@@ -1,0 +1,133 @@
+# ROS 2 Build Outputs
+build/
+install/
+log/
+
+# PlatformIO Build Outputs (STM32 Firmware)
+.pio/
+*.elf
+*.bin
+*.hex
+*.map
+
+# Reference Documentation (Yahboom original firmware - not needed for development)
+**/References/
+
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+
+# IDE Files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Keil/UVISION Project Files
+*.uvoptx
+*.uvprojx
+*.uvguix.*
+*.scvd
+Listings/
+Objects/
+
+# OS Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary Files
+*.tmp
+*.temp
+.tmp/
+.temp/
+
+# Log Files
+*.log
+*.out
+
+# ROS Bag Files (can be very large)
+*.bag
+*.db3
+*.mcap
+
+# SLAM Map Files (binary image data)
+*.pgm
+*.pbm
+
+# 3D Model Source Files (keep only essential STLs in description)
+*.dae
+*.blend
+*.blend1
+*.fbx
+*.obj
+*.3ds
+*.max
+
+# Documentation Build
+_build/
+.doctrees/
+
+# Large Media Files
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.wmv
+*.flv
+*.webm
+*.mp3
+*.wav
+*.ogg
+*.flac
+
+# Image Files (except essential ones)
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.tiff
+
+# Archive Files
+*.zip
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.rar
+*.7z
+
+# Backup Files
+*.bak
+*.backup
+*.orig
+*.rej
+
+# Node.js (if any web components)
+node_modules/
+package-lock.json
+yarn.lock
+
+# Git internals
+.git/
+
+# Compiled Object Files
+*.o
+*.a
+*.so
+*.dylib
+
+# PDF Documentation (reference docs)
+*.pdf
+
+# Excel/Spreadsheet Files
+*.xlsx
+*.xls

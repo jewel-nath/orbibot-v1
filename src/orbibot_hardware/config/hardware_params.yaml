@@ -1,0 +1,32 @@
+# OrbiBot Hardware Configuration
+orbibot_hardware_node:
+  ros__parameters:
+    # Hardware Configuration
+    hardware:
+      serial_port: "/dev/motordriver"
+
+    # Control Parameters
+    control:
+      cmd_timeout: 2.0           # seconds - stop if no command received
+      max_velocity: 1.0          # m/s - maximum linear velocity
+      max_angular_velocity: 2.0  # rad/s - maximum angular velocity
+
+    # Update Rates (Hz)
+    rates:
+      sensor_rate: 50.0          # Sensor data publishing (IMU, encoders, joint states)
+      status_rate: 10.0          # System status publishing
+
+    # Safety Parameters
+    safety:
+      battery_low_threshold: 11.0    # Volts - low battery warning
+      battery_critical_voltage: 10.5 # Volts - critical battery level (auto-disable)
+
+    # Odometry Covariance (adaptive, grows with distance/rotation)
+    odometry:
+      pose_base: 0.001       # Base position variance (m²)
+      pose_drift: 0.02       # Position drift rate (variance per meter traveled)
+      yaw_base: 0.01         # Base yaw variance (rad²)
+      yaw_drift: 0.005       # Yaw drift rate (variance per radian rotated)
+      velocity_base: 0.01    # Base velocity variance ((m/s)²)
+      velocity_scale: 0.1    # Velocity variance scale with speed
+      covariance_decay: 0.99 # Exponential decay factor for accumulated drift (0–1)

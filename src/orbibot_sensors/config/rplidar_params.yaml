@@ -1,0 +1,20 @@
+/**:
+  ros__parameters:
+    # RPLIDAR A1 — valid rplidar_composition parameters only
+    # Range filtering (0.15m–8.0m) is handled by slam_toolbox (min/max_laser_range)
+    # Reconnection is handled by respawn: true in the launch file
+    channel_type: serial
+    serial_port: /dev/lidar
+    serial_baudrate: 115200
+    frame_id: lidar_link
+    inverted: false
+    angle_compensate: true
+    scan_mode: Express  # ~0.5° angular resolution vs ~1° for Standard
+
+    # Motor control
+    motor_pwm: 660  # Default PWM for motor speed
+
+    # Flip X-axis to correct OrbiBot's physical mounting orientation
+    flip_x_axis: true
+
+    use_sim_time: false

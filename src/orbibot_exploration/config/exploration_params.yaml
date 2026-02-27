@@ -1,0 +1,36 @@
+# Exploration parameters for OrbiBot
+
+frontier_explorer:
+  ros__parameters:
+    # Planning frequency (Hz) - how often to search for new frontiers
+    planner_frequency: 0.5
+
+    # Progress timeout (seconds) - blacklist frontier if no progress
+    progress_timeout: 30.0
+
+    # Minimum frontier size in meters (filter out tiny frontiers)
+    min_frontier_size: 0.5
+
+    # Goal tolerance in meters (consider arrived when within this distance)
+    goal_tolerance: 0.3
+
+    # TF transform lookup tolerance in seconds
+    transform_tolerance: 1.0
+
+    # Return to initial position when exploration complete
+    return_to_init: true
+
+    # Frontier selection weights
+    # cost = potential_scale * distance - gain_scale * size
+    potential_scale: 3.0    # Prefer closer frontiers
+    gain_scale: 1.0         # Prefer larger frontiers
+
+    # Frame IDs
+    map_frame: "map"
+    robot_base_frame: "base_footprint"
+
+    # Visualization
+    visualize_frontiers: true
+
+    # Navigation action name
+    navigate_action: "navigate_to_pose"

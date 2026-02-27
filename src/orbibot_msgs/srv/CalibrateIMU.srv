@@ -1,0 +1,8 @@
+# srv/CalibrateIMU.srv
+
+# Calibrate IMU sensor
+uint32 calibration_time  # Calibration time in seconds (default: 10)
+---
+bool success            # True if calibration was successful
+string message          # Calibration result message
+float64[] bias_values   # Calculated bias values

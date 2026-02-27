@@ -1,0 +1,64 @@
+# LGDXRobot2 MCU
+
+> LGDXRobot2 fully uses GitLab CI/CD for builds.<br />[![pipeline status](https://gitlab.com/lgdxrobotics/lgdxrobot2-mcu/badges/main/pipeline.svg)](https://gitlab.com/lgdxrobotics/lgdxrobot2-mcu/-/commits/main)  [![Latest Release](https://gitlab.com/lgdxrobotics/lgdxrobot2-mcu/-/badges/release.svg)](https://gitlab.com/lgdxrobotics/lgdxrobot2-mcu/-/releases)
+
+LGDXRobot2 MCU is an STM32-based controller board designed specifically for the LGDXRobot2 platform. It supports a four-wheeled Mecanum chassis configuration with a straightforward, minimalistic design.
+
+![LGDXRobot2 All Repositories](lgdxrobo2_repos.png)
+
+* LGDXRobot2 Design: ([GitLab](https://gitlab.com/lgdxrobotics/lgdxrobot2-design) | [GitHub](https://github.com/yukaitung/lgdxrobot2-design))
+* LGDXRobot2 MCU: ([GitLab](https://gitlab.com/lgdxrobotics/lgdxrobot2-mcu) | [GitHub](https://github.com/yukaitung/lgdxrobot2-mcu))
+* LGDXRobot2 ChassisTuner: ([GitLab](https://gitlab.com/lgdxrobotics/lgdxrobot2-chassistuner) | [GitHub](https://github.com/yukaitung/lgdxrobot2-chassistuner))
+* LGDXRobot2 ROS 2: ([GitLab](https://gitlab.com/lgdxrobotics/lgdxrobot2-ros2) | [GitHub](https://github.com/yukaitung/lgdxrobot2-ros2))
+
+### Getting Help
+
+* [Homepage](https://lgdxrobot.bristolgram.uk/lgdxrobot2/)
+* [Documentation](https://docs.lgdxrobot.bristolgram.uk/lgdxrobot2/)
+* Issue boards on both GitLab and GitHub
+
+## Prerequisites
+
+* [STM32CubeProgrammer](https://www.st.com/en/development-tools/stm32cubeprog.html)
+* ST-LINK V2
+
+## Firmware Flashing
+
+1. Download the latest firmware from [Releases](https://gitlab.com/lgdxrobotics/lgdxrobot2-mcu/-/releases) page.
+2. Plug the BlackPill into the ST-LINK V2, then connect the ST-LINK V2 to your computer.
+3. Press the BOOT0 button on the BlackPill, then reset it to enter bootloader mode.
+4. Launch STM32CubeProgrammer.
+5. Click the **Connect** button on the right side of the window.
+6. Select **Erasing & Programming** from the left side of the window (arrow pointing to a device icon).
+7. Click **Browse** in the middle of the window and locate the firmware file (`.elf`).
+8. Press **Start Programming**.
+9. Wait for the firmware to be flashed.
+10. Close STM32CubeProgrammer and reset the BlackPill.
+11. You should hear a click sound from the relay module.
+
+## Compling
+
+The following instructions assume that you are using Ubuntu 24.04.
+
+1. Install the dependencies.
+
+```bash
+sudo apt install --no-install-recommends cmake ninja-build gcc-arm-none-eabi libnewlib-arm-none-eabi
+```
+
+2. Clone the project repository.
+
+```bash
+git clone https://gitlab.com/lgdxrobotics/lgdxrobot2-mcu.git
+```
+
+3. Navigate to the project directory in terminal.
+4. Compile the firmware.
+
+```bash
+cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=./cmake/gcc-arm-none-eabi.cmake -S ./ -B ./build/Release -G Ninja
+cmake --build ./build/Release
+```
+
+5. The firmware file `LGDXRobot2.elf` is located in the `build/Release` directory.
+6. Flash the firmware using STM32CubeProgrammer.

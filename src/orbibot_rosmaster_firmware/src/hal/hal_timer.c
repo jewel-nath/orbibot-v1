@@ -1,0 +1,581 @@
+/**
+ * @file hal_timer.c
+ * @brief Timer Hardware Abstraction Layer Implementation
+ * @author Jewel Nath
+ * @date 2025-11-30
+ *
+ * CRITICAL ENCODER FIXES:
+ * - Encoder counters initialized to midpoint (0x7FFF) for bidirectional counting
+ * - TIM2 remapped to PA15/PB3 (JTAG disabled) to avoid PA0/PA1 conflict with TIM5
+ * - hal_timer_read_encoder_delta() for velocity calculation
+ */
+
+#include "hal_timer.h"
+#include "stm32f10x.h"
+#include "orbibot_config.h"
+
+#define MOTOR_MAX_PWM           3600
+#define ENCODER_TIM_PERIOD      0xFFFF
+#define ENCODER_MIDPOINT        0x7FFF
+
+/**
+ * @brief Initialize PWM timers (TIM1, TIM8) for motor control
+ *
+ * Motor PWM configuration for ROSMaster V3.0 board.
+ * See HARDWARE_DOC.md for complete pin mappings and timer specifications.
+ *
+ * Motor Pin Assignments:
+ *   M1: PA11/PA8 (TIM8_CH1/CH2)
+ *   M2: PB0/PB1 (TIM8_CH3/CH4)
+ *   M3: PC6/PC7 (TIM1_CH4/CH1, partial remap)
+ *   M4: PC8/PC9 (TIM1_CH2N/CH3N, complementary outputs)
+ */
+static void hal_timer_pwm_init(void)
+{
+    TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
+    TIM_OCInitTypeDef TIM_OCInitStructure;
+    GPIO_InitTypeDef GPIO_InitStructure;
+
+    // ========== STEP 1: Enable clocks ==========
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM8 | RCC_APB2Periph_TIM1, ENABLE);
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
+
+    // Enable TIM1 partial remap (required for M3/M4 on Port C)
+    GPIO_PinRemapConfig(GPIO_PartialRemap_TIM1, ENABLE);
+
+    // Reset timers
+    TIM_DeInit(TIM8);
+    TIM_DeInit(TIM1);
+
+    // ========== STEP 2: Initialize GPIO pins ==========
+    // Enable all GPIO clocks
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOB | RCC_APB2Periph_GPIOC, ENABLE);
+
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
+
+    // M1A (PA11), M1B (PA8)
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_11 | GPIO_Pin_8;
+    GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+    // M2A (PB0), M2B (PB1)
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0 | GPIO_Pin_1;
+    GPIO_Init(GPIOB, &GPIO_InitStructure);
+
+    // M3A (PC6), M3B (PC7), M4A (PC8), M4B (PC9)
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_6 | GPIO_Pin_7 | GPIO_Pin_8 | GPIO_Pin_9;
+    GPIO_Init(GPIOC, &GPIO_InitStructure);
+
+    // ========== STEP 3: Configure timer timebase ==========
+    TIM_TimeBaseStructure.TIM_Prescaler = 0;
+    TIM_TimeBaseStructure.TIM_Period = 3600 - 1;
+    TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;
+    TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
+
+    TIM_TimeBaseInit(TIM8, &TIM_TimeBaseStructure);
+    TIM_TimeBaseInit(TIM1, &TIM_TimeBaseStructure);
+
+    // ========== STEP 4: Configure PWM channels ==========
+
+    // Standard outputs: TIM8 CH1-4 and TIM1 CH1, CH4
+    TIM_OCStructInit(&TIM_OCInitStructure);
+    TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
+    TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
+    TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
+    TIM_OCInitStructure.TIM_Pulse = 0;
+
+    // TIM8 CH1-4 (M1, M2 motors)
+    TIM_OC1Init(TIM8, &TIM_OCInitStructure);
+    TIM_OC2Init(TIM8, &TIM_OCInitStructure);
+    TIM_OC3Init(TIM8, &TIM_OCInitStructure);
+    TIM_OC4Init(TIM8, &TIM_OCInitStructure);
+
+    // TIM1 CH1, CH4 (M3 motor standard outputs)
+    TIM_OC1Init(TIM1, &TIM_OCInitStructure);
+    TIM_OC4Init(TIM1, &TIM_OCInitStructure);
+
+    // TIM1 CH2N, CH3N (M4 motor complementary outputs)
+    // PC8/PC9 are wired to complementary outputs, not standard channels
+    TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
+    TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Disable;   // Disable CH2/CH3
+    TIM_OCInitStructure.TIM_OutputNState = TIM_OutputNState_Enable;  // Enable CH2N/CH3N
+    TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
+    TIM_OCInitStructure.TIM_Pulse = 0;
+
+    TIM_OC2Init(TIM1, &TIM_OCInitStructure);
+    TIM_OC3Init(TIM1, &TIM_OCInitStructure);
+
+    // ========== STEP 5: Enable PWM outputs ==========
+    TIM_CtrlPWMOutputs(TIM8, ENABLE);
+    TIM_CtrlPWMOutputs(TIM1, ENABLE);
+    TIM_Cmd(TIM8, ENABLE);
+    TIM_Cmd(TIM1, ENABLE);
+}
+
+/**
+ * @brief Disable JTAG to free PA15/PB3 for TIM2 encoder
+ *
+ * ROSMaster board uses PA15 and PB3 for TIM2 encoder (Motor 1).
+ * These pins are JTAG by default, so we disable JTAG while keeping SWD.
+ *
+ * Configuration:
+ * - SWJ_CFG[2:0] = 010 means "JTAG-DP Disabled and SW-DP Enabled"
+ * - This frees PA15 (JTDI) and PB3 (JTDO) for TIM2 use
+ * - SWD debugging remains functional via PA13/PA14
+ */
+static void hal_timer_disable_jtag(void)
+{
+    // Enable AFIO clock (bit 0 of APB2ENR)
+    RCC->APB2ENR |= (1 << 0);
+
+    // Configure SWJ_CFG bits [26:24] in AFIO_MAPR
+    // 010 = JTAG-DP Disabled, SW-DP Enabled (frees PA15/PB3)
+    AFIO->MAPR &= 0xF8FFFFFF;  // Clear bits [26:24]
+    AFIO->MAPR |= (0x01 << 25); // Set SWJ_CFG = 010
+}
+
+/**
+ * @brief Initialize TIM2 encoder (Motor 1 - HAL3: PA15, PB3)
+ *
+ * CRITICAL: TIM2 requires partial remap to use PA15/PB3!
+ * ROSMaster V3.0 encoder hardware configuration for Motor 1.
+ */
+static void hal_timer_encoder_init_tim2(void)
+{
+    TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
+    TIM_ICInitTypeDef TIM_ICInitStructure;
+    GPIO_InitTypeDef GPIO_InitStructure;
+
+    // Enable AFIO clock and apply TIM2 partial remap FIRST
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
+    GPIO_PinRemapConfig(GPIO_PartialRemap1_TIM2, ENABLE);
+
+    // CRITICAL: Disable JTAG AFTER GPIO_PinRemapConfig!
+    // The STM32 standard library's GPIO_PinRemapConfig() clobbers the SWJ_CFG bits
+    // (it does tmpreg |= ~DBGAFR_SWJCFG_MASK which sets bits [27:24] to 1111)
+    // So we MUST call hal_timer_disable_jtag() AFTER to restore proper SWJ_CFG.
+    hal_timer_disable_jtag();
+
+    // Enable TIM2 clock
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
+
+    // Configure PA15 as input with pull-up (TIM2_CH1 = HAL_3A)
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_15;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;
+    GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+    // Configure PB3 as input with pull-up (TIM2_CH2 = HAL_3B)
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE);
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_3;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;
+    GPIO_Init(GPIOB, &GPIO_InitStructure);
+
+    // Configure TIM2 timebase
+    TIM_TimeBaseStructInit(&TIM_TimeBaseStructure);
+    TIM_TimeBaseStructure.TIM_Prescaler = 0;
+    TIM_TimeBaseStructure.TIM_Period = ENCODER_TIM_PERIOD;
+    TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;
+    TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
+    TIM_TimeBaseInit(TIM2, &TIM_TimeBaseStructure);
+
+    // Configure encoder interface
+    TIM_EncoderInterfaceConfig(TIM2, TIM_EncoderMode_TI12,
+                               TIM_ICPolarity_Rising, TIM_ICPolarity_Rising);
+
+    // Configure input capture filter (10-sample digital filter for noise rejection)
+    TIM_ICStructInit(&TIM_ICInitStructure);
+    TIM_ICInitStructure.TIM_ICFilter = 10;
+    TIM_ICInit(TIM2, &TIM_ICInitStructure);
+
+    // Clear update flag (we poll CNT directly, no interrupt needed)
+    TIM_ClearFlag(TIM2, TIM_FLAG_Update);
+
+    // CRITICAL: Set counter to midpoint for bidirectional counting
+    TIM_SetCounter(TIM2, 0);
+    TIM2->CNT = ENCODER_MIDPOINT;
+
+    // Enable timer
+    TIM_Cmd(TIM2, ENABLE);
+}
+
+/**
+ * @brief Initialize TIM3 encoder (Motor 4 - HAL2: PA6, PA7)
+ */
+static void hal_timer_encoder_init_tim3(void)
+{
+    TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
+    TIM_ICInitTypeDef TIM_ICInitStructure;
+    GPIO_InitTypeDef GPIO_InitStructure;
+
+    // Enable TIM3 clock
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, ENABLE);
+
+    // Configure PA6, PA7 as inputs with pull-up
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_6 | GPIO_Pin_7;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;
+    GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+    // Configure TIM3 timebase
+    TIM_TimeBaseStructInit(&TIM_TimeBaseStructure);
+    TIM_TimeBaseStructure.TIM_Prescaler = 0;
+    TIM_TimeBaseStructure.TIM_Period = ENCODER_TIM_PERIOD;
+    TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;
+    TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
+    TIM_TimeBaseInit(TIM3, &TIM_TimeBaseStructure);
+
+    // Configure encoder interface
+    TIM_EncoderInterfaceConfig(TIM3, TIM_EncoderMode_TI12,
+                               TIM_ICPolarity_Rising, TIM_ICPolarity_Rising);
+
+    // Configure input capture filter
+    TIM_ICStructInit(&TIM_ICInitStructure);
+    TIM_ICInitStructure.TIM_ICFilter = 10;
+    TIM_ICInit(TIM3, &TIM_ICInitStructure);
+
+    // Clear update flag (don't enable interrupt - we poll CNT directly)
+    TIM_ClearFlag(TIM3, TIM_FLAG_Update);
+
+    // CRITICAL: Set counter to midpoint
+    TIM_SetCounter(TIM3, 0);
+    TIM3->CNT = ENCODER_MIDPOINT;
+
+    // Enable timer
+    TIM_Cmd(TIM3, ENABLE);
+}
+
+/**
+ * @brief Initialize TIM4 encoder (Motor 2 - HAL4: PB6, PB7)
+ */
+static void hal_timer_encoder_init_tim4(void)
+{
+    TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
+    TIM_ICInitTypeDef TIM_ICInitStructure;
+    GPIO_InitTypeDef GPIO_InitStructure;
+
+    // Enable TIM4 clock
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, ENABLE);
+
+    // Configure PB6, PB7 as inputs with pull-up
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE);
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_6 | GPIO_Pin_7;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;
+    GPIO_Init(GPIOB, &GPIO_InitStructure);
+
+    // Configure TIM4 timebase
+    TIM_TimeBaseStructInit(&TIM_TimeBaseStructure);
+    TIM_TimeBaseStructure.TIM_Prescaler = 0;
+    TIM_TimeBaseStructure.TIM_Period = ENCODER_TIM_PERIOD;
+    TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;
+    TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
+    TIM_TimeBaseInit(TIM4, &TIM_TimeBaseStructure);
+
+    // Configure encoder interface
+    TIM_EncoderInterfaceConfig(TIM4, TIM_EncoderMode_TI12,
+                               TIM_ICPolarity_Rising, TIM_ICPolarity_Rising);
+
+    // Configure input capture filter
+    TIM_ICStructInit(&TIM_ICInitStructure);
+    TIM_ICInitStructure.TIM_ICFilter = 10;
+    TIM_ICInit(TIM4, &TIM_ICInitStructure);
+
+    // Clear update flag (don't enable interrupt - we poll CNT directly)
+    TIM_ClearFlag(TIM4, TIM_FLAG_Update);
+
+    // CRITICAL: Set counter to midpoint
+    TIM_SetCounter(TIM4, 0);
+    TIM4->CNT = ENCODER_MIDPOINT;
+
+    // Enable timer
+    TIM_Cmd(TIM4, ENABLE);
+}
+
+/**
+ * @brief Initialize TIM5 encoder (Motor 3 - HAL1: PA0, PA1)
+ */
+static void hal_timer_encoder_init_tim5(void)
+{
+    TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
+    TIM_ICInitTypeDef TIM_ICInitStructure;
+    GPIO_InitTypeDef GPIO_InitStructure;
+
+    // Enable TIM5 clock
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM5, ENABLE);
+
+    // Configure PA0, PA1 as inputs with pull-up
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0 | GPIO_Pin_1;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;
+    GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+    // Configure TIM5 timebase
+    TIM_TimeBaseStructInit(&TIM_TimeBaseStructure);
+    TIM_TimeBaseStructure.TIM_Prescaler = 0;
+    TIM_TimeBaseStructure.TIM_Period = ENCODER_TIM_PERIOD;
+    TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;
+    TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
+    TIM_TimeBaseInit(TIM5, &TIM_TimeBaseStructure);
+
+    // Configure encoder interface
+    TIM_EncoderInterfaceConfig(TIM5, TIM_EncoderMode_TI12,
+                               TIM_ICPolarity_Rising, TIM_ICPolarity_Rising);
+
+    // Configure input capture filter
+    TIM_ICStructInit(&TIM_ICInitStructure);
+    TIM_ICInitStructure.TIM_ICFilter = 10;
+    TIM_ICInit(TIM5, &TIM_ICInitStructure);
+
+    // Clear update flag (don't enable interrupt - we poll CNT directly)
+    TIM_ClearFlag(TIM5, TIM_FLAG_Update);
+
+    // CRITICAL: Set counter to midpoint
+    TIM_SetCounter(TIM5, 0);
+    TIM5->CNT = ENCODER_MIDPOINT;
+
+    // Enable timer
+    TIM_Cmd(TIM5, ENABLE);
+}
+
+/**
+ * @brief Initialize all encoder timers
+ *
+ * Encoder to Motor mapping (ROSMaster V3.0):
+ * - TIM2 (PA15, PB3) -> M1 (Front-Left)  - HAL3
+ * - TIM4 (PB6, PB7)  -> M2 (Back-Left)   - HAL4
+ * - TIM5 (PA0, PA1)  -> M3 (Front-Right) - HAL1
+ * - TIM3 (PA6, PA7)  -> M4 (Back-Right)  - HAL2
+ */
+static void hal_timer_encoder_init(void)
+{
+    hal_timer_encoder_init_tim2();  // M1
+    hal_timer_encoder_init_tim4();  // M2
+    hal_timer_encoder_init_tim5();  // M3
+    hal_timer_encoder_init_tim3();  // M4
+}
+
+/**
+ * @brief Initialize all timers
+ */
+int hal_timer_init(void)
+{
+    hal_timer_pwm_init();
+    hal_timer_encoder_init();
+    return 0;
+}
+
+/**
+ * @brief Set motor PWM duty cycle
+ *
+ * Motor to Timer/CCR mapping (ROSMaster V3.0):
+ *   PWM_M1_A: TIM8->CCR1    // PA11 (TIM8_CH1)
+ *   PWM_M1_B: TIM8->CCR2    // PA8 (TIM8_CH2)
+ *   PWM_M2_A: TIM8->CCR3    // PB0 (TIM8_CH3)
+ *   PWM_M2_B: TIM8->CCR4    // PB1 (TIM8_CH4)
+ *   PWM_M3_A: TIM1->CCR4    // PC6 (TIM1_CH4)
+ *   PWM_M3_B: TIM1->CCR1    // PC7 (TIM1_CH1)
+ *   PWM_M4_A: TIM1->CCR2    // PC8 (TIM1_CH2N)
+ *   PWM_M4_B: TIM1->CCR3    // PC9 (TIM1_CH3N)
+ *
+ * Direction Inversion:
+ *   - M1: INVERTED (left side motor mounted opposite)
+ *   - M2: INVERTED (left side motor mounted opposite)
+ *   - M3: Normal
+ *   - M4: Normal
+ *
+ * Motor Physical Layout:
+ *   M1 (L1) = Front-Left   | M3 (R1) = Front-Right
+ *   M2 (L2) = Back-Left    | M4 (R2) = Back-Right
+ */
+void hal_timer_set_motor_pwm(uint8_t motor, int16_t pwm)
+{
+    // Clamp PWM value
+    if (pwm > MOTOR_MAX_PWM) pwm = MOTOR_MAX_PWM;
+    if (pwm < -MOTOR_MAX_PWM) pwm = -MOTOR_MAX_PWM;
+
+    switch (motor)
+    {
+        case 0:  // M1 (Front-Left): TIM8 CCR1/CCR2 - DIRECTION INVERTED
+        {
+            // Direction inversion for left side motor
+            pwm = -pwm;
+
+            if (pwm >= 0)
+            {
+                TIM8->CCR1 = pwm;   // PWM_M1_A = Forward
+                TIM8->CCR2 = 0;     // PWM_M1_B = Off
+            }
+            else
+            {
+                TIM8->CCR1 = 0;     // PWM_M1_A = Off
+                TIM8->CCR2 = -pwm;  // PWM_M1_B = Reverse
+            }
+            break;
+        }
+
+        case 1:  // M2 (Back-Left): TIM8 CCR3/CCR4 - DIRECTION INVERTED
+        {
+            // Direction inversion for left side motor
+            pwm = -pwm;
+
+            if (pwm >= 0)
+            {
+                TIM8->CCR3 = pwm;   // PWM_M2_A = Forward
+                TIM8->CCR4 = 0;     // PWM_M2_B = Off
+            }
+            else
+            {
+                TIM8->CCR3 = 0;     // PWM_M2_A = Off
+                TIM8->CCR4 = -pwm;  // PWM_M2_B = Reverse
+            }
+            break;
+        }
+
+        case 2:  // M3 (Front-Right): TIM1 CCR4/CCR1 - DIRECTION NORMAL
+        {
+            if (pwm >= 0)
+            {
+                TIM1->CCR4 = pwm;   // PWM_M3_A = Forward
+                TIM1->CCR1 = 0;     // PWM_M3_B = Off
+            }
+            else
+            {
+                TIM1->CCR4 = 0;     // PWM_M3_A = Off
+                TIM1->CCR1 = -pwm;  // PWM_M3_B = Reverse
+            }
+            break;
+        }
+
+        case 3:  // M4 (Back-Right): TIM1 CCR2/CCR3 - DIRECTION NORMAL
+        {
+            if (pwm >= 0)
+            {
+                TIM1->CCR2 = pwm;   // PWM_M4_A = Forward
+                TIM1->CCR3 = 0;     // PWM_M4_B = Off
+            }
+            else
+            {
+                TIM1->CCR2 = 0;     // PWM_M4_A = Off
+                TIM1->CCR3 = -pwm;  // PWM_M4_B = Reverse
+            }
+            break;
+        }
+    }
+}
+
+/**
+ * @brief Read encoder delta and reset to midpoint
+ *
+ * Encoder reading method:
+ * 1. Calculate delta from midpoint (0x7fff)
+ * 2. Reset counter to midpoint for next reading
+ *
+ * This handles bidirectional counting without wrap-around issues.
+ *
+ * Encoder to Motor mapping:
+ * - encoder 0 -> TIM2 -> M1 (Front-Left)
+ * - encoder 1 -> TIM4 -> M2 (Back-Left)
+ * - encoder 2 -> TIM5 -> M3 (Front-Right)
+ * - encoder 3 -> TIM3 -> M4 (Back-Right)
+ *
+ * @param encoder Encoder index (0-3)
+ * @return Delta count since last read (positive = forward, negative = backward)
+ */
+int16_t hal_timer_read_encoder_delta(uint8_t encoder)
+{
+    int16_t delta = 0;
+
+    switch (encoder)
+    {
+        case 0:  // M1 - TIM2
+            delta = (int16_t)TIM2->CNT - ENCODER_MIDPOINT;  // G5: Fixed inverted formula
+            TIM2->CNT = ENCODER_MIDPOINT;
+            break;
+        case 1:  // M2 - TIM4
+            delta = (int16_t)TIM4->CNT - ENCODER_MIDPOINT;  // G5: Fixed inverted formula
+            TIM4->CNT = ENCODER_MIDPOINT;
+            break;
+        case 2:  // M3 - TIM5
+            delta = (int16_t)TIM5->CNT - ENCODER_MIDPOINT;  // G5: Fixed inverted formula
+            TIM5->CNT = ENCODER_MIDPOINT;
+            break;
+        case 3:  // M4 - TIM3
+            delta = (int16_t)TIM3->CNT - ENCODER_MIDPOINT;  // G5: Fixed inverted formula
+            TIM3->CNT = ENCODER_MIDPOINT;
+            break;
+    }
+
+    return delta;
+}
+
+/**
+ * @brief Get raw encoder count (for compatibility)
+ *
+ * NOTE: For velocity calculation, use hal_timer_read_encoder_delta() instead.
+ * This function returns raw counter value without reset.
+ */
+int32_t hal_timer_get_encoder_count(uint8_t encoder)
+{
+    int16_t count = 0;
+
+    switch (encoder)
+    {
+        case 0: count = (int16_t)TIM2->CNT - ENCODER_MIDPOINT; break;
+        case 1: count = (int16_t)TIM4->CNT - ENCODER_MIDPOINT; break;
+        case 2: count = (int16_t)TIM5->CNT - ENCODER_MIDPOINT; break;
+        case 3: count = (int16_t)TIM3->CNT - ENCODER_MIDPOINT; break;
+    }
+
+    return (int32_t)count;
+}
+
+/**
+ * @brief Reset encoder count to midpoint
+ */
+void hal_timer_reset_encoder(uint8_t encoder)
+{
+    switch (encoder)
+    {
+        case 0: TIM2->CNT = ENCODER_MIDPOINT; break;
+        case 1: TIM4->CNT = ENCODER_MIDPOINT; break;
+        case 2: TIM5->CNT = ENCODER_MIDPOINT; break;
+        case 3: TIM3->CNT = ENCODER_MIDPOINT; break;
+    }
+}
+
+/**
+ * @brief Stop all motors with brake or freewheel
+ *
+ * Stop modes:
+ * - brake=1: Both PWM pins HIGH (short-circuit braking)
+ * - brake=0: Both PWM pins LOW (motor coasts/freewheels)
+ */
+void hal_timer_motor_stop(uint8_t brake)
+{
+    if (brake)
+    {
+        // Active braking: set both PWM pins HIGH
+        // This creates a short-circuit that resists motor rotation
+        TIM8->CCR1 = MOTOR_MAX_PWM;  // M1A
+        TIM8->CCR2 = MOTOR_MAX_PWM;  // M1B
+        TIM8->CCR3 = MOTOR_MAX_PWM;  // M2A
+        TIM8->CCR4 = MOTOR_MAX_PWM;  // M2B
+        TIM1->CCR4 = MOTOR_MAX_PWM;  // M3A
+        TIM1->CCR1 = MOTOR_MAX_PWM;  // M3B
+        TIM1->CCR2 = MOTOR_MAX_PWM;  // M4A
+        TIM1->CCR3 = MOTOR_MAX_PWM;  // M4B
+    }
+    else
+    {
+        // Freewheel: set both PWM pins LOW
+        // Motor coasts to a stop
+        TIM8->CCR1 = 0;  // M1A
+        TIM8->CCR2 = 0;  // M1B
+        TIM8->CCR3 = 0;  // M2A
+        TIM8->CCR4 = 0;  // M2B
+        TIM1->CCR4 = 0;  // M3A
+        TIM1->CCR1 = 0;  // M3B
+        TIM1->CCR2 = 0;  // M4A
+        TIM1->CCR3 = 0;  // M4B
+    }
+}

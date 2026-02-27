@@ -1,0 +1,3 @@
+# Minimal dock database for Nav2 docking server
+# This file prevents the docking server from failing to load
+docks: {}  # No docking stations defined

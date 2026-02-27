@@ -1,0 +1,99 @@
+"""Base LLM provider interface for OrbiBot Agent."""
+
+from abc import ABC, abstractmethod
+from typing import Any, Callable, Dict, List, Optional
+
+
+class BaseLLMProvider(ABC):
+    """Abstract base class for LLM providers."""
+
+    def __init__(self, config: Dict[str, Any]):
+        """Initialize provider with configuration.
+
+        Args:
+            config: Provider configuration dictionary
+        """
+        self.config = config
+        self.name = config.get('name', 'unknown')
+        self.model = config.get('model', 'unknown')
+
+    @abstractmethod
+    def initialize(self) -> bool:
+        """Initialize the provider (load API keys, etc.).
+
+        Returns:
+            True if initialization successful
+        """
+        pass
+
+    @abstractmethod
+    def send_message(
+        self,
+        message: str,
+        tools: Optional[List[Dict]] = None,
+        system_prompt: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Send a message to the LLM.
+
+        Args:
+            message: User message
+            tools: Optional list of tool definitions
+            system_prompt: Optional system prompt
+
+        Returns:
+            Response dictionary with 'text' and optional 'tool_calls'
+        """
+        pass
+
+    @abstractmethod
+    def send_tool_results(
+        self,
+        tool_results: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Send tool execution results back to LLM.
+
+        Args:
+            tool_results: List of tool result dictionaries
+
+        Returns:
+            Response dictionary with 'text'
+        """
+        pass
+
+    @abstractmethod
+    def start_chat(self, system_prompt: Optional[str] = None) -> None:
+        """Start a new chat session.
+
+        Args:
+            system_prompt: Optional system prompt for the session
+        """
+        pass
+
+    def is_available(self) -> bool:
+        """Check if provider is available (API key set, etc.).
+
+        Returns:
+            True if provider can be used
+        """
+        return True
+
+    def get_tool_schema(self, name: str, description: str, parameters: Dict) -> Dict:
+        """Create a tool schema for this provider.
+
+        Args:
+            name: Tool name
+            description: Tool description
+            parameters: Tool parameters schema
+
+        Returns:
+            Provider-specific tool schema
+        """
+        # Default OpenAI-compatible schema
+        return {
+            'type': 'function',
+            'function': {
+                'name': name,
+                'description': description,
+                'parameters': parameters,
+            }
+        }

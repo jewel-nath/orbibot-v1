@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>orbibot_bringup</name>
+  <version>1.0.0</version>
+  <description>System launch files and bringup configurations for OrbiBot</description>
+  <maintainer email="jewel.nath@orbitax.com">Jewel Nath</maintainer>
+  <license>MIT</license>
+
+  <depend>launch</depend>
+  <depend>launch_ros</depend>
+  <depend>orbibot_description</depend>
+  <depend>orbibot_hardware</depend>
+  <depend>orbibot_sensors</depend>
+  <depend>orbibot_localization</depend>
+  <depend>orbibot_slam</depend>
+  <depend>orbibot_navigation</depend>
+  <depend>orbibot_exploration</depend>
+  <depend>orbibot_teleop</depend>
+
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

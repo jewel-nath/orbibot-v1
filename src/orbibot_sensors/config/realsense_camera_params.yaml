@@ -1,0 +1,74 @@
+/**:
+  ros__parameters:
+    # RealSense D435 Configuration
+    device_type: d435
+    serial_no: ""
+    usb_port_id: ""
+    
+    # Camera settings
+    camera_name: camera
+    camera_namespace: ""
+    
+    # Enable/disable streams
+    enable_color: true
+    enable_depth: true
+    enable_infra1: false
+    enable_infra2: false
+    enable_fisheye: false
+    enable_confidence: false
+    enable_accel: false
+    enable_gyro: false
+    
+    # Color stream settings (reduced for RPi)
+    color_width: 424
+    color_height: 240
+    color_fps: 15
+    color_format: RGB8
+
+    # Depth stream settings (reduced for RPi)
+    depth_width: 424
+    depth_height: 240
+    depth_fps: 15
+    depth_format: Z16
+    
+    # Infrared stream settings
+    infra_width: 640
+    infra_height: 480
+    infra_fps: 30
+    infra_format: Y8
+    
+    # Processing options (reduced for RPi)
+    align_depth.enable: false
+    pointcloud.enable: false
+
+    # Spatial filter (disabled for RPi)
+    spatial_filter.enable: false
+
+    # Temporal filter (disabled for RPi)
+    temporal_filter.enable: false
+
+    # Decimation filter - keep enabled to reduce depth data volume
+    decimation_filter.enable: true
+    decimation_filter.filter_magnitude: 3
+    
+    # Frame IDs
+    base_frame_id: camera_link
+    depth_frame_id: camera_depth_frame
+    color_frame_id: camera_color_frame
+    infra1_frame_id: camera_infra1_frame
+    infra2_frame_id: camera_infra2_frame
+    
+    # TF publishing
+    publish_tf: true
+    tf_publish_rate: 0.0  # 0 = static
+    
+    # Diagnostics
+    diagnostics_period: 0.0  # 0 = disabled
+    
+    # Quality settings
+    depth_quality: 1  # 0=low, 1=medium, 2=high
+    color_quality: 1  # 0=low, 1=medium, 2=high
+    
+    # Auto exposure
+    color_auto_exposure: true
+    depth_auto_exposure: true

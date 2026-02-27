@@ -1,0 +1,53 @@
+# OrbiBot Controller Configuration
+# Advanced mecanum controller with all holonomic movement capabilities
+
+controller:
+  ros__parameters:
+    # Speed limits (moderate speeds for advanced maneuvers)
+    max_linear_speed: 0.3      # Maximum linear velocity (m/s)
+    max_angular_speed: 1.0     # Maximum angular velocity (rad/s)
+    deadzone: 0.08             # Analog stick deadzone (slightly higher for precision)
+    enable_motors_on_start: false  # Require manual motor enable for safety
+
+    # Movement Modes (selected via D-pad):
+    # - NORMAL: Free control (all axes independent)
+    # - STRAFE: Pure sideways movement only
+    # - DIAGONAL: 45-degree diagonal movements
+    # - ROTATE: Pure rotation in place (pivot)
+    # - CRAB: Rotate while strafing (crab walk)
+    # - CIRCLE: Drive in arcs (forward + turn)
+    # - PIVOT_STRAFE: Strafe + rotate combined
+    #
+    # D-Pad Controls:
+    #   UP: Normal mode
+    #   RIGHT: Strafe mode
+    #   DOWN: Diagonal mode
+    #   LEFT: Rotate mode
+    #
+    # Button Controls:
+    #   R3 (Right Stick Press): Crab mode
+    #   L3 (Left Stick Press): Circle mode
+    #
+    # Movement Controls (behavior depends on mode):
+    #   Left Stick X: Primary horizontal control
+    #   Left Stick Y: Primary vertical control
+    #   Right Stick X: Rotation control
+    #
+    # Safety Controls:
+    #   R2 (trigger): Enable movement (hold to move)
+    #   L1: Toggle motor enable/disable
+    #   Share: Emergency stop
+    #
+    # Gear Controls:
+    #   Triangle/X: Speed gear up/down (33%, 66%, 100%)
+    #   Square/Circle: Angular gear up/down (25%, 50%, 75%, 100%)
+
+# Joy node configuration
+joy_node:
+  ros__parameters:
+    device: "/dev/input/js0"
+    device_id: 0
+    deadzone: 0.08
+    autorepeat_rate: 20.0
+    sticky_buttons: false
+    coalesce_interval_ms: 1

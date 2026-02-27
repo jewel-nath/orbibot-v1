@@ -1,0 +1,7 @@
+# srv/ResetOdometry.srv
+
+# Reset odometry to zero or specific pose
+geometry_msgs/Pose reset_pose  # New pose (use zero for origin reset)
+---
+bool success                   # True if reset was successful
+string message                 # Status message

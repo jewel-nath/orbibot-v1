@@ -1,0 +1,774 @@
+/**
+ * @file protocol.c
+ * @brief Serial Communication Protocol Implementation
+ * @author Jewel Nath
+ * @date 2025-11-30
+ *
+ * ROSMaster compatible serial protocol for ROS 2 integration
+ */
+
+#include "protocol.h"
+#include "hal_usart.h"
+#include "task_control.h"
+#include "imu_driver.h"
+#include "encoder_driver.h"
+#include "battery_monitor.h"
+#include "flash_storage.h"
+#include "orbibot_config.h"
+#include "FreeRTOS.h"
+#include "task.h"
+#include <string.h>
+
+/* ========================================================================
+ * GLOBAL VARIABLES
+ * ======================================================================== */
+
+// Reception buffers and state (double-buffered to prevent ISR/task race)
+uint8_t g_rx_buffer[PTO_MAX_BUF_LEN] = {0};
+uint8_t g_rx_buffer2[PTO_MAX_BUF_LEN] = {0};  // Secondary buffer
+uint8_t g_rx_index = 0;
+rx_state_t g_rx_state = RX_STATE_WAIT_HEADER;
+uint8_t g_rx_active_buffer = 0;  // Which buffer is being written: 0=primary, 1=secondary, 2=drop
+uint8_t g_cmd_flag = 0;
+uint8_t g_cmd_flag2 = 0;  // Flag for secondary buffer
+uint8_t g_cmd_length = 0;
+uint8_t g_cmd_length2 = 0;  // Length for secondary buffer
+volatile uint32_t g_rx_drop_count = 0;  // Dropped packets (both buffers full)
+
+// Auto-report state
+volatile uint8_t g_auto_report_enabled = 0;
+
+// Buzzer state
+static volatile uint16_t g_buzzer_on_time = 0;  // 0=off, 1=on, >=10 timed (ms)
+static volatile uint32_t g_buzzer_start_tick = 0;  // Start time for timed beep
+
+// Current robot velocities (updated by task_control)
+static int16_t g_current_vx = 0;  // mm/s
+static int16_t g_current_vy = 0;  // mm/s
+static int16_t g_current_vz = 0;  // deg/s or rad/s × 1000
+
+/* ========================================================================
+ * PROTOCOL INITIALIZATION
+ * ======================================================================== */
+
+void protocol_init(void)
+{
+    // Clear reception state (both buffers)
+    memset(g_rx_buffer, 0, sizeof(g_rx_buffer));
+    memset(g_rx_buffer2, 0, sizeof(g_rx_buffer2));
+    g_rx_index = 0;
+    g_rx_state = RX_STATE_WAIT_HEADER;
+    g_rx_active_buffer = 0;
+    g_cmd_flag = 0;
+    g_cmd_flag2 = 0;
+    g_cmd_length = 0;
+    g_cmd_length2 = 0;
+    g_rx_drop_count = 0;
+
+    // Disable auto-report by default (ROS will enable it)
+    g_auto_report_enabled = 0;
+}
+
+/* ========================================================================
+ * BYTE RECEPTION (Call from USART ISR)
+ * ======================================================================== */
+
+// Debug counter - increments for every byte received
+volatile uint32_t g_rx_byte_count = 0;
+
+void protocol_receive_byte(uint8_t byte)
+{
+    // Count every received byte (safe in ISR)
+    g_rx_byte_count++;
+
+    switch (g_rx_state)
+    {
+        case RX_STATE_WAIT_HEADER:
+            if (byte == PTO_HEAD)
+            {
+                g_rx_buffer[0] = byte;
+                g_rx_index = 1;
+                g_rx_state = RX_STATE_WAIT_DEVICE;
+            }
+            break;
+
+        case RX_STATE_WAIT_DEVICE:
+            if (byte == PTO_DEVICE_ID)
+            {
+                g_rx_buffer[1] = byte;
+                g_rx_index = 2;
+                g_rx_state = RX_STATE_WAIT_LENGTH;
+            }
+            else
+            {
+                // Invalid device ID - reset
+                g_rx_state = RX_STATE_WAIT_HEADER;
+                g_rx_index = 0;
+            }
+            break;
+
+        case RX_STATE_WAIT_LENGTH:
+            {
+                uint8_t packet_length = byte + 2;  // Total packet length
+
+                // Validate length
+                if (packet_length > PTO_MAX_BUF_LEN || packet_length < 5)
+                {
+                    // Invalid length - reset
+                    g_rx_state = RX_STATE_WAIT_HEADER;
+                    g_rx_index = 0;
+                }
+                else
+                {
+                    // Select which buffer to use (double-buffer logic)
+                    if (!g_cmd_flag)
+                    {
+                        // Primary buffer available
+                        g_rx_active_buffer = 0;
+                        g_rx_buffer[0] = g_rx_buffer[0];  // Already set (header)
+                        g_rx_buffer[1] = g_rx_buffer[1];  // Already set (device)
+                        g_rx_buffer[2] = byte;
+                        g_cmd_length = packet_length;
+                    }
+                    else if (!g_cmd_flag2)
+                    {
+                        // Primary full, use secondary buffer
+                        g_rx_active_buffer = 1;
+                        g_rx_buffer2[0] = g_rx_buffer[0];  // Copy header
+                        g_rx_buffer2[1] = g_rx_buffer[1];  // Copy device
+                        g_rx_buffer2[2] = byte;
+                        g_cmd_length2 = packet_length;
+                    }
+                    else
+                    {
+                        // Both buffers full - drop this packet
+                        g_rx_active_buffer = 2;
+                        g_rx_drop_count++;
+                    }
+
+                    g_rx_index = 3;
+                    g_rx_state = RX_STATE_READ_DATA;
+                }
+            }
+            break;
+
+        case RX_STATE_READ_DATA:
+            {
+                // Write to selected buffer based on g_rx_active_buffer
+                if (g_rx_active_buffer == 0)
+                {
+                    g_rx_buffer[g_rx_index] = byte;
+                }
+                else if (g_rx_active_buffer == 1)
+                {
+                    g_rx_buffer2[g_rx_index] = byte;
+                }
+                // else g_rx_active_buffer == 2: drop mode, discard byte
+
+                g_rx_index++;
+
+                // Check if packet complete
+                uint8_t target_length = (g_rx_active_buffer == 0) ? g_cmd_length : g_cmd_length2;
+                if (g_rx_index >= target_length)
+                {
+                    // Packet complete - set flag for processing
+                    if (g_rx_active_buffer == 0)
+                    {
+                        g_cmd_flag = 1;
+                    }
+                    else if (g_rx_active_buffer == 1)
+                    {
+                        g_cmd_flag2 = 1;
+                    }
+                    // else: dropped, no flag set
+
+                    // Reset state machine
+                    g_rx_state = RX_STATE_WAIT_HEADER;
+                    g_rx_index = 0;
+                }
+            }
+            break;
+    }
+}
+
+// Get RX byte count for debugging
+uint32_t protocol_get_rx_count(void)
+{
+    return g_rx_byte_count;
+}
+
+/* ========================================================================
+ * CHECKSUM FUNCTIONS
+ * ======================================================================== */
+
+uint8_t protocol_calculate_checksum(const uint8_t *data, uint8_t length)
+{
+    uint16_t sum = 0;
+
+    // Sum bytes from index 2 to length-1
+    for (uint8_t i = 2; i < length - 1; i++)
+    {
+        sum += data[i];
+    }
+
+    return (uint8_t)(sum & 0xFF);
+}
+
+uint8_t protocol_validate_checksum(const uint8_t *data, uint8_t length)
+{
+#if ENABLE_CHECKSUM
+    uint8_t calculated = protocol_calculate_checksum(data, length);
+    uint8_t received = data[length - 1];
+    return (calculated == received) ? 1 : 0;
+#else
+    return 1;  // Always valid if checksums disabled
+#endif
+}
+
+/* ========================================================================
+ * PACKET TRANSMISSION
+ * ======================================================================== */
+
+void protocol_send_packet(uint8_t func_code, const uint8_t *data, uint8_t data_len)
+{
+    uint8_t packet[PTO_MAX_BUF_LEN];
+    uint8_t packet_len = data_len + 5;  // Header + ID + Len + Func + Checksum
+
+    // Build packet
+    packet[0] = PTO_HEAD;
+    packet[1] = PTO_DEVICE_ID_SEND;
+    packet[2] = packet_len - 2;  // Length field
+    packet[3] = func_code;
+
+    // Copy payload
+    if (data != NULL && data_len > 0)
+    {
+        memcpy(&packet[4], data, data_len);
+    }
+
+    // Calculate checksum
+    packet[packet_len - 1] = protocol_calculate_checksum(packet, packet_len);
+
+    // Send via USART
+    hal_usart_send_bytes(packet, packet_len);
+}
+
+/* ========================================================================
+ * COMMAND PARSER
+ * ======================================================================== */
+
+int8_t protocol_parse_command(void)
+{
+    // Double-buffer: check which buffer has a command ready
+    uint8_t *rx_buf;
+    uint8_t rx_len;
+    uint8_t buffer_id;  // 0=primary, 1=secondary
+
+    if (g_cmd_flag)
+    {
+        // Primary buffer has command
+        rx_buf = g_rx_buffer;
+        rx_len = g_cmd_length;
+        buffer_id = 0;
+    }
+    else if (g_cmd_flag2)
+    {
+        // Secondary buffer has command
+        rx_buf = g_rx_buffer2;
+        rx_len = g_cmd_length2;
+        buffer_id = 1;
+    }
+    else
+    {
+        // No command ready in either buffer
+        return -1;
+    }
+
+    // Validate checksum
+    if (!protocol_validate_checksum(rx_buf, rx_len))
+    {
+        DEBUG_ERROR("Checksum failed, len=%d buf=%d\n", rx_len, buffer_id);
+        // Clear the appropriate flag
+        if (buffer_id == 0)
+            g_cmd_flag = 0;
+        else
+            g_cmd_flag2 = 0;
+        return -1;  // Checksum failed
+    }
+
+    // Extract function code
+    uint8_t func_code = rx_buf[3];
+
+    // Debug: print received command
+    DEBUG_VERBOSE("CMD: func=0x%02X len=%d buf=%d\n", func_code, rx_len, buffer_id);
+
+    // Dispatch to handler (using selected buffer)
+    switch (func_code)
+    {
+        case FUNC_AUTO_REPORT:
+            protocol_handle_auto_report(&rx_buf[4]);
+            break;
+
+        case FUNC_MOTION:
+            protocol_handle_motion(&rx_buf[4]);
+            break;
+
+        case FUNC_RESET_ODOM:
+            protocol_handle_reset_odom();
+            break;
+
+        case FUNC_RESET_STATE:
+            protocol_handle_reset_state();
+            break;
+
+        case FUNC_REQUEST_DATA:
+            // Handle data request (e.g., version query)
+            {
+                uint8_t request_type = rx_buf[4];
+                if (request_type == FUNC_VERSION)
+                {
+                    // Send firmware version: v1.0.0 = 0x01, 0x00
+                    uint8_t version_data[2] = {0x01, 0x00};
+                    protocol_send_packet(FUNC_VERSION, version_data, 2);
+                }
+            }
+            break;
+
+        case FUNC_BEEP:
+            // Beep command - no response needed (fire-and-forget)
+            // Protocol specification: no response for beep commands
+            // Data: 2-byte on_time (0=off, 1=always on, >=10=on for xx ms)
+            // Minimum valid packet: header(1)+device(1)+len_field(1)+func(1)+data[0](1)+data[1](1)+csum(1)
+            // packet_length = len_field + 2, so packet_length >= 6 guarantees 2 data bytes
+            if (rx_len >= 6)
+            {
+                uint16_t on_time = (uint16_t)((rx_buf[5] << 8) | rx_buf[4]);
+                g_buzzer_on_time = on_time;
+
+                if (on_time == 0)
+                {
+                    // Turn off buzzer
+                    BUZZER_OFF();
+                }
+                else if (on_time == 1)
+                {
+                    // Turn on buzzer continuously
+                    BUZZER_ON();
+                }
+                else
+                {
+                    // Turn on buzzer for timed duration (will be handled in monitoring task)
+                    BUZZER_ON();
+                    g_buzzer_start_tick = xTaskGetTickCount();
+                }
+            }
+            break;
+
+        case FUNC_SET_MOTOR_PID:
+            protocol_handle_set_motor_pid(&rx_buf[4]);
+            break;
+
+        case FUNC_SET_YAW_PID:
+            protocol_handle_set_yaw_pid(&rx_buf[4]);
+            break;
+
+        case FUNC_SET_MOTOR_PID_MULTILEVEL:
+            protocol_handle_set_motor_pid_multilevel(&rx_buf[4]);
+            break;
+
+        case FUNC_SET_MAG_CAL:
+            protocol_handle_set_mag_cal(&rx_buf[4]);
+            break;
+
+        default:
+            // Unknown command - ignore
+            break;
+    }
+
+    // Clear the appropriate command flag
+    if (buffer_id == 0)
+        g_cmd_flag = 0;
+    else
+        g_cmd_flag2 = 0;
+
+    return 0;
+}
+
+/* ========================================================================
+ * COMMAND HANDLERS
+ * ======================================================================== */
+
+void protocol_handle_auto_report(const uint8_t *data)
+{
+    uint8_t enable = data[0];
+
+    if (enable == 0x00)
+    {
+        g_auto_report_enabled = 0;
+    }
+    else
+    {
+        g_auto_report_enabled = 1;
+    }
+}
+
+void protocol_handle_motion(const uint8_t *data)
+{
+    // Update command timestamp for timeout safety (CRIT-3)
+    control_update_command_time();
+
+    // Parse motion command
+    // Format: [Param][Vx_Lo][Vx_Hi][Vy_Lo][Vy_Hi][Vz_Lo][Vz_Hi]
+    // Velocities are in mm/s (int16_t, little-endian)
+
+    int16_t vx_mm = (int16_t)((data[2] << 8) | data[1]);  // mm/s
+    int16_t vy_mm = (int16_t)((data[4] << 8) | data[3]);  // mm/s
+    int16_t vz_raw = (int16_t)((data[6] << 8) | data[5]); // mrad/s (rad/s × 1000)
+
+    // Speed clamping for safety — limits map to config constants:
+    //   MAX_LINEAR_VELOCITY_MPS (1.0 m/s) = 1000 mm/s
+    //   MAX_ANGULAR_VELOCITY_RPS (2.0 rad/s) = 2000 mrad/s (5000 gives extra headroom)
+    static const int16_t MAX_LINEAR_SPEED_MM = 1000;   // mm/s
+    static const int16_t MAX_ANGULAR_SPEED_MRAD = 5000; // mrad/s
+
+    if (vx_mm > MAX_LINEAR_SPEED_MM) vx_mm = MAX_LINEAR_SPEED_MM;
+    if (vx_mm < -MAX_LINEAR_SPEED_MM) vx_mm = -MAX_LINEAR_SPEED_MM;
+    if (vy_mm > MAX_LINEAR_SPEED_MM) vy_mm = MAX_LINEAR_SPEED_MM;
+    if (vy_mm < -MAX_LINEAR_SPEED_MM) vy_mm = -MAX_LINEAR_SPEED_MM;
+    if (vz_raw > MAX_ANGULAR_SPEED_MRAD) vz_raw = MAX_ANGULAR_SPEED_MRAD;
+    if (vz_raw < -MAX_ANGULAR_SPEED_MRAD) vz_raw = -MAX_ANGULAR_SPEED_MRAD;
+
+    // Convert mm/s to m/s for control task
+    float vx_m = (float)vx_mm / 1000.0f;
+    float vy_m = (float)vy_mm / 1000.0f;
+
+    // CRITICAL: Invert Vy to match ROSMaster protocol convention
+    // Protocol uses negative Y for lateral velocity
+    // This ensures strafing direction matches ROS2 expectations
+    vy_m = -vy_m;
+
+    // Convert angular velocity (mrad/s to rad/s)
+    float vz_rad = (float)vz_raw / 1000.0f;
+
+    // Check for zero command (stop)
+    if (vx_mm == 0 && vy_mm == 0 && vz_raw == 0)
+    {
+        control_set_velocity(0.0f, 0.0f, 0.0f);
+    }
+    else
+    {
+        control_set_velocity(vx_m, vy_m, vz_rad);
+    }
+
+    // Store for internal tracking (not used for auto-report anymore)
+    g_current_vx = vx_mm;
+    g_current_vy = vy_mm;
+    g_current_vz = vz_raw;
+}
+
+void protocol_handle_reset_state(void)
+{
+    // Stop motors
+    control_set_velocity(0.0f, 0.0f, 0.0f);
+
+    DEBUG_INFO("State reset: motors stopped\n");
+}
+
+void protocol_handle_reset_odom(void)
+{
+    // Reset firmware odometry to zero
+    control_reset_odometry();
+
+    DEBUG_INFO("Firmware odometry reset to zero\n");
+}
+
+/* ========================================================================
+ * DATA REPORTING FUNCTIONS
+ * ======================================================================== */
+
+void protocol_send_motion_data(void)
+{
+    // Packet: [Vx_Lo][Vx_Hi][Vy_Lo][Vy_Hi][Vz_Lo][Vz_Hi][Battery]
+    // CRITICAL: Send MEASURED velocities, not commanded velocities!
+    // This provides actual velocity feedback from encoder readings.
+    uint8_t data[7];
+
+    // Get ACTUAL measured velocity from encoder feedback
+    int16_t meas_vx, meas_vy, meas_vz;
+    control_get_measured_velocity(&meas_vx, &meas_vy, &meas_vz);
+
+    // Pack velocities (16-bit little-endian)
+    data[0] = meas_vx & 0xFF;
+    data[1] = (meas_vx >> 8) & 0xFF;
+    data[2] = meas_vy & 0xFF;
+    data[3] = (meas_vy >> 8) & 0xFF;
+    data[4] = meas_vz & 0xFF;
+    data[5] = (meas_vz >> 8) & 0xFF;
+
+    // Battery voltage (0-255, multiply by 0.1 for volts)
+    float voltage = battery_get_voltage();
+    data[6] = (uint8_t)(voltage * 10.0f);
+
+    protocol_send_packet(FUNC_REPORT_SPEED, data, sizeof(data));
+}
+
+void protocol_send_imu_raw_data(void)
+{
+    // Packet: [Gx_Lo][Gx_Hi][Gy_Lo][Gy_Hi][Gz_Lo][Gz_Hi]
+    //         [Ax_Lo][Ax_Hi][Ay_Lo][Ay_Hi][Az_Lo][Az_Hi]
+    //         [Mx_Lo][Mx_Hi][My_Lo][My_Hi][Mz_Lo][Mz_Hi]
+    uint8_t data[18];
+
+    // Get IMU data - single read for all sensors (efficient)
+    int16_t gyro[3], accel[3], mag[3];
+    imu_get_all_raw(gyro, accel, mag);
+
+    // Pack gyroscope (16-bit little-endian)
+    data[0] = gyro[0] & 0xFF;
+    data[1] = (gyro[0] >> 8) & 0xFF;
+    data[2] = gyro[1] & 0xFF;
+    data[3] = (gyro[1] >> 8) & 0xFF;
+    data[4] = gyro[2] & 0xFF;
+    data[5] = (gyro[2] >> 8) & 0xFF;
+
+    // Pack accelerometer
+    data[6] = accel[0] & 0xFF;
+    data[7] = (accel[0] >> 8) & 0xFF;
+    data[8] = accel[1] & 0xFF;
+    data[9] = (accel[1] >> 8) & 0xFF;
+    data[10] = accel[2] & 0xFF;
+    data[11] = (accel[2] >> 8) & 0xFF;
+
+    // Pack magnetometer
+    data[12] = mag[0] & 0xFF;
+    data[13] = (mag[0] >> 8) & 0xFF;
+    data[14] = mag[1] & 0xFF;
+    data[15] = (mag[1] >> 8) & 0xFF;
+    data[16] = mag[2] & 0xFF;
+    data[17] = (mag[2] >> 8) & 0xFF;
+
+    protocol_send_packet(FUNC_REPORT_MPU_RAW, data, sizeof(data));
+}
+
+void protocol_send_imu_attitude_data(void)
+{
+    // Packet: [Roll_Lo][Roll_Hi][Pitch_Lo][Pitch_Hi][Yaw_Lo][Yaw_Hi]
+    // Values: radians × 10000 (16-bit signed)
+    uint8_t data[6];
+
+    // Get attitude angles
+    float roll, pitch, yaw;
+    imu_get_attitude(&roll, &pitch, &yaw);
+
+    // Convert to fixed-point (radians × 10000)
+    int16_t roll_int = (int16_t)(roll * 10000.0f);
+    int16_t pitch_int = (int16_t)(pitch * 10000.0f);
+    int16_t yaw_int = (int16_t)(yaw * 10000.0f);
+
+    // Pack data (16-bit little-endian)
+    data[0] = roll_int & 0xFF;
+    data[1] = (roll_int >> 8) & 0xFF;
+    data[2] = pitch_int & 0xFF;
+    data[3] = (pitch_int >> 8) & 0xFF;
+    data[4] = yaw_int & 0xFF;
+    data[5] = (yaw_int >> 8) & 0xFF;
+
+    protocol_send_packet(FUNC_REPORT_IMU_ATT, data, sizeof(data));
+}
+
+void protocol_send_encoder_data(void)
+{
+    // Packet: [M1_0][M1_1][M1_2][M1_3][M2_0][M2_1][M2_2][M2_3]
+    //         [M3_0][M3_1][M3_2][M3_3][M4_0][M4_1][M4_2][M4_3]
+    // Values: 32-bit unsigned integers (little-endian)
+    uint8_t data[16];
+
+    // Get encoder counts
+    int32_t enc[4];
+    for (uint8_t i = 0; i < 4; i++)
+    {
+        enc[i] = encoder_get_count(i);
+    }
+
+    // Pack encoder counts (32-bit little-endian)
+    for (uint8_t i = 0; i < 4; i++)
+    {
+        data[i * 4 + 0] = enc[i] & 0xFF;
+        data[i * 4 + 1] = (enc[i] >> 8) & 0xFF;
+        data[i * 4 + 2] = (enc[i] >> 16) & 0xFF;
+        data[i * 4 + 3] = (enc[i] >> 24) & 0xFF;
+    }
+
+    protocol_send_packet(FUNC_REPORT_ENCODER, data, sizeof(data));
+}
+
+/* ========================================================================
+ * PID TUNING HANDLERS
+ * ======================================================================== */
+
+void protocol_handle_set_motor_pid(const uint8_t *data)
+{
+    // Data format: [KP_Lo][KP_Hi][KI_Lo][KI_Hi][KD_Lo][KD_Hi][state]
+    // Gains are int16_t little-endian, scaled by 1000
+    int16_t kp_raw = (int16_t)((data[1] << 8) | data[0]);
+    int16_t ki_raw = (int16_t)((data[3] << 8) | data[2]);
+    int16_t kd_raw = (int16_t)((data[5] << 8) | data[4]);
+
+    float kp = (float)kp_raw / 1000.0f;
+    float ki = (float)ki_raw / 1000.0f;
+    float kd = (float)kd_raw / 1000.0f;
+    uint8_t state = data[6];
+
+    control_set_motor_pid(kp, ki, kd);
+
+    // Save to flash when state byte == SAVE_VERIFY (0x5F)
+    if (state == SAVE_VERIFY)
+    {
+        flash_storage_save();
+    }
+}
+
+void protocol_handle_set_yaw_pid(const uint8_t *data)
+{
+    int16_t kp_raw = (int16_t)((data[1] << 8) | data[0]);
+    int16_t ki_raw = (int16_t)((data[3] << 8) | data[2]);
+    int16_t kd_raw = (int16_t)((data[5] << 8) | data[4]);
+
+    float kp = (float)kp_raw / 1000.0f;
+    float ki = (float)ki_raw / 1000.0f;
+    float kd = (float)kd_raw / 1000.0f;
+
+    control_set_yaw_pid(kp, ki, kd);
+}
+
+void protocol_handle_set_motor_pid_multilevel(const uint8_t *data)
+{
+    // Data format: [t0_lo][t0_hi][t1_lo][t1_hi][t2_lo][t2_hi]
+    //              [kp0_lo][kp0_hi][ki0_lo][ki0_hi][kd0_lo][kd0_hi]
+    //              [kp1_lo][kp1_hi][ki1_lo][ki1_hi][kd1_lo][kd1_hi]
+    //              [kp2_lo][kp2_hi][ki2_lo][ki2_hi][kd2_lo][kd2_hi]
+    //              [state]
+    // Total: 25 bytes
+
+    // Parse speed thresholds (int16_t, mm/s)
+    int16_t t0_raw = (int16_t)((data[1] << 8) | data[0]);
+    int16_t t1_raw = (int16_t)((data[3] << 8) | data[2]);
+    int16_t t2_raw = (int16_t)((data[5] << 8) | data[4]);
+
+    float t0 = (float)t0_raw;
+    float t1 = (float)t1_raw;
+    float t2 = (float)t2_raw;
+
+    // Parse PID gains for all 3 levels (int16_t, scaled by 1000)
+    float kp[3], ki[3], kd[3];
+    for (uint8_t level = 0; level < 3; level++)
+    {
+        uint8_t offset = 6 + level * 6;  // 6 bytes thresholds + level * 6 bytes/level
+        int16_t kp_raw = (int16_t)((data[offset + 1] << 8) | data[offset + 0]);
+        int16_t ki_raw = (int16_t)((data[offset + 3] << 8) | data[offset + 2]);
+        int16_t kd_raw = (int16_t)((data[offset + 5] << 8) | data[offset + 4]);
+
+        kp[level] = (float)kp_raw / 1000.0f;
+        ki[level] = (float)ki_raw / 1000.0f;
+        kd[level] = (float)kd_raw / 1000.0f;
+    }
+
+    uint8_t state = data[24];
+
+    // Set speed thresholds
+    control_set_pid_speed_thresholds(t0, t1, t2);
+
+    // Set PID gains for each level
+    control_set_motor_pid_level(0, kp[0], ki[0], kd[0]);
+    control_set_motor_pid_level(1, kp[1], ki[1], kd[1]);
+    control_set_motor_pid_level(2, kp[2], ki[2], kd[2]);
+
+    // Save to flash when state byte == SAVE_VERIFY (0x5F)
+    if (state == SAVE_VERIFY)
+    {
+        flash_storage_save();
+    }
+}
+
+/* ========================================================================
+ * MAGNETOMETER CALIBRATION HANDLER
+ * ======================================================================== */
+
+void protocol_handle_set_mag_cal(const uint8_t *data)
+{
+    // Data format: [ox_lo][ox_hi][oy_lo][oy_hi][oz_lo][oz_hi]
+    // Offsets are int16_t little-endian, scaled by 100 (µT × 100)
+    int16_t ox_raw = (int16_t)((data[1] << 8) | data[0]);
+    int16_t oy_raw = (int16_t)((data[3] << 8) | data[2]);
+    int16_t oz_raw = (int16_t)((data[5] << 8) | data[4]);
+
+    mag_calibration_t cal;
+    imu_get_mag_calibration(&cal);
+
+    cal.hard_iron_offset[0] = (float)ox_raw / 100.0f;
+    cal.hard_iron_offset[1] = (float)oy_raw / 100.0f;
+    cal.hard_iron_offset[2] = (float)oz_raw / 100.0f;
+    cal.calibrated = 1;
+
+    imu_set_mag_calibration(&cal);
+
+    // Auto-save mag calibration to flash
+    flash_storage_save();
+
+    DEBUG_INFO("Mag cal set+saved: [%.2f, %.2f, %.2f] uT\n",
+               cal.hard_iron_offset[0], cal.hard_iron_offset[1], cal.hard_iron_offset[2]);
+}
+
+/* ========================================================================
+ * FIRMWARE ODOMETRY REPORTING
+ * ======================================================================== */
+
+void protocol_send_odometry_data(void)
+{
+    // Packet: 6× int32 LE = 24 bytes
+    // [x_mm][y_mm][theta_mrad][vx_mms][vy_mms][omega_mrads]
+    uint8_t data[24];
+
+    float x, y, theta, vx, vy, omega;
+    control_get_firmware_odometry(&x, &y, &theta, &vx, &vy, &omega);
+
+    int32_t vals[6] = {
+        (int32_t)(x * 1000.0f),         // m → mm
+        (int32_t)(y * 1000.0f),         // m → mm
+        (int32_t)(theta * 1000.0f),     // rad → mrad
+        (int32_t)(vx * 1000.0f),        // m/s → mm/s
+        (int32_t)(vy * 1000.0f),        // m/s → mm/s
+        (int32_t)(omega * 1000.0f),     // rad/s → mrad/s
+    };
+
+    for (int i = 0; i < 6; i++)
+    {
+        data[i * 4 + 0] = vals[i] & 0xFF;
+        data[i * 4 + 1] = (vals[i] >> 8) & 0xFF;
+        data[i * 4 + 2] = (vals[i] >> 16) & 0xFF;
+        data[i * 4 + 3] = (vals[i] >> 24) & 0xFF;
+    }
+
+    protocol_send_packet(FUNC_REPORT_ODOM, data, sizeof(data));
+}
+
+/* ========================================================================
+ * BUZZER CONTROL
+ * ======================================================================== */
+
+void protocol_update_buzzer(void)
+{
+    // Handle timed buzzer (on_time >= 10)
+    if (g_buzzer_on_time >= 10)
+    {
+        uint32_t current_tick = xTaskGetTickCount();
+        uint32_t elapsed_ms = (current_tick - g_buzzer_start_tick) * portTICK_PERIOD_MS;
+
+        if (elapsed_ms >= g_buzzer_on_time)
+        {
+            // Time expired, turn off buzzer
+            BUZZER_OFF();
+            g_buzzer_on_time = 0;
+        }
+    }
+}

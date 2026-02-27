@@ -1,0 +1,74 @@
+# OrbiBot Project Rules for Cline & Kimi
+
+## Overview
+This file serves as the entry point for Cline's context. Detailed rules are located in `.claude/rules/` and referenced below.
+
+## Critical Rules (Read Before Any Work)
+
+### 1. ROS2 Package README Workflow
+📄 **See**: `.claude/rules/ros2_package_readme_workflow.md`
+
+**Summary:**
+- **Before** reading/editing any ROS2 package → MUST read `src/<package_name>/README.md`
+- **After** editing any package → MUST update README.md if changes affect functionality/API/dependencies
+- **Before** exploring full codebase → MUST read `CLAUDE.md`
+
+### 2. Mandatory Workflow Rules
+📄 **See**: `.claude/rules/workflow.md`
+
+**Summary:**
+- Create git commit after every feature/fix (don't batch unrelated changes)
+- Follow naming conventions strictly (read `coding_standards.md` first)
+
+### 3. Coding Standards
+📄 **See**: `.claude/rules/coding_standards.md`
+
+**Summary:**
+- Python: `PascalCase` classes, `snake_case` functions, `UPPER_SNAKE_CASE` constants
+- C: `snake_case` functions/variables, `snake_case_t` types, `UPPER_SNAKE_CASE` macros
+- Files: `snake_case.py`, `snake_case.c`, `kebab-case.md`
+- **NEVER** use `__double_underscore` (use `_single_underscore`)
+- **NEVER** use underscores in class names
+
+## Additional Reference Rules
+
+| Rule File | Purpose |
+|-----------|---------|
+| `.claude/rules/ros2_general.md` | General ROS2 development guidelines |
+| `.claude/rules/ros2_nodes.md` | ROS2 node creation and management |
+| `.claude/rules/ros2_communication.md` | Topics, services, actions |
+| `.claude/rules/clean_architecture.md` | Architecture patterns |
+| `.claude/rules/robot_specific.md` | Robot-specific implementations |
+| `.claude/rules/testing.md` | Testing requirements |
+
+## Quick Command Reference
+
+### ROS2 Package README Locations
+```
+src/orbibot_ai/README.md
+src/orbibot_bringup/README.md
+src/orbibot_description/README.md
+src/orbibot_exploration/README.md
+src/orbibot_hardware/README.md
+src/orbibot_localization/README.md
+src/orbibot_mcp_server/README.md
+src/orbibot_msgs/README.md
+src/orbibot_navigation/README.md
+src/orbibot_sensors/README.md
+src/orbibot_slam/README.md
+src/orbibot_teleop/README.md
+src/orbibot_webgui/README.md
+src/orbibot_rosmaster_firmware/README.md
+```
+
+## Essential Pre-Work Checklist
+
+Before starting any task:
+- [ ] Read relevant rule files listed above
+- [ ] If working with ROS2 package: Read package README.md
+- [ ] If exploring codebase: Read CLAUDE.md
+- [ ] Verify naming conventions from coding_standards.md
+
+## Global Context
+- **CLAUDE.md**: Project-wide architecture and guidelines at project root
+- **.claude/**: Contains all templates, rules, skills, and scripts

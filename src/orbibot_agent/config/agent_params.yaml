@@ -1,0 +1,27 @@
+# OrbiBot Agent Configuration
+
+safety:
+  max_linear_vel: 0.5    # m/s
+  max_angular_vel: 2.0   # rad/s
+  max_duration: 10.0     # seconds
+  sensor_timeout: 3.0    # seconds
+
+llm_providers:
+  gemini:
+    model: "gemini-2.0-flash"
+    api_key_env: "GEMINI_API_KEY"
+
+  anthropic:
+    model: "claude-3-5-sonnet-20241022"
+    api_key_env: "ANTHROPIC_API_KEY"
+
+  moonshot:
+    model: "kimi-latest"
+    api_key_env: "MOONSHOT_API_KEY"
+
+  ollama:
+    model: "llama3.1:8b"
+    base_url: "http://localhost:11434/v1"
+
+# Default provider to use
+default_provider: "gemini"

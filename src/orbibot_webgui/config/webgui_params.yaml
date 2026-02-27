@@ -1,0 +1,40 @@
+/**:
+  ros__parameters:
+    # Server settings
+    rosbridge:
+      host: "0.0.0.0"
+      port: 9090
+      retry_startup_delay: 2.0
+
+    webrtc_server:
+      host: "0.0.0.0"
+      port: 8081
+      width: 640
+      height: 480
+
+    # ROS Topics (matching CLAUDE.md architecture)
+    topics:
+      cmd_vel: "/cmd_vel"
+      odom: "/odom"
+      scan: "/scan"
+      imu: "/imu/data"
+      encoders: "/orbibot/encoders"
+      system_status: "/orbibot/system_status"
+      map: "/map"
+      camera: "/camera/color/image_raw"
+
+    # Control settings
+    control:
+      max_linear_vel: 1.0         # m/s
+      max_angular_vel: 2.0        # rad/s
+      default_linear_vel: 0.3     # m/s
+      default_angular_vel: 1.0    # rad/s
+      publish_rate: 20.0          # Hz
+      safety_timeout: 1.0         # seconds
+
+    # Update rates (Hz)
+    rates:
+      sensor_data: 20.0
+      lidar: 10.0
+      map: 1.0
+      camera: 30.0
