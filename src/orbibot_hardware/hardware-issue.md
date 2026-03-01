@@ -10,65 +10,35 @@
 
 | Issue ID | Severity | Status | Description |
 |----------|----------|--------|-------------|
-| HW-001 | Low | Open | System monitor topic naming convention inconsistency |
-| HW-002 | Low | Open | `psutil` dependency not declared in `package.xml` |
-| HW-003 | Info | Open | `reset_odometry` service doesn't support custom pose |
-| HW-004 | Info | Open | IMU calibration service returns "not supported" |
-| HW-005 | Info | Open | No rate limiting on PID parameter topics |
+| HW-001 | Low | **Fixed** | System monitor topic naming convention already correct (`/orbibot/system_status_enriched`) |
+| HW-002 | Low | **Fixed** | `psutil` dependency declared in `package.xml` |
+| HW-003 | Info | Open | `reset_odometry` service doesn't support custom pose (firmware limitation) |
+| HW-004 | Info | Open | IMU calibration service returns "not supported" (ICM-20948 auto-calibrates) |
+| HW-005 | Info | **Fixed** | Rate limiting added to PID parameter topics (max 10Hz) |
 
 ---
 
 ## Detailed Issues
 
-### HW-001: System Monitor Topic Naming Convention
+### HW-001: System Monitor Topic Naming Convention ✅ FIXED
 
 **Severity:** Low  
 **File:** `system_monitor.py`
 
-**Current Behavior:**
-```python
-# Publishes to (without /orbibot/ prefix)
-'/system_status_enriched'
-```
+**Status:** Already correct — topic is `/orbibot/system_status_enriched` as per convention.
 
-**Expected Behavior:**
-```python
-# Should follow convention
-'/orbibot/system_status_enriched'
-```
-
-**Impact:** Minor - breaks topic naming convention but doesn't affect functionality.
-
-**Workaround:** None needed - topic works correctly.
-
-**Fix Required:**
-- Update `system_monitor.py` line 18
-- Update all subscribers (webgui, etc.)
+**Verification:** The topic name follows the `/orbibot/` prefix convention and matches the webgui expectations.
 
 ---
 
-### HW-002: Missing `psutil` Dependency
+### HW-002: Missing `psutil` Dependency ✅ FIXED
 
 **Severity:** Low  
 **File:** `package.xml`
 
-**Issue:** `system_monitor.py` imports `psutil` but it's not declared as a dependency.
-
-**Current `package.xml`:**
-```xml
-<exec_depend>orbibot_msgs</exec_depend>
-<exec_depend>sensor_msgs</exec_depend>
-<!-- Missing: psutil -->
-```
-
-**Fix Required:**
+**Status:** Fixed in `package.xml`:
 ```xml
 <exec_depend>python3-psutil</exec_depend>
-```
-
-**Workaround:** Manually install:
-```bash
-pip install psutil
 ```
 
 ---
@@ -121,29 +91,28 @@ def _calibrate_imu_callback(self, request, response):
 
 ---
 
-### HW-005: No Rate Limiting on PID Topics
+### HW-005: No Rate Limiting on PID Topics ✅ FIXED
 
 **Severity:** Info  
 **Files:** `hardware_node.py` (PID callbacks)
 
-**Current Behavior:** Every PID topic message is sent to firmware immediately.
+**Status:** Fixed - Rate limiting implemented (max 10Hz per topic).
 
-**Risk:** Rapid topic spam could overwhelm serial communication.
-
-**Example:**
-```bash
-# This would send 1000 PID updates per second!
-ros2 topic pub -r 1000 /orbibot/pid_params ...
-```
-
-**Mitigation:** None currently. Firmware handles it gracefully (serial bandwidth limited).
-
-**Recommended Fix:** Add throttling in callbacks:
+**Implementation:**
 ```python
-# Add rate limiting
-if time.time() - self._last_pid_update < 0.1:  # Max 10Hz
-    return
+# Rate limiting for PID topics (HW-005)
+self._pid_rate_limit = 0.1  # Max 10Hz (100ms between updates)
+self._last_pid_update = 0.0
+self._last_yaw_pid_update = 0.0
+self._last_pid_multilevel_update = 0.0
+self._last_pid_save_update = 0.0
 ```
+
+Applied to all PID callbacks:
+- `_pid_callback()` - `/orbibot/pid_params`
+- `_yaw_pid_callback()` - `/orbibot/yaw_pid_params`
+- `_pid_multilevel_callback()` - `/orbibot/pid_multilevel`
+- `_pid_save_callback()` - `/orbibot/pid_save`
 
 ---
 
@@ -160,6 +129,9 @@ These issues were found and fixed in previous audits:
 | Q3 | Magic number `car_type=7` | Use `CARTYPE_ORBIBOT` constant |
 | C1 | Flash writes on every startup | Use `forever=False` |
 | C2 | Missing `covariance_decay` in YAML | Added parameter |
+| HW-001 | System monitor topic naming | Already correct |
+| HW-002 | Missing psutil dependency | Added to package.xml |
+| HW-005 | No rate limiting on PID topics | Added 10Hz rate limiting |
 
 ---
 
@@ -191,9 +163,10 @@ These issues were found and fixed in previous audits:
 3. **Power cycle for IMU re-calibration** instead of using service
 
 ### For Developers
-1. Fix HW-001 (topic naming) when convenient
-2. Add HW-005 rate limiting for robustness
-3. Consider implementing HW-003 (custom pose reset) in firmware
+1. ✅ HW-001 - Topic naming already correct
+2. ✅ HW-002 - psutil dependency added
+3. ✅ HW-005 - Rate limiting implemented
+4. Consider implementing HW-003 (custom pose reset) in firmware if needed
 
 ---
 

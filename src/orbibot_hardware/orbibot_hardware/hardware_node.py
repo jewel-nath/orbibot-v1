@@ -91,6 +91,13 @@ class OrbiBotHardwareNode(Node):
         self._last_odom_theta = 0.0
         self._last_firmware_odom = None  # G3: Track last firmware data to skip duplicates
 
+        # Rate limiting for PID topics (HW-005)
+        self._pid_rate_limit = 0.1  # Max 10Hz (100ms between updates)
+        self._last_pid_update = 0.0
+        self._last_yaw_pid_update = 0.0
+        self._last_pid_multilevel_update = 0.0
+        self._last_pid_save_update = 0.0
+
         # Callback group for concurrent timer execution with MultiThreadedExecutor
         self._sensor_cb_group = ReentrantCallbackGroup()
 
@@ -336,6 +343,12 @@ class OrbiBotHardwareNode(Node):
         if not self.hardware_connected:
             return
 
+        # Rate limiting (HW-005): Max 10Hz to prevent serial overflow
+        current_time = time.time()
+        if current_time - self._last_pid_update < self._pid_rate_limit:
+            return
+        self._last_pid_update = current_time
+
         if len(msg.data) != 3:
             self.get_logger().warn(f"PID params requires [kp, ki, kd], got {len(msg.data)} values")
             return
@@ -351,6 +364,12 @@ class OrbiBotHardwareNode(Node):
         """Update yaw PID gains on firmware via /orbibot/yaw_pid_params topic."""
         if not self.hardware_connected:
             return
+
+        # Rate limiting (HW-005): Max 10Hz to prevent serial overflow
+        current_time = time.time()
+        if current_time - self._last_yaw_pid_update < self._pid_rate_limit:
+            return
+        self._last_yaw_pid_update = current_time
 
         if len(msg.data) != 3:
             self.get_logger().warn(f"Yaw PID params requires [kp, ki, kd], got {len(msg.data)} values")
@@ -372,6 +391,12 @@ class OrbiBotHardwareNode(Node):
         """
         if not self.hardware_connected:
             return
+
+        # Rate limiting (HW-005): Max 10Hz to prevent serial overflow
+        current_time = time.time()
+        if current_time - self._last_pid_multilevel_update < self._pid_rate_limit:
+            return
+        self._last_pid_multilevel_update = current_time
 
         if len(msg.data) != 12:
             self.get_logger().warn(
@@ -403,6 +428,12 @@ class OrbiBotHardwareNode(Node):
         """
         if not self.hardware_connected:
             return
+
+        # Rate limiting (HW-005): Max 10Hz to prevent flash wear
+        current_time = time.time()
+        if current_time - self._last_pid_save_update < self._pid_rate_limit:
+            return
+        self._last_pid_save_update = current_time
 
         try:
             if len(msg.data) >= 12:
