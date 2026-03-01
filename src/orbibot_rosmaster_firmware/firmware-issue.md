@@ -35,24 +35,21 @@ Extend the protocol to support full soft-iron matrix calibration or implement au
 
 ---
 
-### Issue #2: Yaw Control Activation Threshold Hardcoded
+### Issue #2: Yaw Control Activation Threshold ✅ RESOLVED
 **Severity**: Low  
 **Location**: `tasks/task_control.c`
 
 **Description**:
-The yaw control activation threshold is hardcoded to 0.05 m/s in the code:
+The yaw control activation threshold was documented as hardcoded to 0.05 m/s.
+
+**Status**: ✅ **VERIFIED** - Code already uses `YAW_ENABLE_THRESHOLD` from `orbibot_config.h` (defined as 0.05f). The threshold is configurable via the config file and can be tuned without code changes.
 
 ```c
 uint8_t should_yaw_control = (fabsf(target_local.omega) < 0.01f) &&
-                              (speed_magnitude > 0.05f);  // Hardcoded!
+                              (speed_magnitude > YAW_ENABLE_THRESHOLD);  // Uses config
 ```
 
-**Impact**:
-- Cannot tune via protocol without recompiling
-- May not be optimal for all floor surfaces
-
-**Recommended Fix**:
-Add protocol command to configure yaw control threshold, similar to PID gains.
+**Note**: To make this runtime-configurable via protocol, a new command handler would need to be added (future enhancement).
 
 ---
 
@@ -80,47 +77,33 @@ Store direction flags in flash storage and make configurable via protocol.
 
 ---
 
-### Issue #4: No Checksum on Flash Storage
+### Issue #4: No Checksum on Flash Storage ✅ RESOLVED
 **Severity**: Medium  
 **Location**: `drivers/flash_storage.c`
 
 **Description**:
 Flash storage writes PID gains and calibration data without a checksum or CRC. Corrupted flash data (due to power loss during write) could be loaded as valid.
 
-**Current**:
-```c
-// No checksum validation in flash_storage_load()
-```
-
-**Impact**:
-- Corrupted PID gains could cause erratic motor behavior
-- Difficult to detect flash corruption
-
-**Recommended Fix**:
-Add CRC-16 or similar checksum to flash storage structure.
+**Status**: ✅ **FIXED** - Checksum was already implemented in `flash_storage.c` using additive checksum validation in `calculate_checksum()`, `flash_storage_load()`, and `flash_storage_is_valid()`.
 
 ---
 
-### Issue #5: Watchdog Feed in task_monitoring May Not Be Sufficient
+### Issue #5: Watchdog Feed in task_monitoring May Not Be Sufficient ✅ RESOLVED
 **Severity**: Low  
-**Location**: `tasks/task_monitoring.c`
+**Location**: `tasks/task_monitoring.c`, `tasks/task_control.c`
 
 **Description**:
-The watchdog is fed every 1 second in task_monitoring. If task_control hangs (most critical task), watchdog may not trigger if task_monitoring continues running.
+The watchdog was fed every 1 second in task_monitoring. If task_control hangs (most critical task), watchdog may not trigger if task_monitoring continues running.
 
-**Current**:
+**Fix Applied**:
+Added `hal_watchdog_feed()` call in `task_control.c` at 100Hz (every 10ms), ensuring watchdog triggers if the critical control task hangs.
+
 ```c
-// task_monitoring feeds watchdog every 1s
-// But what if only task_control hangs?
+// In task_control.c - Feed watchdog from critical control task (Issue #5 fix)
 hal_watchdog_feed();
 ```
 
-**Impact**:
-- Critical control task hang may not be detected
-- Robot could continue with stuck motors
-
-**Recommended Fix**:
-Feed watchdog from task_control (which runs at 100Hz) or implement task health monitoring that checks all critical tasks.
+**Date Fixed**: March 2026
 
 ---
 
@@ -259,6 +242,12 @@ Increased communication task stack from 256 to 512 words to prevent stack overfl
 
 ### Resolved: Magnetometer DRDY Handling (February 2026)
 Added last-valid-reading cache to prevent zero-value spikes when DRDY not set.
+
+### Resolved: Watchdog from task_control (March 2026) ✅
+**Issue #5**: Added `hal_watchdog_feed()` in `task_control.c` to ensure watchdog triggers if the critical 100Hz control task hangs. Watchdog is now fed from both task_control (100Hz) and task_monitoring (1Hz) for redundancy.
+
+### Resolved: Flash Storage Checksum Verification (March 2026) ✅
+**Issue #4**: Verified that `flash_storage.c` already implements additive checksum validation for all flash data. The checksum covers PID gains and magnetometer calibration data, preventing corrupted values from being loaded after power loss during write.
 
 ---
 

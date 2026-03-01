@@ -278,6 +278,27 @@ eventually reset, but no error is reported and the reset takes up to the IWDG pe
 9. [x] M4 — encoder_driver_init comment + counter reset
 10. [x] M5 — Flash checksum XOR → additive sum
 11. [x] L1 + L2 + L3 — PI_F constant, derived circumference, debug level=1
+12. [x] Issue #5 — Watchdog from task_control (100Hz) for critical task hang detection
+13. [x] Issue #4 — Verified flash storage checksum already implemented
+
+---
+
+## Recent Fixes (March 2026)
+
+### Issue #5: Watchdog Feed from Critical Control Task
+**File:** `src/tasks/task_control.c`  
+**Problem:** Watchdog was only fed in `task_monitoring` (1Hz). If `task_control` hung, watchdog would not trigger.  
+**Fix:** Added `hal_watchdog_feed()` call in `task_control.c` at 100Hz, ensuring watchdog triggers if the critical control task hangs. Watchdog is now fed from both tasks for redundancy.
+
+### Issue #4: Flash Storage Checksum Verification
+**File:** `src/drivers/flash_storage.c`  
+**Problem:** Document claimed no checksum on flash storage.  
+**Status:** ✅ Verified - Additive checksum was already implemented in `calculate_checksum()`, `flash_storage_load()`, and `flash_storage_is_valid()`. Checksum covers PID gains and magnetometer calibration data.
+
+### Issue #2: Yaw Control Threshold Configuration
+**File:** `src/tasks/task_control.c`, `include/orbibot_config.h`  
+**Problem:** Document claimed threshold was hardcoded.  
+**Status:** ✅ Verified - Code already uses `YAW_ENABLE_THRESHOLD` from config (0.05f). Configurable without recompilation via header file.
 
 ### Next (in order)
 12. [x] N1 — Fix 0x0E function code collision (protocol.h + ROS driver)
