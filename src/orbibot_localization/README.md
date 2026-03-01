@@ -271,7 +271,7 @@ ros2 topic echo /diagnostics
 
 ```bash
 sudo apt install ros-jazzy-robot-localization
-sudo apt install ros-jazzy-imu-tools
+sudo apt install ros-jazzy-imu-filter-madgwick
 ```
 
 ---
@@ -284,5 +284,5 @@ sudo apt install ros-jazzy-imu-tools
 
 ---
 
-**Last Updated**: 2026-02-24  
+**Last Updated**: 2026-03-01  
 **Maintainer**: Jewel Nath
