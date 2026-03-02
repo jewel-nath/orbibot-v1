@@ -6,7 +6,7 @@ EKF sensor fusion for OrbiBot using `robot_localization`. Fuses wheel odometry w
 
 This package implements a two-stage sensor fusion pipeline:
 1. **Madgwick Filter** (50Hz): Fuses raw IMU + magnetometer → drift-free orientation
-2. **EKF** (25Hz): Fuses wheel velocities + Madgwick orientation → smooth odometry
+2. **EKF** (20Hz): Fuses wheel velocities + Madgwick orientation → smooth odometry
 
 This architecture provides better yaw accuracy than EKF alone while maintaining computational efficiency on Raspberry Pi 5.
 
@@ -45,7 +45,7 @@ This architecture provides better yaw accuracy than EKF alone while maintaining 
 │   └──────────────┘                       │                        │
 │                                          ▼                        │
 │                              ┌──────────────────┐                 │
-│                              │ EKF (robot_      │  25 Hz           │
+│                              │ EKF (robot_      │  20 Hz           │
 │                              │  localization)   │                 │
 │                              │                  │                 │
 │                              │ • Fuses vx, vy   │                 │
@@ -74,7 +74,7 @@ The EKF is configured with `odom0_config` positions=false. This prevents wheel e
 
 ### Madgwick + EKF (Two-Stage)
 - **Madgwick** runs at 50Hz on raw IMU data with magnetometer → produces drift-free orientation
-- **EKF** fuses this with wheel odometry at 25Hz → smooth, computationally efficient
+- **EKF** fuses this with wheel odometry at 20Hz → smooth, computationally efficient
 
 This provides better yaw accuracy than EKF alone while keeping CPU usage low on Raspberry Pi 5.
 
@@ -118,7 +118,7 @@ ros2 launch orbibot_localization localization.launch.py log_level:=debug
 | Topic | Type | Rate | Description |
 |-------|------|------|-------------|
 | `/imu/data_filtered` | `sensor_msgs/Imu` | 50 Hz | Madgwick-filtered IMU with orientation quaternion |
-| `/odometry/filtered` | `nav_msgs/Odometry` | 25 Hz | EKF-fused odometry for Nav2/SLAM |
+| `/odometry/filtered` | `nav_msgs/Odometry` | 20 Hz | EKF-fused odometry for Nav2/SLAM |
 
 ### TF Published
 
@@ -157,8 +157,8 @@ ros2 launch orbibot_localization localization.launch.py log_level:=debug
 
 | Parameter | Value | Description |
 |-----------|-------|-------------|
-| `frequency` | 25.0 Hz | EKF output rate |
-| `sensor_timeout` | 0.1 s | Max wait before prediction-only (5 missed samples at 50Hz) |
+| `frequency` | 20.0 Hz | EKF output rate (was 25Hz, reduced to prevent timing overruns on RPi5) |
+| `sensor_timeout` | 0.15 s | Max wait before prediction-only (increased from 0.1s for 20Hz rate) |
 | `two_d_mode` | true | Planar robot — ignore z/roll/pitch |
 | `imu0_differential` | false | Use absolute yaw (not differentiated) |
 | `imu0_relative` | true | Yaw starts at 0 regardless of initial heading |
@@ -232,7 +232,7 @@ ros2 topic hz /imu/data_raw           # ~50Hz
 ros2 topic hz /imu/mag                # ~50Hz
 ros2 topic hz /imu/data_filtered      # ~50Hz
 ros2 topic hz /odom                   # ~20Hz
-ros2 topic hz /odometry/filtered      # ~25Hz
+ros2 topic hz /odometry/filtered      # ~20Hz
 
 # Inspect EKF output
 ros2 topic echo /odometry/filtered --once
