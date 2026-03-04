@@ -1,313 +1,166 @@
-# Firmware Audit — Issues & Improvements
+# OrbiBot Firmware Changelog
 
-**Audited:** 2026-02-18
-**Compared against:** ROSMaster X3 reference, LGDXRobot2 MCU, Autonomous-Mobile-Robot
-
-**Status legend:**
-- `[ ]` Not fixed
-- `[~]` In progress
-- `[x]` Fixed
+All notable changes to the OrbiBot ROSMaster firmware.
 
 ---
 
-## CRITICAL — Must fix (safety / correctness)
+## v2.0.0 — 2026-03-04 (Deep Audit & Hardening)
 
-### C1 — No motor stop on critical battery voltage
-**File:** `src/tasks/task_monitoring.c`
-**Problem:** When battery drops below critical voltage (10.5V), the monitoring task only shows
-an OLED warning (and only if `ENABLE_OLED_DISPLAY=1`). Motors are **never stopped** when
-battery is critically low. This can over-discharge the LiFePO4 pack and cause BMS cutoff
-mid-motion (sudden stop = uncontrolled robot).
-**Fix:** Call `control_set_velocity(0.0f, 0.0f, 0.0f)` when `voltage < BATTERY_VOLTAGE_CRITICAL`.
-Also trigger buzzer regardless of OLED setting.
-- [x] Fixed
+Major reliability, safety, and code-quality release based on a comprehensive firmware audit comparing against ROSMaster X3 reference, LGDXRobot2 MCU, and Autonomous-Mobile-Robot codebases.
 
-### C2 — Wrong battery LOW threshold used (11.0V warning skipped entirely)
-**File:** `src/tasks/task_monitoring.c:30`
-**Problem:** The file defines `VOLTAGE_LOW_THRESHOLD 10.5f` which is the **critical** voltage,
-not the low warning voltage. The config has:
-- `BATTERY_VOLTAGE_LOW = 11.0V` — 20% remaining, warn user
-- `BATTERY_VOLTAGE_CRITICAL = 10.5V` — BMS cutoff, stop motors
+### Critical Bug Fixes
 
-But task_monitoring uses 10.5V for "low" and has no 11.0V warning step. The robot jumps
-straight from normal to emergency with no warning.
-Also `VOLTAGE_HIGH_THRESHOLD = 13.5f` is not in config and makes no physical sense for LiFePO4
-4S (full = 14.6V, nominal = 12.8V — 13.5V is a normal operating voltage).
-**Fix:** Replace local defines with `BATTERY_VOLTAGE_LOW` and `BATTERY_VOLTAGE_CRITICAL` from
-`orbibot_config.h`. Implement a proper 3-level warning: normal → low_warn → critical_stop.
-- [x] Fixed
+| ID | Fix | Files |
+|----|-----|-------|
+| BUG-1 | **SPI2 race condition** — `task_imu` is now the sole SPI reader; comm task reads from cache via `imu_task_get_raw_data()` | `task_imu.c`, `protocol.c`, `imu_driver.c` |
+| BUG-2 | **FreeRTOS hooks never called** — added `configCHECK_FOR_STACK_OVERFLOW 2` and `configUSE_MALLOC_FAILED_HOOK 1` | `FreeRTOSConfig.h` |
+| BUG-3 | **Protocol drop mode stale length** — added `g_cmd_length_drop` for correct packet tracking when both RX buffers full | `protocol.c` |
+| BUG-4 | **Duplicate `IMU_UPDATE_RATE_HZ`** — removed duplicate definition | `orbibot_config.h` |
 
-### C3 — `imu_task_get_attitude()` not thread-safe
-**File:** `src/tasks/task_imu.c:40-44`
-**Problem:** Reads 3 volatile floats (`g_roll`, `g_pitch`, `g_yaw`) with no critical section.
-ARM Cortex-M3 does not guarantee atomic multi-word reads. `task_control` reads this at 100Hz
-priority 10 while `task_imu` writes at 50Hz priority 8. A preemption between reading g_roll
-and g_yaw would give inconsistent attitude data to the yaw PID controller.
-**Fix:** Wrap the read in `taskENTER_CRITICAL() / taskEXIT_CRITICAL()`.
-- [x] Fixed
+### Concurrency & Thread-Safety
 
-### C4 — `measured_vel` written without critical section
-**File:** `src/tasks/task_control.c:261-264`
-**Problem:** The `measured_vel` struct (3 floats) is written in `task_control` without a
-critical section. `control_get_measured_velocity()` reads it from the communication task
-(called at 20Hz). Multi-word struct write is not atomic — a torn read could produce garbage
-velocity values reported to ROS 2.
-**Fix:** Wrap the 3-line write in `taskENTER_CRITICAL() / taskEXIT_CRITICAL()`.
-- [x] Fixed
+| ID | Fix | Files |
+|----|-----|-------|
+| RACE-1 | IMU attitude writes now inside `taskENTER_CRITICAL()` — prevents torn reads | `task_imu.c` |
+| RACE-2 | Encoder delta uses single-read prev_cnt subtraction — zero lost pulses | `hal_timer.c` |
+| RACE-3 | Protocol RX header bytes staged before buffer selection — prevents corruption | `protocol.c` |
 
-### C5 — `control_get_firmware_odometry()` reads without critical section
-**File:** `src/tasks/task_control.c:167-176`
-**Problem:** Reads 6 floats from `firmware_odom` with no critical section. `firmware_odom`
-is written at 100Hz by `task_control` (lines 268). The communication task calls
-`protocol_send_odometry_data()` → `control_get_firmware_odometry()` at 20Hz. Race condition
-can produce odometry packets with inconsistent x/y/theta values (torn from two update cycles).
-**Fix:** Wrap the 6-float read in `taskENTER_CRITICAL() / taskEXIT_CRITICAL()`.
-- [x] Fixed
+### Safety & Reliability
 
----
+| ID | Fix | Files |
+|----|-----|-------|
+| SAFE-1 | HardFault/StackOverflow/MallocFailed handlers use direct USART register writes (no heap/printf) | `main.c` |
+| SAFE-2 | HSE failure falls back to HSI @ 36MHz instead of hanging in `while(1)` | `main.c` |
+| SAFE-3 | Battery critical state sets `g_battery_lockout` — motors refuse non-zero commands until voltage recovers | `task_control.c`, `task_monitoring.c` |
+| SAFE-4 | Bounds checks (`>= 4`) on all motor/encoder index parameters | `motor_driver.c`, `encoder_driver.c`, `hal_timer.c` |
+| SAFE-5 | Per-task alive counters — watchdog only fed if all critical tasks report alive | `task_monitoring.c`, `task_control.c`, `task_imu.c`, `task_communication.c` |
 
-## HIGH — Bugs with functional impact
+### Protocol & Communication
 
-### H1 — BEEP command length check is wrong (potential buffer overread)
-**File:** `src/communication/protocol.c:341`
-**Problem:** The BEEP handler checks `if (rx_len >= 2)` before accessing `rx_buf[4]` and
-`rx_buf[5]`. But `rx_len` is the **total** packet length. A valid BEEP packet with 2 data bytes
-has: header(1) + device_id(1) + length_field(1) + func_code(1) + data[0](1) + data[1](1) +
-checksum(1) = 7 bytes → `rx_len = 6` (since `packet_length = length_field + 2`).
-The check `>= 2` allows access when total length is just 2, which would read beyond valid data.
-**Fix:** Change check to `if (rx_len >= 6)`.
-- [x] Fixed
+| ID | Fix | Files |
+|----|-----|-------|
+| PROTO-1 | Debug printf disabled for production (`ENABLE_DEBUG_OUTPUT=0`); boot messages gated by `BOOT_PRINTF` macro | `orbibot_config.h`, `main.c` |
+| PROTO-2 | Angular velocity clamp uses `MAX_ANGULAR_VELOCITY_RPS` from config (was hardcoded 5.0) | `protocol.c` |
+| PROTO-3 | Battery voltage clamped to 0–25.5V before `uint8_t` cast (prevents wrap-around) | `protocol.c` |
+| PROTO-4 | Unknown protocol commands counted in `g_unknown_cmd_count` for diagnostics | `protocol.c` |
 
-### H2 — Double SPI read in `imu_get_all_raw()` (inconsistent data)
-**File:** `src/drivers/imu_driver.c:769-799`
-**Problem:** `imu_get_all_raw()` calls `imu_read_raw(&raw)` first, then calls
-`imu_read_calibrated(&cal)` which internally calls `imu_read_raw()` again. This reads the IMU
-sensor registers **twice** per call — gyro/accel come from the first read, magnetometer comes
-from the second read (a different point in time). Creates inconsistent IMU packets.
-**Fix:** Read raw once, then apply calibration inline to the same raw data, without a second
-hardware read.
-- [x] Fixed
+### Configuration & Build
 
-### H3 — `protocol_is_command_ready()` only checks primary buffer
-**File:** `include/protocol.h:289-292`, `src/tasks/task_communication.c:48`
-**Problem:** The helper `protocol_is_command_ready()` returns only `g_cmd_flag` (primary buffer).
-`protocol_parse_command()` correctly handles both buffers, but it is only called when
-`protocol_is_command_ready()` returns true. If the primary buffer is empty but the secondary
-buffer has a command (`g_cmd_flag=0, g_cmd_flag2=1`), the command is **never processed** until
-a new command arrives in the primary buffer.
-**Fix:** Change return to `return g_cmd_flag || g_cmd_flag2;`.
-- [x] Fixed
+| ID | Fix | Files |
+|----|-----|-------|
+| CFG-1 | Version updated to v2.0.0; `FIRMWARE_VERSION_STRING` auto-generated from MAJOR/MINOR/PATCH | `firmware_version.h` |
+| CFG-2 | Git commit hash + branch injected at build time via PlatformIO `extra_scripts` | `git_version.py`, `platformio.ini` |
+| CFG-3 | Removed `-Wno-implicit-function-declaration`; fixed all in-body `extern` declarations with proper `#include` | `platformio.ini`, `hal_usart.c`, `imu_driver.c` |
+| CFG-4 | Added `-Werror` to build flags — all warnings are now build errors | `platformio.ini` |
 
----
+### Performance
 
-## MEDIUM — Code quality & improvement
+| ID | Fix | Files |
+|----|-----|-------|
+| PERF-2 | IMU data consolidated into single SPI transaction via `imu_read_both()` (resolved with BUG-1) | `imu_driver.c`, `task_imu.c` |
+| PERF-4 | Odometry upgraded from Euler to Midpoint (RK2) integration — less drift during rotation | `odometry.c` |
+| PERF-5 | Battery voltage EMA filter (alpha=0.3) — smooths motor inrush transients | `battery_monitor.c` |
 
-### M1 — Pure gyro integration for yaw (drifts over time)
-**File:** `src/tasks/task_imu.c:98`
-**Problem:** `g_yaw += imu_data.gyro_z * IMU_DT;` — pure gyro integration accumulates drift.
-The ICM-20948 + AK09916 magnetometer is fully initialized and reading data, but magnetometer
-data is never used for yaw correction. The yaw PID in task_control uses this drifting yaw,
-causing incorrect heading correction during extended straight-line operation.
-**Fix:** Add a complementary filter that blends gyro integration with magnetometer-derived
-heading: `yaw = alpha * (yaw + gyro_z * dt) + (1 - alpha) * mag_yaw`. Alpha ≈ 0.98 at 50Hz.
-This is the same approach used by LGDXRobot2.
-- [ ] Not yet fixed
+### Code Quality & Refactoring
 
-### M2 — `#define` inside function body
-**File:** `src/communication/protocol.c:428-429`
-**Problem:** `#define MAX_LINEAR_SPEED_MM 1000` and `#define MAX_ANGULAR_SPEED 5000` are
-defined inside the body of `protocol_handle_motion()`. Function-local `#define` has file scope
-(no block scope in C preprocessor), which is misleading. The values should use constants from
-`orbibot_config.h` (`MAX_LINEAR_VELOCITY_MPS = 1.0 m/s = 1000 mm/s` already exists).
-**Fix:** Remove local defines, use `(int16_t)(MAX_LINEAR_VELOCITY_MPS * 1000)` and define
-`MAX_ANGULAR_VELOCITY_RPS` equivalent at module level or use config.
-- [x] Fixed
+| ID | Fix | Files |
+|----|-----|-------|
+| REFACT-1 | Encoder direction: 4-way switch → `const int8_t encoder_direction[4]` table | `encoder_driver.c` |
+| REFACT-2 | Motor PWM: 4-way switch → `motor_hw_map_t` struct table with CCR pointers | `hal_timer.c` |
+| REFACT-3 | Replaced in-body `extern` declarations with proper `#include` headers | `hal_usart.c`, `imu_driver.c` |
+| REFACT-4 | Removed duplicate motor GPIO AF_PP init from `hal_timer_pwm_init()` | `hal_timer.c` |
+| REFACT-5 | Fixed `flash_storage.h` checksum comment (said XOR, code uses additive sum) | `flash_storage.h` |
+| REFACT-6 | Removed 14 dead protocol function codes; kept as commented reference block | `protocol.h` |
+| REFACT-7 | Added `robot_error.h` with `robot_err_t` enum (`ROBOT_OK`, `ROBOT_ERR_*`); adopted in IMU driver | `robot_error.h`, `imu_driver.c/h` |
+| REFACT-8 | `imu_delay_ms()` uses DWT CYCCNT cycle counter (was iteration-based busy-wait) | `imu_driver.c` |
 
-### M3 — Battery warning has no buzzer fallback when OLED disabled
-**File:** `src/tasks/task_monitoring.c:66-90`
-**Problem:** Low battery warnings are entirely gated by `#if ENABLE_OLED_DISPLAY`. If OLED is
-disabled, the robot gives no feedback at all when battery is low. The buzzer (`BUZZER_ON()`) is
-available but not used.
-**Fix:** Always beep on low battery voltage regardless of OLED state. Keep OLED update inside
-the `#if ENABLE_OLED_DISPLAY` guard, but move buzzer action outside the guard.
-- [x] Fixed (resolved as part of C1/C2 battery rewrite)
+### Documentation
 
-### M4 — `encoder_driver_init()` does nothing (misleading API)
-**File:** `src/drivers/encoder_driver.c:14-17`
-**Problem:** `encoder_driver_init()` just returns 0 without initializing any hardware.
-Encoder hardware is initialized inside `hal_timer_init()`. A caller who sees the function
-name would expect encoders to be ready after calling it, but they're not unless `hal_timer_init()`
-was called first (which happens in `main.c`). This is a leaky abstraction.
-**Fix:** Have `encoder_driver_init()` call `hal_timer_init_encoders()` directly, or at minimum
-add an assert or comment documenting the dependency.
-- [x] Fixed
+All 12 documentation-vs-code mismatches fixed across `README.md`, `hardware-doc.md`, and `firmware-architecture.md`:
 
-### M5 — Flash checksum uses XOR (weak, misses common errors)
-**File:** `src/drivers/flash_storage.c:27-37`
-**Problem:** The flash checksum is XOR of all bytes. XOR cannot detect: even numbers of
-identical bit flips, complete byte transpositions, or common data corruption patterns. The
-serial protocol already uses additive sum (sum & 0xFF) which catches more error types.
-**Fix:** Replace XOR with additive sum (consistent with protocol.c), or use CRC-8.
-- [x] Fixed
+| ID | Fix |
+|----|-----|
+| DOC-1 | Firmware version synchronized to v2.0.0 everywhere |
+| DOC-2 | SPI Mode corrected: Mode 0 (CPOL_Low, CPHA_1Edge), not Mode 3 |
+| DOC-3 | Checksum corrected: additive sum, not XOR |
+| DOC-4 | CommTask priority corrected: 7, not 9 |
+| DOC-5 | IMU task stack corrected: 1024 words, not 256 |
+| DOC-6 | Monitoring task rate corrected: 1Hz, not 10Hz |
+| DOC-7 | Battery ADC pin corrected: PC4 (CH14), not PC2 |
+| DOC-8 | IMU raw report code corrected: 0x0B, not 0x0E |
+| DOC-9 | OLED corrected: software I2C on PA2/PA3, not I2C1 (PB6/PB7 conflicts with TIM4) |
+| DOC-10 | Monitoring task stack corrected: 512 words, not 128 |
+| DOC-11 | Architecture directory tree rewritten to match actual file layout |
+| DOC-12 | Flash map corrected: firmware at 0x0800_0000 (no bootloader offset) |
 
 ---
 
-## LOW — Minor issues
+## v1.x — 2025-12 to 2026-02 (Initial Development & First Audit)
 
-### L1 — `WHEEL_CIRCUMFERENCE_M` hardcoded instead of derived
-**File:** `include/orbibot_config.h:29`
-**Problem:** `#define WHEEL_CIRCUMFERENCE_M 0.314159f` is hardcoded. If `WHEEL_DIAMETER_M`
-is ever changed, this value does not update automatically.
-**Fix:** `#define WHEEL_CIRCUMFERENCE_M (3.14159265f * WHEEL_DIAMETER_M)` — derived constant.
-- [x] Fixed
+### First Firmware Audit (2026-02-18)
 
-### L2 — Inconsistent π constant across files
-**File:** `include/orbibot_config.h:470`, `src/control/odometry.c:55`, `src/tasks/task_imu.c:101`
-**Problem:** Pi is spelled as `3.14159f`, `3.14159265f`, `3.14159265359f` in different places.
-Should use a single `PI_F` constant defined once in `orbibot_config.h`.
-- [x] Fixed
+Based on comparison with ROSMaster X3 reference, LGDXRobot2 MCU, and Autonomous-Mobile-Robot.
 
-### L3 — `DEBUG_LEVEL=2` (Info) with printf() on protocol USART
-**File:** `include/orbibot_config.h:270`
-**Problem:** `DEBUG_LEVEL=2` enables `DEBUG_INFO()` which calls `printf()`. The protocol USART
-(USART1) is used for both protocol packets and debug output. Interleaved debug text corrupts
-the binary protocol. The monitoring task already suppresses its printf for this reason.
-Other debug prints in protocol.c (`DEBUG_VERBOSE`) could fire during production use.
-**Fix:** Set `DEBUG_LEVEL=0` for production, or route debug to a separate USART. For now,
-change to `DEBUG_LEVEL=1` (errors only) as a minimum.
-- [x] Fixed
+**Critical fixes (C1–C5):**
+- C1: Motor stop on critical battery voltage (was OLED-only warning)
+- C2: Battery thresholds: 3-level state machine (normal → low_warn → critical_stop)
+- C3: `imu_task_get_attitude()` thread safety (taskENTER_CRITICAL)
+- C4: `measured_vel` struct write protected with critical section
+- C5: `control_get_firmware_odometry()` read protected with critical section
 
----
+**High-priority fixes (H1–H3):**
+- H1: BEEP command length check corrected (>= 6 instead of >= 2)
+- H2: Double SPI read in `imu_get_all_raw()` eliminated
+- H3: `protocol_is_command_ready()` now checks both buffer flags
 
-## Improvements (no bugs, but should be better)
+**Medium fixes (M2–M5):**
+- M2: Function-local `#define` replaced with config constants
+- M3: Buzzer low-battery fallback works without OLED enabled
+- M4: `encoder_driver_init()` documented dependency on `hal_timer_init()`
+- M5: Flash checksum changed from XOR to additive sum
 
-### I1 — Odometry uses simple Euler integration (comment says RK2)
-**File:** `src/control/odometry.c:38-52`
-**Current:** Comment says "Runge-Kutta 2nd order or simple Euler" but only Euler is implemented.
-**Suggestion:** Implement midpoint (RK2) integration for better accuracy at higher speeds:
-```c
-float mid_theta = odom->theta + robot_vel.omega * dt / 2.0f;
-delta_x = (robot_vel.vx * cosf(mid_theta) - robot_vel.vy * sinf(mid_theta)) * dt;
-delta_y = (robot_vel.vx * sinf(mid_theta) + robot_vel.vy * cosf(mid_theta)) * dt;
-```
-- [ ] Improved
+**Low-priority fixes (L1–L3):**
+- L1: `WHEEL_CIRCUMFERENCE_M` derived from `WHEEL_DIAMETER_M`
+- L2: Unified `PI_F` constant across all files
+- L3: `DEBUG_LEVEL` set to 1 (errors only)
 
-### I2 — Add velocity smoothing/filtering on encoder readings
-**File:** `src/tasks/task_control.c:249`
-**Current:** Raw encoder delta is used directly as measured wheel velocity. Single-tick noise
-spikes pass through to the PID.
-**Suggestion:** Apply a simple low-pass filter (EMA) to `wheel_speed_mm_s`:
-`filtered = alpha * new_speed + (1-alpha) * filtered_prev` with alpha ≈ 0.7 at 100Hz.
-LGDXRobot2 uses this pattern.
-- [ ] Improved
+**New audit findings (N1–N6):**
+- N1: Function code 0x0E collision fixed — `FUNC_RESET_ODOM` assigned 0x09
+- N2: HSE startup failure — watchdog moved to first line of `main()`
+- N3: Motor test gated behind `#if ENABLE_DEBUG_OUTPUT`
+- N4: SPI2 clock lowered from 9MHz to 4.5MHz (within ICM-20948 spec)
+- N5: Encoder GPIO changed from IN_FLOATING to IPU (noise rejection)
+- N6: DMA TX wait loop has ~2ms timeout (was infinite)
 
-### I3 — Gyro calibration blocks startup for ~1 second
-**File:** `src/drivers/imu_driver.c:556-591`
-**Current:** `imu_calibrate()` collects 1000 samples with 1ms delay each = ~1 second busy-wait
-before FreeRTOS scheduler starts.
-**Suggestion:** Collect fewer samples (200) or move calibration to a startup task that runs
-after the scheduler, using `vTaskDelay()` instead of busy-wait.
-- [ ] Improved
+### Initial Implementation (2025-11 to 2026-01)
+
+- STM32F103RCT6 firmware from scratch (replaced Yahboom proprietary binary)
+- FreeRTOS with 4 tasks: control (100Hz), IMU (50Hz), communication, monitoring
+- ICM-20948 SPI2 driver with gyro calibration, magnetometer, SPI-only mode
+- Mecanum kinematics (inverse + forward)
+- Multi-level incremental PID motor control
+- Yahboom-compatible serial protocol with double-buffered RX
+- Quadrature encoder counting via hardware timers
+- Battery ADC monitoring with voltage thresholds
+- Flash persistence for PID gains and magnetometer calibration
+- PlatformIO build system (replaced Keil MDK)
 
 ---
 
-## NEW — Found by deep audit (2026-02-18, second pass)
+## Open Items (Not Yet Implemented)
 
-### N1 — Function code 0x0E collision: FUNC_RESET_ODOM vs FUNC_REPORT_ICM_RAW
-**File:** `include/protocol.h`
-**Problem:** Both `FUNC_RESET_ODOM` and `FUNC_REPORT_ICM_RAW` are assigned `0x0E`. An incoming
-`0x0E` packet from ROS 2 dispatches to `protocol_handle_reset_odom()`. The outgoing ICM raw
-report also uses `0x0E`. The Yahboom reference uses `0x0E` = ICM raw and `0x0F` = reset state.
-If the ROS driver ever receives an echo it will misparse it as ICM raw data.
-**Fix:** Assign `FUNC_RESET_ODOM` a unique code (e.g., `0x0F`) and update firmware + ROS driver.
-- [x] Fixed — assigned 0x09, updated protocol.h + rosmaster_driver.py atomically
-
-### N2 — HSE startup failure causes unrecoverable hang
-**File:** `src/main.c:76-81`
-**Problem:** If the 8 MHz crystal fails to start (e.g., cold start, vibration), the MCU enters
-`while(1)` at clock init — before the IWDG watchdog is initialized (watchdog init happens after
-`vTaskStartScheduler()`, which is unreachable). The robot hangs permanently with no recovery.
-**Fix:** Initialize IWDG early (before RCC clock switch), or implement HSI fallback (run at
-36 MHz on internal RC if HSE fails).
-- [x] Fixed — hal_watchdog_init() moved to first line of main()
-
-### N3 — Motor test fires on every boot (safety risk)
-**File:** `src/main.c:234-235`
-**Problem:** `motorTest()` pulses all four motors briefly on every power-up — even when the robot
-is on a surface with obstacles nearby. This is a safety risk in production.
-**Fix:** Gate behind `#if ENABLE_DEBUG_OUTPUT` or a button-press check at boot.
-- [x] Fixed — motorTest() wrapped in #if ENABLE_DEBUG_OUTPUT
-
-### N4 — SPI2 clock (9 MHz) exceeds ICM-20948 max for register reads (7 MHz)
-**File:** `src/hal/hal_spi.c:61`
-**Problem:** SPI2 is configured at APB1/4 = 9 MHz. ICM-20948 datasheet specifies max 7 MHz for
-register read operations. At 9 MHz, occasional SPI read errors are possible (register reads can
-glitch at speeds above spec).
-**Fix:** Change prescaler to APB1/8 = 4.5 MHz for reliable IMU reads, or split to slow init /
-fast data (ICM allows faster for burst reads only).
-- [x] Fixed — SPI_BaudRatePrescaler_8 (4.5 MHz)
-
-### N5 — Encoder GPIO uses IN_FLOATING (susceptible to noise on long wires)
-**File:** `src/hal/hal_timer.c` (all encoder init functions)
-**Problem:** All encoder GPIO inputs use `GPIO_Mode_IN_FLOATING`. For long motor wires or noisy
-environments, floating inputs can pick up glitches when the motor is at rest or spinning slowly.
-**Fix:** Change to `GPIO_Mode_IPU` (input pull-up) for more reliable low-speed reading.
-- [x] Fixed — all 4 encoder timers (TIM2/3/4/5) updated to GPIO_Mode_IPU
-
-### N6 — DMA TX wait loop has no timeout
-**File:** `src/hal/hal_usart.c`
-**Problem:** `while (DMA_GetCurrDataCounter(DMA1_Channel4) != 0)` has no timeout. If a DMA
-transfer stalls (USART hardware fault), the comm task hangs indefinitely. The watchdog would
-eventually reset, but no error is reported and the reset takes up to the IWDG period.
-**Fix:** Add a timeout counter and return an error if DMA stall is detected.
-- [x] Fixed — ~2ms timeout (144000 cycles), disables channel on stall
+| ID | Category | Priority | Description |
+|----|----------|----------|-------------|
+| PERF-1 | Performance | HIGH | Fixed-point PID (STM32F103 has no FPU) |
+| PERF-3 | Performance | MEDIUM | DMA for UART RX (reduce ISR overhead) |
+| M1 | Feature | MEDIUM | Magnetometer complementary filter for yaw correction |
+| I2 | Improvement | LOW | Encoder velocity EMA filtering |
+| I3 | Improvement | LOW | Move gyro calibration to RTOS task |
+| TEST-1 | Testing | HIGH | Host-side unit tests for PID, kinematics, odometry, protocol |
+| TEST-2 | Testing | MEDIUM | Protocol double-buffer stress test |
+| TEST-3 | Testing | MEDIUM | Watchdog recovery verification |
+| TEST-4 | Testing | LOW | Flash storage wear/corruption test |
 
 ---
 
-## Fix Order (priority sequence)
-
-### Completed
-1. [x] C1 + C2 — Battery safety (3-level state machine, motor stop, buzzer)
-2. [x] C3 — IMU attitude thread safety (taskENTER_CRITICAL)
-3. [x] C4 + C5 — measured_vel + firmware_odom thread safety
-4. [x] H1 — BEEP length check (>= 6)
-5. [x] H2 — Double SPI read in imu_get_all_raw
-6. [x] H3 — protocol_is_command_ready secondary buffer
-7. [x] M2 — #define inside function → static const
-8. [x] M3 — Buzzer fallback (resolved in C1/C2 rewrite)
-9. [x] M4 — encoder_driver_init comment + counter reset
-10. [x] M5 — Flash checksum XOR → additive sum
-11. [x] L1 + L2 + L3 — PI_F constant, derived circumference, debug level=1
-12. [x] Issue #5 — Watchdog from task_control (100Hz) for critical task hang detection
-13. [x] Issue #4 — Verified flash storage checksum already implemented
-
----
-
-## Recent Fixes (March 2026)
-
-### Issue #5: Watchdog Feed from Critical Control Task
-**File:** `src/tasks/task_control.c`  
-**Problem:** Watchdog was only fed in `task_monitoring` (1Hz). If `task_control` hung, watchdog would not trigger.  
-**Fix:** Added `hal_watchdog_feed()` call in `task_control.c` at 100Hz, ensuring watchdog triggers if the critical control task hangs. Watchdog is now fed from both tasks for redundancy.
-
-### Issue #4: Flash Storage Checksum Verification
-**File:** `src/drivers/flash_storage.c`  
-**Problem:** Document claimed no checksum on flash storage.  
-**Status:** ✅ Verified - Additive checksum was already implemented in `calculate_checksum()`, `flash_storage_load()`, and `flash_storage_is_valid()`. Checksum covers PID gains and magnetometer calibration data.
-
-### Issue #2: Yaw Control Threshold Configuration
-**File:** `src/tasks/task_control.c`, `include/orbibot_config.h`  
-**Problem:** Document claimed threshold was hardcoded.  
-**Status:** ✅ Verified - Code already uses `YAW_ENABLE_THRESHOLD` from config (0.05f). Configurable without recompilation via header file.
-
-### Next (in order)
-12. [x] N1 — Fix 0x0E function code collision (protocol.h + ROS driver)
-13. [x] N2 — HSE startup watchdog (main.c)
-14. [x] N3 — Gate motorTest() behind debug flag (main.c)
-15. [x] N4 — Lower SPI clock to 4.5 MHz for ICM-20948 (hal_spi.c)
-16. [x] N5 — Encoder GPIO IN_FLOATING → IPU (hal_timer.c)
-17. [x] N6 — DMA TX timeout (hal_usart.c)
-18. [ ] M1 — Magnetometer complementary filter for yaw (task_imu.c)
-19. [ ] I1 — RK2 odometry integration (odometry.c)
-20. [ ] I2 — Encoder velocity EMA filter (task_control.c)
-21. [ ] I3 — Gyro calibration move to RTOS task (imu_driver.c)
+*Last updated: 2026-03-04*
