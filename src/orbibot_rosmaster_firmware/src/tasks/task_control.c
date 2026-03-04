@@ -48,6 +48,10 @@ static uint8_t yaw_control_active = 0; // Flag: is yaw control currently active?
 static volatile TickType_t last_command_time = 0;
 static volatile uint8_t command_timeout_active = 0;  // Flag: has timeout occurred?
 
+// Battery lockout: prevents motor commands when battery is critically low.
+// Set by task_monitoring, cleared when voltage recovers above hysteresis threshold.
+static volatile uint8_t g_battery_lockout = 0;
+
 // Velocity ramp: desire speeds track ramped targets (mm/s, signed)
 static float desire_wheel_speed_mm[4] = {0};
 
@@ -78,10 +82,24 @@ void task_control_init(void)
     flash_storage_load();
 }
 
+void control_set_battery_lockout(uint8_t locked)
+{
+    g_battery_lockout = locked;
+}
+
+uint8_t control_get_battery_lockout(void)
+{
+    return g_battery_lockout;
+}
+
 void control_set_velocity(float vx, float vy, float omega)
 {
-    // Critical section protects multi-word struct from race condition
-    // (volatile float is NOT atomic on ARM Cortex-M3)
+    // Refuse non-zero velocity when battery is critically low
+    if (g_battery_lockout && (vx != 0.0f || vy != 0.0f || omega != 0.0f))
+    {
+        return;
+    }
+
     taskENTER_CRITICAL();
     target_vel.vx = vx;
     target_vel.vy = vy;

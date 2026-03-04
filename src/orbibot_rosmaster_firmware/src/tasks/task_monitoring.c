@@ -71,10 +71,10 @@ void task_monitoring(void *params)
             {
                 battery_state = BATTERY_STATE_CRITICAL;
 
-                // Stop motors immediately — prevents hard BMS cutoff during motion
+                // Lock out motors and stop immediately
+                control_set_battery_lockout(1);
                 control_set_velocity(0.0f, 0.0f, 0.0f);
 
-                // Continuous beep alert (always active, regardless of OLED state)
                 BUZZER_ON();
 
 #if ENABLE_OLED_DISPLAY
@@ -88,7 +88,6 @@ void task_monitoring(void *params)
             {
                 battery_state = BATTERY_STATE_LOW;
 
-                // Double-beep warning (always active, regardless of OLED state)
                 BUZZER_ON();
                 vTaskDelay(pdMS_TO_TICKS(200));
                 BUZZER_OFF();
@@ -104,11 +103,11 @@ void task_monitoring(void *params)
         }
         else
         {
-            // Voltage recovered — silence buzzer/display. Motors remain stopped;
-            // a new cmd_vel from ROS 2 is required to resume motion.
+            // Voltage recovered above LOW threshold — clear lockout with hysteresis
             if (battery_state != BATTERY_STATE_NORMAL)
             {
                 battery_state = BATTERY_STATE_NORMAL;
+                control_set_battery_lockout(0);
                 BUZZER_OFF();
 
 #if ENABLE_OLED_DISPLAY

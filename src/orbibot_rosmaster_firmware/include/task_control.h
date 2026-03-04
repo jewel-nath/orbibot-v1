@@ -23,10 +23,24 @@ void task_control_init(void);
 void task_control(void *params);
 
 /**
+ * @brief Set/clear battery lockout (blocks non-zero motor commands)
+ * @param locked 1 = motors locked out, 0 = normal operation
+ */
+void control_set_battery_lockout(uint8_t locked);
+
+/**
+ * @brief Check if battery lockout is active
+ * @return 1 if locked out, 0 if normal
+ */
+uint8_t control_get_battery_lockout(void);
+
+/**
  * @brief Set target robot velocity
  * @param vx Linear X (m/s)
  * @param vy Linear Y (m/s)
  * @param omega Angular Z (rad/s)
+ *
+ * Non-zero commands are silently rejected when battery lockout is active.
  */
 void control_set_velocity(float vx, float vy, float omega);
 

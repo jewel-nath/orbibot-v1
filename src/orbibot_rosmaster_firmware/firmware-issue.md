@@ -403,6 +403,8 @@ When battery reaches critical voltage, `control_set_velocity(0,0,0)` is called o
 
 **Review**: Fix it.
 
+**Status**: ✅ FIXED — Added `g_battery_lockout` flag in `task_control.c`. `control_set_velocity()` rejects non-zero commands when locked. `task_monitoring.c` sets lockout on critical, clears when voltage recovers above `BATTERY_VOLTAGE_LOW` (hysteresis).
+
 ---
 
 ### SAFE-4: No Bounds Check on Motor/Encoder Index Parameters
