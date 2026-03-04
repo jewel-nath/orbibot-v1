@@ -225,7 +225,7 @@
  */
 #define IMU_TYPE                    "ICM20948"
 #define IMU_INTERFACE               "SPI2"
-#define IMU_UPDATE_RATE_HZ          50
+// IMU_UPDATE_RATE_HZ defined in Control Parameters section above
 
 /**
  * IMU Sensor Ranges

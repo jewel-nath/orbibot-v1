@@ -128,6 +128,8 @@ else target_length = g_cmd_length_drop;
 
 **Review**: Fix it.
 
+**Status**: ✅ FIXED — Removed duplicate, kept single definition in Control Parameters section.
+
 ---
 
 ## 2. Concurrency & Thread-Safety Issues
