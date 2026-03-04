@@ -391,6 +391,8 @@ If HSE fails, `systemClockConfig()` hangs in `while(1)`. The code comment says "
 
 **Review**: think and try to make a best solution for this issue.
 
+**Status**: ✅ FIXED — HSE failure now falls back to HSI/2 × 9 = 36MHz PLL. Robot runs at half speed with degraded timing precision but remains operational. Watchdog (already moved to first line of main) covers the startup window.
+
 ---
 
 ### SAFE-3: Battery Critical State Does Not Disable Motor Commands

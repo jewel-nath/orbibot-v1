@@ -68,34 +68,39 @@ volatile uint32_t system_uptime_ms = 0;
  */
 static void systemClockConfig(void)
 {
-    // Enable HSE (High-Speed External oscillator)
+    // Try HSE (8MHz external crystal) -> PLL -> 72MHz
     RCC_HSEConfig(RCC_HSE_ON);
-
-    // Wait for HSE to be ready
     ErrorStatus hse_status = RCC_WaitForHSEStartUp();
-    if (hse_status != SUCCESS)
+
+    if (hse_status == SUCCESS)
     {
-        // HSE failed to start - use HSI as fallback
-        // (This should never happen on ROSMaster board)
-        while (1);  // Error: HSE oscillator failed
+        // HSE OK: configure PLL for 72MHz (HSE × 9)
+        FLASH_PrefetchBufferCmd(FLASH_PrefetchBuffer_Enable);
+        FLASH_SetLatency(FLASH_Latency_2);
+
+        RCC_PLLConfig(RCC_PLLSource_HSE_Div1, RCC_PLLMul_9);
+        RCC_PLLCmd(ENABLE);
+        while (RCC_GetFlagStatus(RCC_FLAG_PLLRDY) == RESET);
+
+        RCC_SYSCLKConfig(RCC_SYSCLKSource_PLLCLK);
+        while (RCC_GetSYSCLKSource() != 0x08);
     }
+    else
+    {
+        // HSE failed — fall back to HSI (8MHz internal RC).
+        // PLL from HSI/2 × 9 = 36MHz (half speed, degraded but functional).
+        RCC_HSEConfig(RCC_HSE_OFF);
 
-    // Configure Flash latency (2 wait states for 72MHz)
-    FLASH_PrefetchBufferCmd(FLASH_PrefetchBuffer_Enable);
-    FLASH_SetLatency(FLASH_Latency_2);
+        FLASH_PrefetchBufferCmd(FLASH_PrefetchBuffer_Enable);
+        FLASH_SetLatency(FLASH_Latency_1);  // 1 wait state for 36MHz
 
-    // Configure PLL: HSE × 9 = 8MHz × 9 = 72MHz
-    RCC_PLLConfig(RCC_PLLSource_HSE_Div1, RCC_PLLMul_9);
-    RCC_PLLCmd(ENABLE);
+        RCC_PLLConfig(RCC_PLLSource_HSI_Div2, RCC_PLLMul_9);
+        RCC_PLLCmd(ENABLE);
+        while (RCC_GetFlagStatus(RCC_FLAG_PLLRDY) == RESET);
 
-    // Wait for PLL to lock
-    while (RCC_GetFlagStatus(RCC_FLAG_PLLRDY) == RESET);
-
-    // Set system clock source to PLL
-    RCC_SYSCLKConfig(RCC_SYSCLKSource_PLLCLK);
-
-    // Wait until PLL is used as system clock
-    while (RCC_GetSYSCLKSource() != 0x08);
+        RCC_SYSCLKConfig(RCC_SYSCLKSource_PLLCLK);
+        while (RCC_GetSYSCLKSource() != 0x08);
+    }
 
     // Configure AHB clock (HCLK = SYSCLK = 72MHz)
     RCC_HCLKConfig(RCC_SYSCLK_Div1);
