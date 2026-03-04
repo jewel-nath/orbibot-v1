@@ -23,8 +23,15 @@
 /* ADC resolution (12-bit) */
 #define ADC_MAX_VALUE       4096.0f
 
-/* Number of samples to average (matches reference firmware) */
+/* Number of samples to average per read */
 #define ADC_SAMPLE_COUNT    4
+
+/* EMA filter coefficient (0.0–1.0, lower = smoother, slower response)
+ * At 1Hz monitoring rate: alpha=0.3 gives ~3s settling time */
+#define BATTERY_EMA_ALPHA   0.3f
+
+static float ema_voltage = 0.0f;
+static uint8_t ema_initialized = 0;
 
 /**
  * @brief Initialize battery monitor
@@ -79,11 +86,23 @@ float battery_get_voltage(void)
         adc_avg = adc_sum / valid_samples;
     }
 
-    /* Convert ADC value to voltage (matches reference firmware formula) */
+    /* Convert ADC value to voltage */
     float measured_voltage = (float)adc_avg * (ADC_VREF / ADC_MAX_VALUE);
-    float battery_voltage = measured_voltage * BATTERY_ADC_RATIO;
+    float raw_voltage = measured_voltage * BATTERY_ADC_RATIO;
 
-    return battery_voltage;
+    /* Apply EMA filter across calls to smooth transient dips
+     * (e.g., motor inrush current causing false low-voltage warnings) */
+    if (!ema_initialized)
+    {
+        ema_voltage = raw_voltage;
+        ema_initialized = 1;
+    }
+    else
+    {
+        ema_voltage = BATTERY_EMA_ALPHA * raw_voltage + (1.0f - BATTERY_EMA_ALPHA) * ema_voltage;
+    }
+
+    return ema_voltage;
 }
 
 /**

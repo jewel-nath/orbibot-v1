@@ -769,6 +769,8 @@ filtered_voltage = 0.9f * filtered_voltage + 0.1f * raw;
 
 This smooths transient dips (e.g., motor inrush current) that could cause false low-voltage warnings.
 
+**Status**: ✅ FIXED — Added EMA filter (`alpha=0.3`) across `battery_get_voltage()` calls. First call seeds the filter; subsequent calls blend new samples with history.
+
 ---
 
 ## 8. Code Quality & Refactoring Ideas
