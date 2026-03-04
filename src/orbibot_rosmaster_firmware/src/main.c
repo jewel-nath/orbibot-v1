@@ -485,59 +485,43 @@ uint8_t system_is_initialized(void)
 }
 
 /**
- * @brief FreeRTOS stack overflow hook (called when task overflows stack)
- * @param pxTask Handle of the task that overflowed
- * @param pcTaskName Name of the task
+ * @brief Direct USART1 output — safe in fault/ISR context.
+ *
+ * Uses raw register writes instead of printf/HAL to avoid any
+ * dependency on heap, DMA, or library functions that may have
+ * caused (or been corrupted by) the fault.
  */
+static void fault_putc(char c)
+{
+    while (!(USART1->SR & (1 << 7)));  // Wait for TXE
+    USART1->DR = (uint8_t)c;
+}
+
+static void fault_puts(const char *s)
+{
+    while (*s) fault_putc(*s++);
+}
+
 void vApplicationStackOverflowHook(TaskHandle_t pxTask, char *pcTaskName)
 {
-    (void)pxTask;  // Unused
-    printf("\n[FATAL] Stack overflow in task: %s\n", pcTaskName);
-
-#if ENABLE_OLED_DISPLAY
-    oled_clear();
-    oled_print(0, 0, "STACK OVERFLOW!");
-    oled_print(0, 1, pcTaskName);
-    oled_update();
-#endif
-
-    // Disable interrupts and halt
+    (void)pxTask;
     __disable_irq();
+    fault_puts("\n[FATAL] Stack overflow: ");
+    fault_puts(pcTaskName);
+    fault_puts("\n");
     while (1);
 }
 
-/**
- * @brief FreeRTOS malloc failed hook (called when heap exhausted)
- */
 void vApplicationMallocFailedHook(void)
 {
-    printf("\n[FATAL] FreeRTOS heap exhausted!\n");
-
-#if ENABLE_OLED_DISPLAY
-    oled_clear();
-    oled_print(0, 0, "HEAP EXHAUSTED!");
-    oled_update();
-#endif
-
-    // Disable interrupts and halt
     __disable_irq();
+    fault_puts("\n[FATAL] FreeRTOS heap exhausted!\n");
     while (1);
 }
 
-/**
- * @brief Hard fault handler (called on critical CPU faults)
- */
 void HardFault_Handler(void)
 {
-    printf("\n[FATAL] Hard fault exception!\n");
-
-#if ENABLE_OLED_DISPLAY
-    oled_clear();
-    oled_print(0, 0, "HARD FAULT!");
-    oled_update();
-#endif
-
-    // Disable interrupts and halt
     __disable_irq();
+    fault_puts("\n[FATAL] Hard fault exception!\n");
     while (1);
 }

@@ -374,6 +374,8 @@ Removing `-Werror` means all warnings are non-fatal. Combined with `-Wall -Wextr
 
 **Review**: Fix it.
 
+**Status**: ✅ FIXED — Replaced `printf()` with `fault_puts()` using direct USART1 register writes. Interrupts disabled first, then message output. No heap, DMA, or library dependency.
+
 
 ---
 
