@@ -272,8 +272,16 @@
  * Debug Output
  * Verbose logging via serial port
  */
-#define ENABLE_DEBUG_OUTPUT         1           // Enabled during development
-#define DEBUG_LEVEL                 1           // 0=None, 1=Error only (Info/Verbose interleave with protocol USART1)
+/* Debug output shares USART1 with protocol TX.  Enabling debug in production
+ * risks interleaving printf bytes with DMA protocol packets, which corrupts
+ * the serial stream the ROS 2 driver parses.
+ * Set to 1 + desired DEBUG_LEVEL only during bench debugging with no host. */
+#define ENABLE_DEBUG_OUTPUT         0           // 0 for production, 1 for bench debug
+#define DEBUG_LEVEL                 0           // 0=None, 1=Error, 2=Info, 3=Verbose
+
+/* Boot printf messages (pre-scheduler). Safe from DMA conflicts but pollute
+ * the serial stream if the ROS 2 host is already connected. */
+#define ENABLE_BOOT_MESSAGES        0           // 0 for production, 1 for bench debug
 
 /**
  * Debug Print Macros
@@ -300,6 +308,13 @@
     #define DEBUG_ERROR(fmt, ...)
     #define DEBUG_INFO(fmt, ...)
     #define DEBUG_VERBOSE(fmt, ...)
+#endif
+
+#if ENABLE_BOOT_MESSAGES
+    #include <stdio.h>
+    #define BOOT_PRINTF(fmt, ...)  printf(fmt, ##__VA_ARGS__)
+#else
+    #define BOOT_PRINTF(fmt, ...)
 #endif
 
 /* ========================================================================

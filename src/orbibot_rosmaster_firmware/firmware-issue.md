@@ -210,6 +210,8 @@ With `DEBUG_LEVEL = 1` and `ENABLE_DEBUG_OUTPUT = 1`, error messages can fire at
 
 **Review**: When I write version 1 firmwire robot motor not moving. thats why I including this. now robot is moving. think what can I do for this issue, suggest the best solution. 
 
+**Status**: ✅ FIXED — Set `ENABLE_DEBUG_OUTPUT=0` and `DEBUG_LEVEL=0` for production. Added `ENABLE_BOOT_MESSAGES` flag (also 0 for production) and replaced all bare `printf()` in `main.c` with `BOOT_PRINTF()`. Both can be set to 1 for bench debugging with serial monitor.
+
 ---
 
 ### PROTO-2: Angular Velocity Clamp Mismatch — Config Says 2.0 rad/s, Protocol Allows 5.0 rad/s

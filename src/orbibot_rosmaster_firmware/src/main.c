@@ -139,35 +139,35 @@ static void hardwareInit(void)
     hal_usart_init(USART_BAUDRATE);
 
     // Print startup message
-    printf("\n\n");
-    printf("========================================\n");
-    printf("%s\n", FIRMWARE_FULL_INFO);
-    printf("========================================\n");
-    printf("Target: %s\n", FIRMWARE_TARGET);
-    printf("Board: %s\n", FIRMWARE_BOARD);
-    printf("System Clock: %lu MHz\n", SystemCoreClock / 1000000);
-    printf("Build: %s %s\n", BUILD_DATE, BUILD_TIME);
-    printf("========================================\n\n");
+    BOOT_PRINTF("\n\n");
+    BOOT_PRINTF("========================================\n");
+    BOOT_PRINTF("%s\n", FIRMWARE_FULL_INFO);
+    BOOT_PRINTF("========================================\n");
+    BOOT_PRINTF("Target: %s\n", FIRMWARE_TARGET);
+    BOOT_PRINTF("Board: %s\n", FIRMWARE_BOARD);
+    BOOT_PRINTF("System Clock: %lu MHz\n", SystemCoreClock / 1000000);
+    BOOT_PRINTF("Build: %s %s\n", BUILD_DATE, BUILD_TIME);
+    BOOT_PRINTF("========================================\n\n");
 
     // Initialize timers (PWM for motors, capture for encoders)
-    printf("[INIT] Configuring timers...\n");
+    BOOT_PRINTF("[INIT] Configuring timers...\n");
     hal_timer_init();
 
     // Initialize SPI for IMU communication
-    printf("[INIT] Configuring SPI for IMU...\n");
+    BOOT_PRINTF("[INIT] Configuring SPI for IMU...\n");
     hal_spi_init();
 
 #if ENABLE_OLED_DISPLAY
     // Initialize I2C for OLED display
-    printf("[INIT] Configuring I2C for OLED...\n");
+    BOOT_PRINTF("[INIT] Configuring I2C for OLED...\n");
     hal_i2c_init();
 #endif
 
     // Initialize ADC for battery monitoring
-    printf("[INIT] Configuring ADC for battery...\n");
+    BOOT_PRINTF("[INIT] Configuring ADC for battery...\n");
     hal_adc_init();
 
-    printf("[INIT] Hardware initialization complete.\n\n");
+    BOOT_PRINTF("[INIT] Hardware initialization complete.\n\n");
 }
 
 /**
@@ -178,7 +178,7 @@ static void hardwareInit(void)
  */
 static void motorTest(void)
 {
-    printf("[TEST] Motor PWM test - pulsing each motor...\n");
+    BOOT_PRINTF("[TEST] Motor PWM test - pulsing each motor...\n");
 
     // Use direct register access to eliminate software layers
     // Motor to Timer mapping (ROSMaster V3.0):
@@ -188,34 +188,34 @@ static void motorTest(void)
     //   M4 (Back-Right):  TIM1 CCR2/CCR3 -> PC8/PC9 (via CH2N/CH3N)
 
     // Test M1 (Front-Left): TIM8 CCR1/CCR2 (PA11/PA8)
-    printf("  M1 (FL): TIM8->CCR1 = 2000 (PA11)\n");
+    BOOT_PRINTF("  M1 (FL): TIM8->CCR1 = 2000 (PA11)\n");
     TIM8->CCR1 = 2000;
     TIM8->CCR2 = 0;
     for (volatile int i = 0; i < 500000; i++);  // ~70ms delay
     TIM8->CCR1 = 0;
 
     // Test M2 (Back-Left): TIM8 CCR3/CCR4 (PB0/PB1)
-    printf("  M2 (BL): TIM8->CCR3 = 2000 (PB0)\n");
+    BOOT_PRINTF("  M2 (BL): TIM8->CCR3 = 2000 (PB0)\n");
     TIM8->CCR3 = 2000;
     TIM8->CCR4 = 0;
     for (volatile int i = 0; i < 500000; i++);
     TIM8->CCR3 = 0;
 
     // Test M3 (Front-Right): TIM1 CCR4/CCR1 (PC6/PC7)
-    printf("  M3 (FR): TIM1->CCR4 = 2000 (PC6)\n");
+    BOOT_PRINTF("  M3 (FR): TIM1->CCR4 = 2000 (PC6)\n");
     TIM1->CCR4 = 2000;
     TIM1->CCR1 = 0;
     for (volatile int i = 0; i < 500000; i++);
     TIM1->CCR4 = 0;
 
     // Test M4 (Back-Right): TIM1 CCR2/CCR3 (PC8/PC9 via CH2N/CH3N)
-    printf("  M4 (BR): TIM1->CCR2 = 2000 (PC8 via CH2N)\n");
+    BOOT_PRINTF("  M4 (BR): TIM1->CCR2 = 2000 (PC8 via CH2N)\n");
     TIM1->CCR2 = 2000;
     TIM1->CCR3 = 0;
     for (volatile int i = 0; i < 500000; i++);
     TIM1->CCR2 = 0;
 
-    printf("[TEST] Motor test complete - did motors twitch?\n\n");
+    BOOT_PRINTF("[TEST] Motor test complete - did motors twitch?\n\n");
 }
 
 /**
@@ -230,43 +230,36 @@ static void motorTest(void)
  */
 static void driverInit(void)
 {
-    printf("[INIT] Initializing drivers...\n");
+    BOOT_PRINTF("[INIT] Initializing drivers...\n");
 
-    // Initialize motor driver (4-channel H-bridge)
-    printf("[INIT] Motor driver...\n");
+    BOOT_PRINTF("[INIT] Motor driver...\n");
     motor_driver_init();
 
-    // Test motors with direct PWM output (debug-only — unsafe on a live surface)
-#if ENABLE_DEBUG_OUTPUT
+#if ENABLE_BOOT_MESSAGES
     motorTest();
 #endif
 
-    // Initialize encoder driver (quadrature capture)
-    printf("[INIT] Encoder driver...\n");
+    BOOT_PRINTF("[INIT] Encoder driver...\n");
     encoder_driver_init();
 
-    // Initialize IMU driver (ICM-20948)
-    printf("[INIT] IMU driver (ICM-20948)...\n");
+    BOOT_PRINTF("[INIT] IMU driver (ICM-20948)...\n");
     if (imu_driver_init() == 0)
     {
-        printf("[OK] IMU initialized successfully\n");
+        BOOT_PRINTF("[OK] IMU initialized successfully\n");
     }
     else
     {
-        printf("[ERROR] IMU initialization failed!\n");
-        // Continue anyway - IMU is important but not critical for testing
+        BOOT_PRINTF("[ERROR] IMU initialization failed!\n");
     }
 
-    // Initialize battery monitor
-    printf("[INIT] Battery monitor...\n");
+    BOOT_PRINTF("[INIT] Battery monitor...\n");
     battery_monitor_init();
 
 #if ENABLE_OLED_DISPLAY
-    // Initialize OLED display
-    printf("[INIT] OLED display...\n");
+    BOOT_PRINTF("[INIT] OLED display...\n");
     if (oled_driver_init() == 0)
     {
-        printf("[OK] OLED initialized successfully\n");
+        BOOT_PRINTF("[OK] OLED initialized successfully\n");
         oled_clear();
         oled_print(0, 0, "OrbiBot v1.0");
         oled_print(0, 1, "Initializing...");
@@ -274,11 +267,11 @@ static void driverInit(void)
     }
     else
     {
-        printf("[WARN] OLED not detected\n");
+        BOOT_PRINTF("[WARN] OLED not detected\n");
     }
 #endif
 
-    printf("[INIT] Driver initialization complete.\n\n");
+    BOOT_PRINTF("[INIT] Driver initialization complete.\n\n");
 }
 
 /**
@@ -286,9 +279,9 @@ static void driverInit(void)
  */
 static void protocolInit(void)
 {
-    printf("[INIT] Initializing communication protocol...\n");
+    BOOT_PRINTF("[INIT] Initializing communication protocol...\n");
     protocol_init();
-    printf("[INIT] Protocol ready (ROSMaster compatible)\n\n");
+    BOOT_PRINTF("[INIT] Protocol ready (ROSMaster compatible)\n\n");
 }
 
 /**
@@ -302,7 +295,7 @@ static void protocolInit(void)
  */
 static void createTasks(void)
 {
-    printf("[RTOS] Creating FreeRTOS tasks...\n");
+    BOOT_PRINTF("[RTOS] Creating FreeRTOS tasks...\n");
 
     // Task 1: Motion control (highest priority)
     BaseType_t result = xTaskCreate(
@@ -315,10 +308,10 @@ static void createTasks(void)
     );
     if (result != pdPASS)
     {
-        printf("[ERROR] Failed to create ControlTask\n");
+        BOOT_PRINTF("[ERROR] Failed to create ControlTask\n");
         while (1);
     }
-    printf("[RTOS] Created ControlTask (priority 10, %d bytes stack)\n", TASK_CONTROL_STACK * 4);
+    BOOT_PRINTF("[RTOS] Created ControlTask (priority 10, %d bytes stack)\n", TASK_CONTROL_STACK * 4);
 
     // Task 2: Serial communication (auto-report)
     // Priority 7 - lower than control tasks, runs in gaps (matches reference firmware)
@@ -332,10 +325,10 @@ static void createTasks(void)
     );
     if (result != pdPASS)
     {
-        printf("[ERROR] Failed to create CommTask\n");
+        BOOT_PRINTF("[ERROR] Failed to create CommTask\n");
         while (1);
     }
-    printf("[RTOS] Created CommTask (priority 7, %d bytes stack)\n", TASK_COMMUNICATION_STACK * 4);
+    BOOT_PRINTF("[RTOS] Created CommTask (priority 7, %d bytes stack)\n", TASK_COMMUNICATION_STACK * 4);
 
     // Task 3: IMU data acquisition
     result = xTaskCreate(
@@ -348,10 +341,10 @@ static void createTasks(void)
     );
     if (result != pdPASS)
     {
-        printf("[ERROR] Failed to create IMU_Task\n");
+        BOOT_PRINTF("[ERROR] Failed to create IMU_Task\n");
         while (1);
     }
-    printf("[RTOS] Created IMU_Task (priority 8, %d bytes stack)\n", TASK_IMU_STACK * 4);
+    BOOT_PRINTF("[RTOS] Created IMU_Task (priority 8, %d bytes stack)\n", TASK_IMU_STACK * 4);
 
     // Task 4: System monitoring (battery, diagnostics)
     result = xTaskCreate(
@@ -364,16 +357,16 @@ static void createTasks(void)
     );
     if (result != pdPASS)
     {
-        printf("[ERROR] Failed to create MonitorTask\n");
+        BOOT_PRINTF("[ERROR] Failed to create MonitorTask\n");
         while (1);
     }
-    printf("[RTOS] Created MonitorTask (priority 5, %d bytes stack)\n", TASK_MONITORING_STACK * 4);
+    BOOT_PRINTF("[RTOS] Created MonitorTask (priority 5, %d bytes stack)\n", TASK_MONITORING_STACK * 4);
 
-    printf("[RTOS] All tasks created successfully.\n");
-    printf("[RTOS] Total stack allocated: %d bytes\n",
+    BOOT_PRINTF("[RTOS] All tasks created successfully.\n");
+    BOOT_PRINTF("[RTOS] Total stack allocated: %d bytes\n",
            (TASK_CONTROL_STACK + TASK_COMMUNICATION_STACK +
             TASK_IMU_STACK + TASK_MONITORING_STACK) * 4);
-    printf("[RTOS] FreeRTOS heap: %d bytes\n\n", FREERTOS_HEAP_SIZE);
+    BOOT_PRINTF("[RTOS] FreeRTOS heap: %d bytes\n\n", FREERTOS_HEAP_SIZE);
 }
 
 /**
@@ -415,10 +408,10 @@ int main(void)
     createTasks();
 
     // Print final startup message
-    printf("========================================\n");
-    printf("OrbiBot firmware initialization complete!\n");
-    printf("Starting FreeRTOS scheduler...\n");
-    printf("========================================\n\n");
+    BOOT_PRINTF("========================================\n");
+    BOOT_PRINTF("OrbiBot firmware initialization complete!\n");
+    BOOT_PRINTF("Starting FreeRTOS scheduler...\n");
+    BOOT_PRINTF("========================================\n\n");
 
 #if ENABLE_OLED_DISPLAY
     // Show ready message
@@ -429,7 +422,7 @@ int main(void)
     vTaskStartScheduler();
 
     // Should never reach here
-    printf("[ERROR] FreeRTOS scheduler failed to start!\n");
+    BOOT_PRINTF("[ERROR] FreeRTOS scheduler failed to start!\n");
     while (1);
 
     return 0;
