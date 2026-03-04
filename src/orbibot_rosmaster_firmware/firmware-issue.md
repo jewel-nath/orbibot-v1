@@ -184,6 +184,8 @@ In states `RX_STATE_WAIT_HEADER` and `RX_STATE_WAIT_DEVICE`, bytes are written t
 
 **Review**: think clearly and fix this with best solution.
 
+**Status**: ✅ FIXED — Header and device bytes now stage in `g_rx_staged_header`/`g_rx_staged_device`, then copy to the correct target buffer only after buffer selection in `RX_STATE_WAIT_LENGTH`.
+
 ---
 
 ## 3. Protocol & Communication Issues

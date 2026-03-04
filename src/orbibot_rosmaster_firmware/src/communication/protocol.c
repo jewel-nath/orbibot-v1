@@ -77,9 +77,13 @@ void protocol_init(void)
 // Debug counter - increments for every byte received
 volatile uint32_t g_rx_byte_count = 0;
 
+/* Staging area for header bytes — avoids writing to g_rx_buffer
+ * while the primary buffer might still be processed by the task. */
+static uint8_t g_rx_staged_header = 0;
+static uint8_t g_rx_staged_device = 0;
+
 void protocol_receive_byte(uint8_t byte)
 {
-    // Count every received byte (safe in ISR)
     g_rx_byte_count++;
 
     switch (g_rx_state)
@@ -87,7 +91,7 @@ void protocol_receive_byte(uint8_t byte)
         case RX_STATE_WAIT_HEADER:
             if (byte == PTO_HEAD)
             {
-                g_rx_buffer[0] = byte;
+                g_rx_staged_header = byte;
                 g_rx_index = 1;
                 g_rx_state = RX_STATE_WAIT_DEVICE;
             }
@@ -96,13 +100,12 @@ void protocol_receive_byte(uint8_t byte)
         case RX_STATE_WAIT_DEVICE:
             if (byte == PTO_DEVICE_ID)
             {
-                g_rx_buffer[1] = byte;
+                g_rx_staged_device = byte;
                 g_rx_index = 2;
                 g_rx_state = RX_STATE_WAIT_LENGTH;
             }
             else
             {
-                // Invalid device ID - reset
                 g_rx_state = RX_STATE_WAIT_HEADER;
                 g_rx_index = 0;
             }
@@ -110,39 +113,33 @@ void protocol_receive_byte(uint8_t byte)
 
         case RX_STATE_WAIT_LENGTH:
             {
-                uint8_t packet_length = byte + 2;  // Total packet length
+                uint8_t packet_length = byte + 2;
 
-                // Validate length
                 if (packet_length > PTO_MAX_BUF_LEN || packet_length < 5)
                 {
-                    // Invalid length - reset
                     g_rx_state = RX_STATE_WAIT_HEADER;
                     g_rx_index = 0;
                 }
                 else
                 {
-                    // Select which buffer to use (double-buffer logic)
                     if (!g_cmd_flag)
                     {
-                        // Primary buffer available
                         g_rx_active_buffer = 0;
-                        g_rx_buffer[0] = g_rx_buffer[0];  // Already set (header)
-                        g_rx_buffer[1] = g_rx_buffer[1];  // Already set (device)
+                        g_rx_buffer[0] = g_rx_staged_header;
+                        g_rx_buffer[1] = g_rx_staged_device;
                         g_rx_buffer[2] = byte;
                         g_cmd_length = packet_length;
                     }
                     else if (!g_cmd_flag2)
                     {
-                        // Primary full, use secondary buffer
                         g_rx_active_buffer = 1;
-                        g_rx_buffer2[0] = g_rx_buffer[0];  // Copy header
-                        g_rx_buffer2[1] = g_rx_buffer[1];  // Copy device
+                        g_rx_buffer2[0] = g_rx_staged_header;
+                        g_rx_buffer2[1] = g_rx_staged_device;
                         g_rx_buffer2[2] = byte;
                         g_cmd_length2 = packet_length;
                     }
                     else
                     {
-                        // Both buffers full - drop this packet but track length
                         g_rx_active_buffer = 2;
                         g_cmd_length_drop = packet_length;
                         g_rx_drop_count++;
