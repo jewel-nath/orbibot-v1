@@ -11,6 +11,10 @@
 // Accumulated encoder counts for odometry
 static int32_t encoder_accumulated[4] = {0, 0, 0, 0};
 
+// Direction correction table for ROSMaster V3.0 motor wiring
+// M1 (FL): inverted, M2 (BL): normal, M3 (FR): normal, M4 (BR): inverted
+static const int8_t encoder_direction[4] = { -1, 1, 1, -1 };
+
 int encoder_driver_init(void)
 {
     // Encoder hardware (TIM2/3/4/5 quadrature decoders) is initialized by
@@ -40,22 +44,7 @@ int16_t encoder_read_delta(uint8_t encoder)
     if (encoder >= 4) return 0;
 
     int16_t delta = hal_timer_read_encoder_delta(encoder);
-
-    // Apply direction correction for ROSMaster V3.0 motor configuration
-    // G5: Inverted after HAL encoder delta fix (previous inversions compensated for HAL bug)
-    switch (encoder)
-    {
-        case 0:  // M1 (Front-Left) - inverted
-            delta = -delta;
-            break;
-        case 1:  // M2 (Back-Left) - normal
-            break;
-        case 2:  // M3 (Front-Right) - normal
-            break;
-        case 3:  // M4 (Back-Right) - inverted
-            delta = -delta;
-            break;
-    }
+    delta *= encoder_direction[encoder];
 
     encoder_accumulated[encoder] += delta;
     return delta;

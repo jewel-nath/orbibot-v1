@@ -364,29 +364,22 @@ int hal_timer_init(void)
     return 0;
 }
 
-/**
- * @brief Set motor PWM duty cycle
- *
- * Motor to Timer/CCR mapping (ROSMaster V3.0):
- *   PWM_M1_A: TIM8->CCR1    // PA11 (TIM8_CH1)
- *   PWM_M1_B: TIM8->CCR2    // PA8 (TIM8_CH2)
- *   PWM_M2_A: TIM8->CCR3    // PB0 (TIM8_CH3)
- *   PWM_M2_B: TIM8->CCR4    // PB1 (TIM8_CH4)
- *   PWM_M3_A: TIM1->CCR4    // PC6 (TIM1_CH4)
- *   PWM_M3_B: TIM1->CCR1    // PC7 (TIM1_CH1)
- *   PWM_M4_A: TIM1->CCR2    // PC8 (TIM1_CH2N)
- *   PWM_M4_B: TIM1->CCR3    // PC9 (TIM1_CH3N)
- *
- * Direction Inversion:
- *   - M1: INVERTED (left side motor mounted opposite)
- *   - M2: INVERTED (left side motor mounted opposite)
- *   - M3: Normal
- *   - M4: Normal
- *
- * Motor Physical Layout:
- *   M1 (L1) = Front-Left   | M3 (R1) = Front-Right
- *   M2 (L2) = Back-Left    | M4 (R2) = Back-Right
- */
+/* Table-driven motor-to-timer mapping (ROSMaster V3.0).
+ * Each entry maps a motor index to its forward/reverse CCR registers
+ * and direction sign. Changing wiring is now a config change, not code. */
+typedef struct {
+    volatile uint32_t *ccr_fwd;
+    volatile uint32_t *ccr_rev;
+    int8_t direction;        // +1 normal, -1 inverted (left-side motors)
+} motor_hw_map_t;
+
+static const motor_hw_map_t motor_map[4] = {
+    { &TIM8->CCR1, &TIM8->CCR2, -1 },  // M1 Front-Left  (inverted)
+    { &TIM8->CCR3, &TIM8->CCR4, -1 },  // M2 Back-Left   (inverted)
+    { &TIM1->CCR4, &TIM1->CCR1,  1 },  // M3 Front-Right (normal)
+    { &TIM1->CCR2, &TIM1->CCR3,  1 },  // M4 Back-Right  (normal)
+};
+
 void hal_timer_set_motor_pwm(uint8_t motor, int16_t pwm)
 {
     if (motor >= 4) return;
@@ -394,73 +387,18 @@ void hal_timer_set_motor_pwm(uint8_t motor, int16_t pwm)
     if (pwm > MOTOR_MAX_PWM) pwm = MOTOR_MAX_PWM;
     if (pwm < -MOTOR_MAX_PWM) pwm = -MOTOR_MAX_PWM;
 
-    switch (motor)
+    const motor_hw_map_t *m = &motor_map[motor];
+    pwm *= m->direction;
+
+    if (pwm >= 0)
     {
-        case 0:  // M1 (Front-Left): TIM8 CCR1/CCR2 - DIRECTION INVERTED
-        {
-            // Direction inversion for left side motor
-            pwm = -pwm;
-
-            if (pwm >= 0)
-            {
-                TIM8->CCR1 = pwm;   // PWM_M1_A = Forward
-                TIM8->CCR2 = 0;     // PWM_M1_B = Off
-            }
-            else
-            {
-                TIM8->CCR1 = 0;     // PWM_M1_A = Off
-                TIM8->CCR2 = -pwm;  // PWM_M1_B = Reverse
-            }
-            break;
-        }
-
-        case 1:  // M2 (Back-Left): TIM8 CCR3/CCR4 - DIRECTION INVERTED
-        {
-            // Direction inversion for left side motor
-            pwm = -pwm;
-
-            if (pwm >= 0)
-            {
-                TIM8->CCR3 = pwm;   // PWM_M2_A = Forward
-                TIM8->CCR4 = 0;     // PWM_M2_B = Off
-            }
-            else
-            {
-                TIM8->CCR3 = 0;     // PWM_M2_A = Off
-                TIM8->CCR4 = -pwm;  // PWM_M2_B = Reverse
-            }
-            break;
-        }
-
-        case 2:  // M3 (Front-Right): TIM1 CCR4/CCR1 - DIRECTION NORMAL
-        {
-            if (pwm >= 0)
-            {
-                TIM1->CCR4 = pwm;   // PWM_M3_A = Forward
-                TIM1->CCR1 = 0;     // PWM_M3_B = Off
-            }
-            else
-            {
-                TIM1->CCR4 = 0;     // PWM_M3_A = Off
-                TIM1->CCR1 = -pwm;  // PWM_M3_B = Reverse
-            }
-            break;
-        }
-
-        case 3:  // M4 (Back-Right): TIM1 CCR2/CCR3 - DIRECTION NORMAL
-        {
-            if (pwm >= 0)
-            {
-                TIM1->CCR2 = pwm;   // PWM_M4_A = Forward
-                TIM1->CCR3 = 0;     // PWM_M4_B = Off
-            }
-            else
-            {
-                TIM1->CCR2 = 0;     // PWM_M4_A = Off
-                TIM1->CCR3 = -pwm;  // PWM_M4_B = Reverse
-            }
-            break;
-        }
+        *m->ccr_fwd = (uint32_t)pwm;
+        *m->ccr_rev = 0;
+    }
+    else
+    {
+        *m->ccr_fwd = 0;
+        *m->ccr_rev = (uint32_t)(-pwm);
     }
 }
 

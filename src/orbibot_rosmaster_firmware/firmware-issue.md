@@ -796,6 +796,8 @@ This is cleaner, self-documenting, and easier to configure at runtime (via flash
 
 **Review**: okay do it.
 
+**Status**: ✅ FIXED — Replaced 4-way switch in `encoder_read_delta()` with a `static const int8_t encoder_direction[4]` lookup table. Direction is now a one-line config change.
+
 ---
 
 ### REFACT-2: Motor-to-Timer Mapping — Use Table-Driven Approach
@@ -824,6 +826,8 @@ static const motor_hw_map_t motor_map[4] = {
 Reduces code duplication, makes hardware changes a config change.
 
 **Review**: okay do it.
+
+**Status**: ✅ FIXED — Replaced 4-way switch in `hal_timer_set_motor_pwm()` with `motor_hw_map_t` struct array. Motor wiring changes are now table edits.
 
 ---
 
