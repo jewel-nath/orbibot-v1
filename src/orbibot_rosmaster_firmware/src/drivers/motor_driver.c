@@ -47,10 +47,9 @@ static int16_t motor_apply_deadzone(int16_t speed)
 
 void motor_set_speed(uint8_t motor, int16_t speed)
 {
-    // Apply deadzone compensation before sending to HAL
+    if (motor >= 4) return;
+
     int16_t compensated_speed = motor_apply_deadzone(speed);
-    
-    // Send to HAL (which now handles the correct Dual-PWM pin mapping)
     hal_timer_set_motor_pwm(motor, compensated_speed);
 }
 

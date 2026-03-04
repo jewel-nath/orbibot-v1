@@ -389,7 +389,8 @@ int hal_timer_init(void)
  */
 void hal_timer_set_motor_pwm(uint8_t motor, int16_t pwm)
 {
-    // Clamp PWM value
+    if (motor >= 4) return;
+
     if (pwm > MOTOR_MAX_PWM) pwm = MOTOR_MAX_PWM;
     if (pwm < -MOTOR_MAX_PWM) pwm = -MOTOR_MAX_PWM;
 
@@ -483,6 +484,8 @@ void hal_timer_set_motor_pwm(uint8_t motor, int16_t pwm)
  */
 int16_t hal_timer_read_encoder_delta(uint8_t encoder)
 {
+    if (encoder >= 4) return 0;
+
     int16_t delta = 0;
 
     switch (encoder)
@@ -516,6 +519,8 @@ int16_t hal_timer_read_encoder_delta(uint8_t encoder)
  */
 int32_t hal_timer_get_encoder_count(uint8_t encoder)
 {
+    if (encoder >= 4) return 0;
+
     int16_t count = 0;
 
     switch (encoder)
@@ -534,6 +539,8 @@ int32_t hal_timer_get_encoder_count(uint8_t encoder)
  */
 void hal_timer_reset_encoder(uint8_t encoder)
 {
+    if (encoder >= 4) return;
+
     switch (encoder)
     {
         case 0: TIM2->CNT = ENCODER_MIDPOINT; break;

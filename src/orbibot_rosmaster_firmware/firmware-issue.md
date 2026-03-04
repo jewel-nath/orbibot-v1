@@ -420,6 +420,8 @@ Functions like `motor_set_speed(motor, speed)`, `encoder_read_delta(encoder)`, `
 
 **Review**: Fix it.
 
+**Status**: ✅ FIXED — Added `>= 4` bounds checks in `motor_set_speed()`, `encoder_read_delta()`, `encoder_get_count()`, `encoder_reset()`, `hal_timer_set_motor_pwm()`, `hal_timer_read_encoder_delta()`, `hal_timer_get_encoder_count()`, `hal_timer_reset_encoder()`.
+
 ---
 
 ### SAFE-5: Watchdog Fed from Two Tasks — Masks Failure of Either

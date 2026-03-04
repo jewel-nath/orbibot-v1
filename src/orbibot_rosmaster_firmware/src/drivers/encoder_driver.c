@@ -37,6 +37,8 @@ int encoder_driver_init(void)
  */
 int16_t encoder_read_delta(uint8_t encoder)
 {
+    if (encoder >= 4) return 0;
+
     int16_t delta = hal_timer_read_encoder_delta(encoder);
 
     // Apply direction correction for ROSMaster V3.0 motor configuration
@@ -78,11 +80,13 @@ void encoder_reset_all(void)
 
 int32_t encoder_get_count(uint8_t encoder)
 {
+    if (encoder >= 4) return 0;
     return encoder_accumulated[encoder];
 }
 
 void encoder_reset(uint8_t encoder)
 {
+    if (encoder >= 4) return;
     encoder_accumulated[encoder] = 0;
     hal_timer_reset_encoder(encoder);
 }
