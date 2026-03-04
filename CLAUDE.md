@@ -116,6 +116,17 @@
 
 ---
 
+## ROS2 Package README Workflow
+
+**Follow these rules every time when working with any ROS 2 package:**
+
+- **Before** reading or editing any ROS 2 package → read `src/<package_name>/README.md` first (e.g. `src/orbibot_hardware/README.md`).
+- **After** changing a package (functionality, API, launch/config, or dependencies) → update that package’s `README.md` if needed (features, parameters, usage, deps).
+
+Detailed workflow: `.claude/rules/ros2_package_readme_workflow.md`.
+
+---
+
 ## Quick Start
 
 ### 1. Build Firmware (First Time)
