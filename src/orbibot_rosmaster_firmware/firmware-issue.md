@@ -327,6 +327,8 @@ Or use PlatformIO's `extra_scripts` for cross-platform git info injection.
 
 **Review**: use build flags.
 
+**Status**: ✅ FIXED — Added `git_version.py` pre-build script via PlatformIO `extra_scripts`. Injects `-DGIT_COMMIT_HASH` and `-DGIT_BRANCH` at build time. Works cross-platform (Linux/Windows). Falls back to `"unknown"` if git is unavailable.
+
 ---
 
 ### CFG-3: `-Wno-implicit-function-declaration` Suppresses Real Errors
