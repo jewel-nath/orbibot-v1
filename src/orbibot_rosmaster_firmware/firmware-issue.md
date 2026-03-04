@@ -939,6 +939,8 @@ The 12000 iteration count gives ~72000 cycles at ~6 cycles/iteration, which is a
 
 **Review**: okay do it.
 
+**Status**: ✅ FIXED — Replaced iteration-based busy-wait with DWT CYCCNT hardware cycle counter. Delay is now accurate regardless of compiler optimization level. Uses `SystemCoreClock` so it auto-adapts if the clock changes (e.g., HSI fallback).
+
 ---
 
 ## 9. Testing Gaps

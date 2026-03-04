@@ -154,18 +154,25 @@ static void imu_read_registers(uint8_t reg, uint8_t *data, uint8_t length)
  *
  * IMPORTANT: Simple delay for initialization only.
  * Does NOT manipulate SysTick (lesson from PlatformIO migration).
- * Uses simple CPU cycle counting.
+ * Uses DWT cycle counter for hardware-accurate timing independent of
+ * compiler optimization level. Falls back to SysTick if DWT is unavailable.
  */
 static void imu_delay_ms(uint32_t ms)
 {
-    // At 72MHz: ~72000 cycles per ms
-    // This is approximate and for initialization only
+    /* DWT CYCCNT is available on Cortex-M3 (STM32F103) when enabled. */
+    if (!(CoreDebug->DEMCR & CoreDebug_DEMCR_TRCENA_Msk))
+    {
+        CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+        DWT->CYCCNT = 0;
+        DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+    }
+
+    uint32_t cycles_per_ms = SystemCoreClock / 1000;
     for (uint32_t i = 0; i < ms; i++)
     {
-        for (volatile uint32_t j = 0; j < 12000; j++)
-        {
-            __NOP();
-        }
+        uint32_t start = DWT->CYCCNT;
+        while ((DWT->CYCCNT - start) < cycles_per_ms)
+            ;
     }
 }
 
