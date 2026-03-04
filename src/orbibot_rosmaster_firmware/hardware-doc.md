@@ -123,8 +123,8 @@ Filter: TIM_ICFILTER_10 (noise rejection)
 Mode: SPI_Mode_Master
 Direction: SPI_Direction_2Lines_FullDuplex
 DataSize: SPI_DataSize_8b
-CPOL: SPI_CPOL_High (idle high)
-CPHA: SPI_CPHA_2Edge (sample on rising edge)
+CPOL: SPI_CPOL_Low (idle low)       — SPI Mode 0
+CPHA: SPI_CPHA_1Edge (sample on first edge)
 BaudRate: SPI_BaudRatePrescaler_16 (72MHz/16 = 4.5MHz)
 FirstBit: SPI_FirstBit_MSB
 ```
@@ -162,8 +162,9 @@ FirstBit: SPI_FirstBit_MSB
 
 **Checksum Calculation:**
 ```c
-checksum = Device_ID ^ Length ^ Function ^ Data[0] ^ Data[1] ^ ... ^ Data[N-1]
+checksum = (Device_ID + Length + Function + Data[0] + ... + Data[N-1]) & 0xFF
 ```
+Additive sum truncated to 8 bits (not XOR).
 
 **Key Function Codes:**
 | Code | Name | Direction | Description |
@@ -172,7 +173,7 @@ checksum = Device_ID ^ Length ^ Function ^ Data[0] ^ Data[1] ^ ... ^ Data[N-1]
 | 0x0A | REPORT_SPEED | TX | Motion speed (Vx, Vy, Vz) + battery |
 | 0x0C | REPORT_IMU_ATT | TX | IMU attitude (roll, pitch, yaw) |
 | 0x0D | REPORT_ENCODER | TX | Encoder counts (4 motors) |
-| 0x0E | REPORT_ICM_RAW | TX | Raw gyro/accel data |
+| 0x0B | REPORT_IMU_RAW | TX | Raw gyro/accel/mag data |
 | 0x12 | MOTION | RX | 3D velocity command (Vx, Vy, Vz) |
 
 ---
@@ -192,7 +193,8 @@ checksum = Device_ID ^ Length ^ Function ^ Data[0] ^ Data[1] ^ ... ^ Data[N-1]
 - **Function**: User input / firmware trigger
 
 ### OLED Display
-- **Interface**: I2C1
+- **Interface**: Software I2C on PA2 (SCL) / PA3 (SDA)
+  - Hardware I2C1 (PB6/PB7) conflicts with TIM4 encoder (M2)
 - **Address**: 0x3C (7-bit)
 - **Controller**: SSD1306
 - **Resolution**: 128×64 pixels
@@ -305,9 +307,9 @@ Vy = (-ωFL + ωFR + ωRL - ωRR) × r / 4
 | Task Name | Priority | Rate | Stack Size | Function |
 |-----------|----------|------|------------|----------|
 | task_control | 10 (highest) | 100 Hz | 256 words | Motor PID control loop |
-| task_communication | 9 | Async | 512 words | Serial RX/TX processing |
-| task_imu | 8 | 50 Hz | 256 words | IMU data acquisition |
-| task_monitoring | 5 | 10 Hz | 128 words | Battery, diagnostics, safety |
+| task_communication | 7 | Async | 512 words | Serial RX/TX processing |
+| task_imu | 8 | 50 Hz | 1024 words | IMU data acquisition |
+| task_monitoring | 5 | 1 Hz | 512 words | Battery, diagnostics, safety |
 
 **Heap Configuration**: 20 KB FreeRTOS heap
 
@@ -380,9 +382,10 @@ Vy = (-ωFL + ωFR + ωRL - ωRR) × r / 4
 ## Memory Map
 
 ### Flash Layout (256 KB total)
-- **Bootloader**: 0x0800 0000 - 0x0800 3FFF (16 KB, protected)
-- **Firmware**: 0x0800 4000 - 0x0803 FFFF (240 KB)
-- **Current Usage**: ~15.5 KB (5.9%)
+- **Firmware**: 0x0800 0000 - 0x0803 F7FF (254 KB)
+  - No bootloader offset — PlatformIO default linker starts at base
+- **Flash Storage**: 0x0803 F800 - 0x0803 FFFF (2 KB, last page — PID gains, mag cal)
+- **Current Usage**: ~38 KB (~15%)
 
 ### RAM Layout (48 KB total)
 - **FreeRTOS Heap**: 20 KB
@@ -424,7 +427,7 @@ Vy = (-ωFL + ωFR + ωRL - ωRR) × r / 4
 
 ---
 
-**Document Version**: 1.0
-**Last Updated**: 2026-01-27
+**Document Version**: 2.0
+**Last Updated**: 2026-03-04
 **Author**: Jewel Nath
 **Status**: Complete hardware specification for OrbiBot firmware development

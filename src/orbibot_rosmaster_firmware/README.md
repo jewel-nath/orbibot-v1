@@ -173,9 +173,9 @@ orbibot_rosmaster_firmware/
 
 3. **FreeRTOS Tasks**
    - `task_control.c/h` - Motion control (100Hz, priority 10)
-   - `task_communication.c/h` - Serial RX/TX (async, priority 9; 2048-byte stack)
    - `task_imu.c/h` - IMU data acquisition (50Hz, priority 8)
-   - `task_monitoring.c/h` - Battery and diagnostics (10Hz, priority 5)
+   - `task_communication.c/h` - Serial RX/TX (async, priority 7; 2048-byte stack)
+   - `task_monitoring.c/h` - Battery and diagnostics (1Hz, priority 5)
 
 ## Build Instructions
 
@@ -341,7 +341,7 @@ V_RR = Vx - Vy + (a + b) × ω
 | `0x0A` | F→H | `REPORT_SPEED` | `[vx_lo][vx_hi][vy_lo][vy_hi][vz_lo][vz_hi][bat]` — velocities int16 mm/s × 1000, battery uint8 × 0.1V |
 | `0x0C` | F→H | `REPORT_IMU_ATT` | `[roll_lo][roll_hi][pitch_lo][pitch_hi][yaw_lo][yaw_hi]` — int16 × 1000 rad |
 | `0x0D` | F→H | `REPORT_ENCODER` | `[m1×4][m2×4][m3×4][m4×4]` — 4× int32 LE ticks (16 bytes total) |
-| `0x0E` | F→H | `REPORT_ICM_RAW` | `[gx][gy][gz][ax][ay][az]` — raw int16 ADC counts |
+| `0x0B` | F→H | `REPORT_IMU_RAW` | `[gx][gy][gz][ax][ay][az][mx][my][mz]` — raw int16 ADC counts |
 | `0x15` | F→H | `REPORT_ODOM` | `[x_lo..hi][y_lo..hi][theta_lo..hi][vx_lo..hi][vy_lo..hi][omega_lo..hi]` — int32/int16 |
 
 > Full packet format: see [firmware-architecture.md](firmware-architecture.md)
@@ -353,7 +353,7 @@ V_RR = Vx - Vy + (a + b) × ω
 | Cycle count | Report sent | Function code |
 |-------------|------------|---------------|
 | 1 | Motion/Speed + Battery | `0x0A` |
-| 11 | IMU Raw (gyro/accel/mag) | `0x0E` |
+| 11 | IMU Raw (gyro/accel/mag) | `0x0B` |
 | 21 | IMU Attitude (roll/pitch/yaw) | `0x0C` |
 | 31 | Encoder counts | `0x0D` |
 | 41 | Firmware Odometry | `0x15` |
@@ -410,7 +410,7 @@ ls -la /dev/motordriver   # Should be symlink → /dev/ttyUSB0 or ttyACM0
 | No serial data | BOOT0 pin must be LOW after upload |
 | Wrong encoder direction | `test_encoder.py` — rotate wheel by hand |
 | IMU returns 0 | WHO_AM_I must return `0xEA` — check SPI2 wiring |
-| Battery reads 0V | ADC on PC2 — check 4S divider resistors |
+| Battery reads 0V | ADC on PC4 (ADC_Channel_14) — check 4S divider resistors |
 | Motors don't respond | Verify `AUTO_REPORT` enabled; check 12V supply |
 
 ---
@@ -444,14 +444,15 @@ while (!SPI_I2S_GetFlagStatus(SPI2, SPI_I2S_FLAG_TXE) && timeout--)
 
 ### 3. ✅ FreeRTOS-Safe Delays
 **Issue**: Cannot manipulate SysTick after FreeRTOS starts
-**Solution**: CPU cycle delays in IMU driver:
+**Solution**: DWT cycle counter in IMU driver for hardware-accurate pre-scheduler delays:
 ```c
 static void imu_delay_ms(uint32_t ms)
 {
-    // At 72MHz: ~72000 cycles per ms
-    for (uint32_t i = 0; i < ms; i++)
-        for (volatile uint32_t j = 0; j < 12000; j++)
-            __NOP();
+    uint32_t cycles_per_ms = SystemCoreClock / 1000;
+    for (uint32_t i = 0; i < ms; i++) {
+        uint32_t start = DWT->CYCCNT;
+        while ((DWT->CYCCNT - start) < cycles_per_ms);
+    }
 }
 ```
 

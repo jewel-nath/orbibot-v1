@@ -495,6 +495,8 @@ The ICM-20948 supports both Mode 0 and Mode 3, so the code works, but the docume
 
 **Review**: okay, match this.
 
+**Status**: ✅ FIXED — Updated `hardware-doc.md` SPI Configuration to `SPI_CPOL_Low` / `SPI_CPHA_1Edge` (Mode 0).
+
 ---
 
 ### DOC-MISMATCH-3: Checksum Algorithm — hardware-doc.md Says XOR, Code Uses Additive Sum
@@ -516,6 +518,8 @@ Three sources say additive, two say XOR. The code is additive.
 
 **Review**: My firmware can commucate with ros2 hardware node to stm32 firmware, so update the docs according to code, may be its my mistake.
 
+**Status**: ✅ FIXED — Updated `hardware-doc.md` checksum from XOR to additive sum formula. `flash_storage.h` comment was already fixed in REFACT-5.
+
 ---
 
 ### DOC-MISMATCH-4: CommTask Priority — Docs Say 9, Code Uses 7
@@ -536,6 +540,8 @@ The actual priority was lowered to 7 (comment says "matches reference firmware")
 
 **Review**: yes, update to 7.
 
+**Status**: ✅ FIXED — Updated CommTask priority from 9 to 7 in `README.md`, `firmware-architecture.md`, and `hardware-doc.md`.
+
 ---
 
 ### DOC-MISMATCH-5: IMU Task Stack — hardware-doc.md Says 256 Words, Code Uses 1024
@@ -551,6 +557,8 @@ The actual priority was lowered to 7 (comment says "matches reference firmware")
 **Fix**: Update `hardware-doc.md` FreeRTOS task table.
 
 **Review**: update docs
+
+**Status**: ✅ FIXED — Updated IMU task stack to 1024 words in `hardware-doc.md` FreeRTOS task table.
 
 ---
 
@@ -569,6 +577,8 @@ The actual priority was lowered to 7 (comment says "matches reference firmware")
 
 **Review**: update docs
 
+**Status**: ✅ FIXED — Updated monitoring task rate from 10Hz to 1Hz in `README.md`. `firmware-architecture.md` was already correct.
+
 ---
 
 ### DOC-MISMATCH-7: Battery ADC Pin — README Says PC2, Code Uses PC4
@@ -585,6 +595,8 @@ The actual priority was lowered to 7 (comment says "matches reference firmware")
 **Fix**: Update README debug table to say "ADC on PC4".
 
 **Review**: update docs
+
+**Status**: ✅ FIXED — Updated battery ADC pin from PC2 to PC4 (ADC_Channel_14) in `README.md`.
 
 ---
 
@@ -605,6 +617,8 @@ The code sends IMU raw data with function code `0x0B`, but docs say `0x0E`. A RO
 
 **Review**: fix this.
 
+**Status**: ✅ FIXED — Updated IMU raw report code from `0x0E` to `0x0B` in `README.md`, `firmware-architecture.md`, and `hardware-doc.md`.
+
 ---
 
 ### DOC-MISMATCH-9: OLED Interface — hardware-doc.md Says I2C1, Code Uses Software I2C on PA2/PA3
@@ -624,6 +638,8 @@ Hardware I2C1 can't be used because PB6/PB7 are needed for M2 encoder (TIM4).
 
 **Review**: update docs
 
+**Status**: ✅ FIXED — Updated OLED interface from I2C1 to software I2C on PA2/PA3, with note about TIM4 conflict.
+
 ---
 
 ### DOC-MISMATCH-10: Monitoring Task Stack — hardware-doc.md Says 128 Words, Code Uses 512
@@ -639,6 +655,8 @@ Hardware I2C1 can't be used because PB6/PB7 are needed for M2 encoder (TIM4).
 **Fix**: Update `hardware-doc.md` FreeRTOS task table.
 
 **Review**: update docs
+
+**Status**: ✅ FIXED — Updated monitoring task stack from 128 to 512 words in `hardware-doc.md`.
 
 ---
 
@@ -662,6 +680,8 @@ The architecture doc shows files/directories that don't exist:
 
 **Review**: update docs
 
+**Status**: ✅ FIXED — Replaced entire directory tree in `firmware-architecture.md` with actual file layout.
+
 ---
 
 ### DOC-MISMATCH-12: Flash Memory Map — hardware-doc.md Shows Bootloader Offset, Code Uses Base
@@ -674,6 +694,8 @@ The architecture doc shows files/directories that don't exist:
 **Fix**: Remove the bootloader reference or clarify this only applies when using a custom bootloader.
 
 **Review**: fix this.
+
+**Status**: ✅ FIXED — Updated flash layout in `hardware-doc.md` to show firmware at base `0x0800_0000` (no bootloader offset), plus flash storage page.
 
 ---
 

@@ -24,55 +24,68 @@ Clean, professional STM32 firmware for OrbiBot mecanum-wheeled robot.
 ```
 src/orbibot_rosmaster_firmware/
 ├── platformio.ini              # PlatformIO configuration
+├── git_version.py              # Pre-build script (git hash injection)
 ├── README.md                   # Firmware documentation
-├── FIRMWARE_ARCHITECTURE.md    # This file
+├── firmware-architecture.md    # This file
+├── hardware-doc.md             # Hardware specifications
+├── firmware-issue.md           # Issue tracker
+├── firmware-changelog.md       # Change history
 │
 ├── include/                    # Public headers
 │   ├── orbibot_config.h        # Robot-specific parameters
-│   └── firmware_version.h      # Version info
+│   ├── firmware_version.h      # Version info (auto-generated string)
+│   ├── robot_error.h           # Firmware-wide error codes
+│   ├── FreeRTOSConfig.h        # FreeRTOS kernel config
+│   ├── hal_*.h                 # HAL interfaces
+│   ├── *_driver.h              # Driver interfaces
+│   ├── protocol.h              # Protocol constants and API
+│   ├── flash_storage.h         # Flash persistence API
+│   └── task_*.h                # Task interfaces
 │
 ├── src/
-│   ├── main.c                  # Application entry point
-│   │
-│   ├── core/                   # Core system (startup, interrupts)
-│   │   ├── system_init.c       # Clock & peripheral init
-│   │   ├── freertos_config.c   # FreeRTOS configuration
-│   │   └── stm32f1xx_it.c      # Interrupt handlers
+│   ├── main.c                  # Entry point, clock config, init, task creation
 │   │
 │   ├── hal/                    # Hardware Abstraction Layer
-│   │   ├── hal_gpio.c          # GPIO control
-│   │   ├── hal_usart.c         # Serial communication
-│   │   ├── hal_timer.c         # PWM & encoder timers
-│   │   ├── hal_i2c.c           # I2C for IMU/OLED
-│   │   ├── hal_spi.c           # SPI for IMU
-│   │   └── hal_adc.c           # Battery voltage monitoring
+│   │   ├── hal_gpio.c          # GPIO control (motors, LEDs)
+│   │   ├── hal_usart.c         # USART1 with DMA TX
+│   │   ├── hal_timer.c         # PWM (TIM1/8) & encoder (TIM2-5)
+│   │   ├── hal_i2c.c           # Software I2C for OLED
+│   │   ├── hal_spi.c           # SPI2 for IMU
+│   │   ├── hal_adc.c           # ADC for battery monitoring
+│   │   └── hal_watchdog.c      # IWDG watchdog
 │   │
 │   ├── drivers/                # Device drivers
 │   │   ├── motor_driver.c      # 4-channel H-bridge control
 │   │   ├── encoder_driver.c    # Quadrature encoder reading
-│   │   ├── imu_driver.c        # ICM20948 IMU interface
+│   │   ├── imu_driver.c        # ICM-20948 IMU (SPI2)
 │   │   ├── oled_driver.c       # SSD1306 OLED (optional)
-│   │   └── battery_monitor.c   # Battery voltage & safety
+│   │   ├── battery_monitor.c   # Battery voltage + EMA filter
+│   │   └── flash_storage.c     # Flash persistence (PID, mag cal)
 │   │
 │   ├── control/                # Motion control
 │   │   ├── mecanum_kinematics.c # Forward/inverse kinematics
-│   │   ├── pid_controller.c     # Motor speed PID loops
-│   │   └── odometry.c           # Wheel odometry calculation
+│   │   ├── pid_controller.c     # Multi-level incremental PID
+│   │   └── odometry.c           # Midpoint (RK2) odometry
 │   │
-│   ├── communication/          # ROS communication
-│   │   ├── protocol.c          # Serial protocol parser
-│   │   └── command_handler.c   # Motion commands
+│   ├── communication/          # Serial protocol
+│   │   └── protocol.c          # RX state machine + TX reporting
 │   │
 │   └── tasks/                  # FreeRTOS tasks
-│       ├── task_control.c      # Motion control task (100Hz)
-│       ├── task_communication.c # Serial RX/TX task
-│       ├── task_monitoring.c   # Battery & diagnostics (10Hz)
-│       └── task_imu.c          # IMU data task (50Hz, optional)
+│       ├── task_control.c      # Motion control (100Hz, prio 10)
+│       ├── task_communication.c # Serial RX/TX (prio 7)
+│       ├── task_imu.c          # IMU acquisition (50Hz, prio 8)
+│       └── task_monitoring.c   # Battery, watchdog, LED (1Hz, prio 5)
+│
+├── tests/                      # Python test suite
+│   ├── run_all_tests.py
+│   ├── test_encoder.py
+│   ├── test_imu.py
+│   ├── test_motor_speed.py
+│   └── test_beep.py
 │
 └── lib/                        # Third-party libraries
-    ├── FreeRTOS/               # Real-time kernel
-    ├── STM32F1xx_HAL/          # STM32 peripheral library
-    └── printf/                 # Lightweight printf
+    ├── FreeRTOS/               # FreeRTOS v10.x kernel
+    └── STM32F10x_StdPeriph_Driver/  # STM32 Standard Peripheral Library
 ```
 
 ---
@@ -145,8 +158,8 @@ src/orbibot_rosmaster_firmware/
 | Priority | Task | Rate | Responsibility |
 |----------|------|------|----------------|
 | 10 | `task_control` | 100Hz | Encoder read, PID, mecanum kinematics, odometry accumulation |
-| 9 | `task_communication` | 1ms tick | USART RX command parse; 5-type auto-report at 20Hz each |
 | 8 | `task_imu` | 50Hz | ICM-20948 read; accel→roll/pitch; gyro+mag→yaw (complementary filter) |
+| 7 | `task_communication` | 1ms tick | USART RX command parse; 5-type auto-report at 20Hz each |
 | 5 | `task_monitoring` | 1Hz | Watchdog feed, battery voltage, buzzer, LED heartbeat |
 
 ### Control Flow
@@ -165,7 +178,7 @@ ROS 2 → /cmd_vel
           ├── pid_calculate_incremental() × 4
           ├── motor_set_pwm() × 4
           └── odometry_update()
-                ↓  [serial packet 0x0A/0x0C/0x0D/0x0E/0x15]
+                ↓  [serial packet 0x0A/0x0B/0x0C/0x0D/0x15]
               USART DMA TX → ROS 2 hardware_node
 ```
 
@@ -173,7 +186,7 @@ ROS 2 → /cmd_vel
 
 ```
  0ms  ─ report_count=1  → REPORT_SPEED   (0x0A) — Vx/Vy/Vz + battery
-10ms  ─ report_count=11 → REPORT_ICM_RAW (0x0E) — raw gyro/accel/mag
+10ms  ─ report_count=11 → REPORT_IMU_RAW (0x0B) — raw gyro/accel/mag
 20ms  ─ report_count=21 → REPORT_IMU_ATT (0x0C) — roll/pitch/yaw
 30ms  ─ report_count=31 → REPORT_ENCODER (0x0D) — 4 encoder counts
 40ms  ─ report_count=41 → REPORT_ODOM    (0x15) — x/y/theta/vx/vy/omega
@@ -219,7 +232,7 @@ ROS 2 → /cmd_vel
 | `0x0A` | REPORT_SPEED | Vx, Vy, Vz (int16 mm/s × 1000) + battery (int16 mV) |
 | `0x0C` | REPORT_IMU_ATT | Roll, pitch, yaw (int16 × 1000 rad) |
 | `0x0D` | REPORT_ENCODER | FL, BL, FR, BR encoder counts (int16 ticks each) |
-| `0x0E` | REPORT_ICM_RAW | Raw gyro + accel + mag (int16 ADC counts) |
+| `0x0B` | REPORT_IMU_RAW | Raw gyro + accel + mag (int16 ADC counts) |
 | `0x15` | REPORT_ODOM | x, y (int32 mm), theta (int16 mrad), vx/vy/omega |
 
 > Full field layouts: see `include/protocol.h` and `src/communication/protocol.c`
@@ -478,6 +491,6 @@ test: Add motor driver unit tests
 
 ---
 
-**Architecture Version**: 2.1
-**Last Updated**: 2026-02-19
+**Architecture Version**: 2.2
+**Last Updated**: 2026-03-04
 **Status**: Implemented and Active
