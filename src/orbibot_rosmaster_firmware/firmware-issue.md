@@ -275,6 +275,8 @@ For a 14.6V battery this works (146 fits in uint8), but:
 
 **Review**: For now orbibot not using this protocol, so think and do, what need to do.
 
+**Status**: ✅ FIXED — Dead function code `#define`s already removed in REFACT-6. Added `g_unknown_cmd_count` counter in the `default:` case of `protocol_parse_command()` so unhandled codes are silently counted rather than ignored entirely (useful for diagnostics).
+
 ---
 
 ## 4. Configuration & Build Issues

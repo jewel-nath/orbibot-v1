@@ -36,6 +36,7 @@ uint8_t g_cmd_length = 0;
 uint8_t g_cmd_length2 = 0;  // Length for secondary buffer
 static uint8_t g_cmd_length_drop = 0;   // Length for dropped packet (correct drain)
 volatile uint32_t g_rx_drop_count = 0;  // Dropped packets (both buffers full)
+volatile uint32_t g_unknown_cmd_count = 0;  // Unhandled function codes received
 
 // Auto-report state
 volatile uint8_t g_auto_report_enabled = 0;
@@ -387,7 +388,7 @@ int8_t protocol_parse_command(void)
             break;
 
         default:
-            // Unknown command - ignore
+            g_unknown_cmd_count++;
             break;
     }
 
