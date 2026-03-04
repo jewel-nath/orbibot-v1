@@ -54,6 +54,10 @@
 #define configIDLE_SHOULD_YIELD		1
 #define configUSE_MUTEXES			1
 
+/* Hook function enables — required for the hooks defined in main.c */
+#define configCHECK_FOR_STACK_OVERFLOW	2
+#define configUSE_MALLOC_FAILED_HOOK	1
+
 /* Co-routine definitions. */
 #define configUSE_CO_ROUTINES 		0
 #define configMAX_CO_ROUTINE_PRIORITIES ( 2 )
