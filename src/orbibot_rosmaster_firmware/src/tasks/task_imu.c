@@ -96,45 +96,49 @@ void task_imu(void *params)
             /* Store latest data */
             g_imu_data = imu_data;
 
-            /* Calculate roll and pitch from accelerometer */
-            /* These are valid when robot is not accelerating */
-            /* NOTE: Axes adjusted for ICM-20948 orientation on ROSMaster board:
-             * - Roll negated to match ROS convention (positive = right side up)
-             * - Axes swapped to account for chip mounting orientation */
-            g_roll = -atan2f(imu_data.accel_x, imu_data.accel_z);
-            g_pitch = atan2f(-imu_data.accel_y,
+            /* Compute roll and pitch from accelerometer (no shared state) */
+            float new_roll = -atan2f(imu_data.accel_x, imu_data.accel_z);
+            float new_pitch = atan2f(-imu_data.accel_y,
                             sqrtf(imu_data.accel_x * imu_data.accel_x +
                                   imu_data.accel_z * imu_data.accel_z));
 
-            /* Gyro integration step (fast, drift-prone) */
-            float gyro_yaw = g_yaw + imu_data.gyro_z * IMU_DT;
+            /* Gyro integration step (read g_yaw inside critical section) */
+            float prev_yaw;
+            taskENTER_CRITICAL();
+            prev_yaw = g_yaw;
+            taskEXIT_CRITICAL();
+
+            float gyro_yaw = prev_yaw + imu_data.gyro_z * IMU_DT;
             while (gyro_yaw > PI_F)  gyro_yaw -= 2.0f * PI_F;
             while (gyro_yaw < -PI_F) gyro_yaw += 2.0f * PI_F;
 
-            /* Complementary filter: blend gyro with magnetometer heading.
-             * AK09916 mag values are 0.0 when hardware not initialized —
-             * used as an availability flag without a separate extern.
-             * Assumes robot is roughly level (2D heading only).
-             * Difference-based blend handles the ±π discontinuity cleanly. */
+            /* Complementary filter: blend gyro with magnetometer heading */
+            float new_yaw;
             if (imu_data.mag_x != 0.0f || imu_data.mag_y != 0.0f)
             {
                 float mag_yaw = atan2f(-imu_data.mag_y, imu_data.mag_x);
 
-                /* Unwrap angular difference to the nearest equivalent */
                 float diff = mag_yaw - gyro_yaw;
                 while (diff > PI_F)  diff -= 2.0f * PI_F;
                 while (diff < -PI_F) diff += 2.0f * PI_F;
 
-                g_yaw = gyro_yaw + (1.0f - YAW_CF_ALPHA) * diff;
+                new_yaw = gyro_yaw + (1.0f - YAW_CF_ALPHA) * diff;
             }
             else
             {
-                g_yaw = gyro_yaw;   /* Mag unavailable: pure gyro integration */
+                new_yaw = gyro_yaw;
             }
 
             /* Normalize final yaw to -PI to +PI */
-            while (g_yaw > PI_F)  g_yaw -= 2.0f * PI_F;
-            while (g_yaw < -PI_F) g_yaw += 2.0f * PI_F;
+            while (new_yaw > PI_F)  new_yaw -= 2.0f * PI_F;
+            while (new_yaw < -PI_F) new_yaw += 2.0f * PI_F;
+
+            /* Atomically update all three attitude values */
+            taskENTER_CRITICAL();
+            g_roll = new_roll;
+            g_pitch = new_pitch;
+            g_yaw = new_yaw;
+            taskEXIT_CRITICAL();
         }
 
         vTaskDelayUntil(&last_wake_time, period);

@@ -156,6 +156,8 @@ taskEXIT_CRITICAL();
 
 **Review**: Fix it.
 
+**Status**: ✅ FIXED — Attitude computed into local variables, then written atomically inside `taskENTER_CRITICAL()`/`taskEXIT_CRITICAL()`. Yaw read also protected when used for gyro integration.
+
 ---
 
 ### RACE-2: Encoder Delta Read-Then-Reset Not Atomic
