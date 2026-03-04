@@ -33,6 +33,7 @@ uint8_t g_cmd_flag = 0;
 uint8_t g_cmd_flag2 = 0;  // Flag for secondary buffer
 uint8_t g_cmd_length = 0;
 uint8_t g_cmd_length2 = 0;  // Length for secondary buffer
+static uint8_t g_cmd_length_drop = 0;   // Length for dropped packet (correct drain)
 volatile uint32_t g_rx_drop_count = 0;  // Dropped packets (both buffers full)
 
 // Auto-report state
@@ -141,8 +142,9 @@ void protocol_receive_byte(uint8_t byte)
                     }
                     else
                     {
-                        // Both buffers full - drop this packet
+                        // Both buffers full - drop this packet but track length
                         g_rx_active_buffer = 2;
+                        g_cmd_length_drop = packet_length;
                         g_rx_drop_count++;
                     }
 
@@ -168,7 +170,13 @@ void protocol_receive_byte(uint8_t byte)
                 g_rx_index++;
 
                 // Check if packet complete
-                uint8_t target_length = (g_rx_active_buffer == 0) ? g_cmd_length : g_cmd_length2;
+                uint8_t target_length;
+                if (g_rx_active_buffer == 0)
+                    target_length = g_cmd_length;
+                else if (g_rx_active_buffer == 1)
+                    target_length = g_cmd_length2;
+                else
+                    target_length = g_cmd_length_drop;
                 if (g_rx_index >= target_length)
                 {
                     // Packet complete - set flag for processing

@@ -93,18 +93,7 @@ This can cause the state machine to:
 
 **Review**: Fix it.
 
-```c
-static uint8_t g_cmd_length_drop = 0;
-
-// In RX_STATE_WAIT_LENGTH, when dropping:
-g_cmd_length_drop = packet_length;
-
-// In RX_STATE_READ_DATA:
-uint8_t target_length;
-if (g_rx_active_buffer == 0) target_length = g_cmd_length;
-else if (g_rx_active_buffer == 1) target_length = g_cmd_length2;
-else target_length = g_cmd_length_drop;
-```
+**Status**: ✅ FIXED — Added `g_cmd_length_drop` to track dropped packet length. `RX_STATE_READ_DATA` now uses a 3-way check for primary/secondary/drop buffer lengths.
 
 ---
 
