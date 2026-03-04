@@ -30,4 +30,13 @@ void imu_task_get_attitude(float *roll, float *pitch, float *yaw);
  */
 void imu_task_reset_yaw(void);
 
+/**
+ * @brief Get cached raw IMU data (thread-safe, no SPI access)
+ *
+ * Returns the raw int16 values from the most recent task_imu read.
+ * This eliminates the SPI race condition (BUG-1) by ensuring only
+ * task_imu performs SPI reads; all other tasks read from this cache.
+ */
+void imu_task_get_raw_data(int16_t gyro[3], int16_t accel[3], int16_t mag[3]);
+
 #endif /* TASK_IMU_H */

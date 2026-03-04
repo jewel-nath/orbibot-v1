@@ -11,6 +11,7 @@
 #include "hal_usart.h"
 #include "task_control.h"
 #include "imu_driver.h"
+#include "task_imu.h"
 #include "encoder_driver.h"
 #include "battery_monitor.h"
 #include "flash_storage.h"
@@ -524,9 +525,9 @@ void protocol_send_imu_raw_data(void)
     //         [Mx_Lo][Mx_Hi][My_Lo][My_Hi][Mz_Lo][Mz_Hi]
     uint8_t data[18];
 
-    // Get IMU data - single read for all sensors (efficient)
+    // Read from task_imu cache (no SPI access — eliminates BUG-1 race)
     int16_t gyro[3], accel[3], mag[3];
-    imu_get_all_raw(gyro, accel, mag);
+    imu_task_get_raw_data(gyro, accel, mag);
 
     // Pack gyroscope (16-bit little-endian)
     data[0] = gyro[0] & 0xFF;

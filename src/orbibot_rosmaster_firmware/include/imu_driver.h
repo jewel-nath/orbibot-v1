@@ -114,6 +114,14 @@ int imu_read_raw(imu_raw_data_t *data);
 int imu_read_calibrated(imu_data_t *data);
 
 /**
+ * @brief Read both raw and calibrated data in a single SPI transaction
+ * @param raw Pointer to raw data output (may be NULL)
+ * @param cal Pointer to calibrated data output (may be NULL)
+ * @return 0 on success, -1 on failure
+ */
+int imu_read_both(imu_raw_data_t *raw, imu_data_t *cal);
+
+/**
  * @brief Read accelerometer only
  * @param accel_x Pointer for X-axis (m/s²)
  * @param accel_y Pointer for Y-axis (m/s²)

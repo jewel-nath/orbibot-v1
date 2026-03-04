@@ -45,6 +45,8 @@ Both `task_imu` (priority 8) and `task_communication` (priority 7) perform SPI2 
 
 **Review**: Good finding, need to fix this "task_imu" read the IMU.
 
+**Status**: ✅ FIXED — `task_imu` is now the sole SPI2 reader. Uses `imu_read_both()` for a single SPI transaction producing both raw and calibrated data. Raw int16 values cached in `g_raw_gyro/accel/mag[]` with critical section. `protocol_send_imu_raw_data()` reads from cache via `imu_task_get_raw_data()` — zero SPI access from comm task.
+
 ---
 
 ### BUG-2: FreeRTOS Hook Functions Never Called — Config Macros Missing
@@ -702,6 +704,8 @@ Reads #1 and #2 can happen concurrently (see BUG-1). Read #2 is also temporally 
 **Fix**: Make `task_imu` the sole SPI reader. Cache both raw and calibrated data in thread-safe global structs. Have `protocol_send_*` read from the cache.
 
 **Review**: think and write the best solution for this.
+
+**Status**: ✅ FIXED — Resolved together with BUG-1. `imu_read_both()` returns raw + calibrated from single SPI read. `task_imu` caches both. Comm task reads only from cache.
 
 ---
 

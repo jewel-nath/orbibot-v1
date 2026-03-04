@@ -470,9 +470,49 @@ int imu_read_calibrated(imu_data_t *data)
     }
 
     // Convert temperature to °C
-    // Temperature formula: ((TEMP_OUT - RoomTemp_Offset) / Temp_Sensitivity) + 21°C
     data->temperature = ((float)raw_data.temperature / 333.87f) + 21.0f;
 
+    return 0;
+}
+
+int imu_read_both(imu_raw_data_t *raw, imu_data_t *cal)
+{
+    imu_raw_data_t raw_data;
+    if (imu_read_raw(&raw_data) != 0)
+        return -1;
+
+    if (raw)
+        *raw = raw_data;
+
+    if (cal)
+    {
+        cal->accel_x = raw_data.accel_x * accel_scale;
+        cal->accel_y = raw_data.accel_y * accel_scale;
+        cal->accel_z = raw_data.accel_z * accel_scale;
+        cal->gyro_x = (raw_data.gyro_x * gyro_scale) - gyro_offset_x;
+        cal->gyro_y = (raw_data.gyro_y * gyro_scale) - gyro_offset_y;
+        cal->gyro_z = (raw_data.gyro_z * gyro_scale) - gyro_offset_z;
+
+        if (mag_cal.calibrated)
+        {
+            float raw_mx = raw_data.mag_x * mag_scale;
+            float raw_my = raw_data.mag_y * mag_scale;
+            float raw_mz = raw_data.mag_z * mag_scale;
+            float hx = raw_mx - mag_cal.hard_iron_offset[0];
+            float hy = raw_my - mag_cal.hard_iron_offset[1];
+            float hz = raw_mz - mag_cal.hard_iron_offset[2];
+            cal->mag_x = mag_cal.soft_iron_matrix[0] * hx + mag_cal.soft_iron_matrix[1] * hy + mag_cal.soft_iron_matrix[2] * hz;
+            cal->mag_y = mag_cal.soft_iron_matrix[3] * hx + mag_cal.soft_iron_matrix[4] * hy + mag_cal.soft_iron_matrix[5] * hz;
+            cal->mag_z = mag_cal.soft_iron_matrix[6] * hx + mag_cal.soft_iron_matrix[7] * hy + mag_cal.soft_iron_matrix[8] * hz;
+        }
+        else
+        {
+            cal->mag_x = raw_data.mag_x * mag_scale;
+            cal->mag_y = raw_data.mag_y * mag_scale;
+            cal->mag_z = raw_data.mag_z * mag_scale;
+        }
+        cal->temperature = ((float)raw_data.temperature / 333.87f) + 21.0f;
+    }
     return 0;
 }
 

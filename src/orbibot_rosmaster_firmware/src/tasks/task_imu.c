@@ -35,6 +35,11 @@ static volatile float g_yaw = 0.0f;
 /* Latest calibrated IMU data */
 static volatile imu_data_t g_imu_data;
 
+/* Cached raw int16 IMU data for protocol reporting (eliminates SPI race) */
+static volatile int16_t g_raw_gyro[3]  = {0};
+static volatile int16_t g_raw_accel[3] = {0};
+static volatile int16_t g_raw_mag[3]   = {0};
+
 /**
  * @brief Get current attitude angles (thread-safe)
  * @param roll Pointer to roll angle (rad)
@@ -68,6 +73,18 @@ void imu_task_reset_yaw(void)
     g_yaw = 0.0f;
 }
 
+void imu_task_get_raw_data(int16_t gyro[3], int16_t accel[3], int16_t mag[3])
+{
+    taskENTER_CRITICAL();
+    for (int i = 0; i < 3; i++)
+    {
+        gyro[i]  = g_raw_gyro[i];
+        accel[i] = g_raw_accel[i];
+        mag[i]   = g_raw_mag[i];
+    }
+    taskEXIT_CRITICAL();
+}
+
 /**
  * @brief IMU Task Entry Point
  *
@@ -91,10 +108,23 @@ void task_imu(void *params)
 
     for (;;)
     {
-        /* Read calibrated IMU data */
-        if (imu_read_calibrated(&imu_data) == 0)
+        /* Single SPI read: get both raw (for protocol cache) and calibrated data */
+        imu_raw_data_t raw;
+        if (imu_read_both(&raw, &imu_data) == 0)
         {
-            /* Store latest data */
+            /* Cache raw int16 values for protocol reporting (no SPI from comm task) */
+            taskENTER_CRITICAL();
+            g_raw_gyro[0]  = raw.gyro_x;
+            g_raw_gyro[1]  = raw.gyro_y;
+            g_raw_gyro[2]  = raw.gyro_z;
+            g_raw_accel[0] = raw.accel_x;
+            g_raw_accel[1] = raw.accel_y;
+            g_raw_accel[2] = raw.accel_z;
+            g_raw_mag[0]   = raw.mag_x;
+            g_raw_mag[1]   = raw.mag_y;
+            g_raw_mag[2]   = raw.mag_z;
+            taskEXIT_CRITICAL();
+
             g_imu_data = imu_data;
 
             /* Compute roll and pitch from accelerometer (no shared state) */
