@@ -441,6 +441,8 @@ The intent was redundancy (Issue #5), but the result is that neither task's hang
 
 **Review**: think and give a better fix.
 
+**Status**: ✅ FIXED — Implemented per-task alive counters (`ALIVE_TASK_CONTROL`, `ALIVE_TASK_IMU`, `ALIVE_TASK_COMM`). Each task calls `task_alive_kick()` every iteration. `task_monitoring` compares counters to snapshots; watchdog is only fed if all counters have incremented. Removed direct `hal_watchdog_feed()` from `task_control`.
+
 ---
 
 ## 6. Documentation vs Code Discrepancies

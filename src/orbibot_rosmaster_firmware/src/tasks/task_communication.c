@@ -17,6 +17,7 @@
 #include "task.h"
 #include "hal_usart.h"
 #include "protocol.h"
+#include "task_monitoring.h"
 
 /**
  * @brief Communication Task Entry Point
@@ -88,7 +89,8 @@ void task_communication(void *params)
             report_count = 0;
         }
 
-        // 1ms delay - with DMA TX this is achievable
+        task_alive_kick(ALIVE_TASK_COMM);
+
         vTaskDelay(pdMS_TO_TICKS(1));
     }
 }

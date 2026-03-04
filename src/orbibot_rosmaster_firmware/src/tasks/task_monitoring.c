@@ -38,6 +38,16 @@ typedef enum {
 
 static uint32_t heartbeat_count = 0;
 
+/* Per-task alive counters: each task increments its slot every iteration */
+static volatile uint32_t alive_counters[ALIVE_TASK_COUNT] = {0};
+static uint32_t alive_snapshot[ALIVE_TASK_COUNT] = {0};
+
+void task_alive_kick(uint8_t task_id)
+{
+    if (task_id < ALIVE_TASK_COUNT)
+        alive_counters[task_id]++;
+}
+
 void task_monitoring(void *params)
 {
     (void)params;
@@ -48,8 +58,22 @@ void task_monitoring(void *params)
     {
         heartbeat_count++;
 
-        // Feed watchdog to prevent MCU reset (must be done within 5 seconds)
-        hal_watchdog_feed();
+        /* Check alive counters: feed watchdog only if all critical tasks
+         * have incremented since the last monitoring cycle. */
+        uint8_t all_alive = 1;
+        for (uint8_t i = 0; i < ALIVE_TASK_COUNT; i++)
+        {
+            uint32_t current = alive_counters[i];
+            if (current == alive_snapshot[i])
+            {
+                all_alive = 0;
+                break;
+            }
+            alive_snapshot[i] = current;
+        }
+
+        if (all_alive)
+            hal_watchdog_feed();
 
         // Update buzzer state for timed beeps
         protocol_update_buzzer();

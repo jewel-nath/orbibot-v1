@@ -15,7 +15,7 @@
 #include "odometry.h"
 #include "imu_driver.h"
 #include "flash_storage.h"
-#include "hal_watchdog.h"
+#include "task_monitoring.h"
 #include "orbibot_config.h"
 #include <math.h>
 
@@ -414,9 +414,9 @@ void task_control(void *params)
             pid_reset(&pid_yaw);
         }
 
-        // Feed watchdog from critical control task (Issue #5 fix)
-        // This ensures watchdog triggers if task_control hangs
-        hal_watchdog_feed();
+        // Signal alive to monitoring task (watchdog fed only by task_monitoring
+        // after verifying all tasks are alive)
+        task_alive_kick(ALIVE_TASK_CONTROL);
 
         // Apply motor control with yaw correction and speed-dependent PID gains
         for (int i = 0; i < 4; i++)

@@ -15,6 +15,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "imu_driver.h"
+#include "task_monitoring.h"
 #include "orbibot_config.h"
 #include <math.h>
 
@@ -140,6 +141,8 @@ void task_imu(void *params)
             g_yaw = new_yaw;
             taskEXIT_CRITICAL();
         }
+
+        task_alive_kick(ALIVE_TASK_IMU);
 
         vTaskDelayUntil(&last_wake_time, period);
     }
