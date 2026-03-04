@@ -9,6 +9,7 @@
  */
 
 #include "hal_usart.h"
+#include "protocol.h"
 #include "stm32f10x.h"
 #include "stm32f10x_dma.h"
 #include "orbibot_config.h"
@@ -313,9 +314,6 @@ void USART1_IRQHandler(void)
     {
         uint8_t data = USART_ReceiveData(USART1);
 
-        // Feed byte to protocol parser
-        // Protocol parser handles state machine internally
-        extern void protocol_receive_byte(uint8_t byte);
         protocol_receive_byte(data);
 
         // Also store in circular buffer for debugging (optional)

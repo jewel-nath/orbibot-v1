@@ -347,6 +347,8 @@ This hides cases where a function is called without a proper `#include` or forwa
 
 **Review**: fix it.
 
+**Status**: ✅ FIXED — Removed `-Wno-implicit-function-declaration` from `platformio.ini`. Fixed in-body `extern` declarations in `hal_usart.c` (added `#include "protocol.h"`) and `imu_driver.c` (added `#include "task_imu.h"`).
+
 ---
 
 ### CFG-4: `build_unflags = -Werror` Weakens Build Safety
@@ -360,6 +362,8 @@ Removing `-Werror` means all warnings are non-fatal. Combined with `-Wall -Wextr
 **Fix**: Remove `build_unflags = -Werror` and fix all warnings. Add `-Werror` to `build_flags` for production builds.
 
 **Review**: Fix it.
+
+**Status**: ✅ FIXED — Removed `build_unflags = -Werror` and added `-Werror` to `build_flags`. All warnings are now build errors.
 
 ---
 
@@ -851,6 +855,8 @@ extern void imu_task_get_attitude(float *roll, float *pitch, float *yaw);
 **Better**: Add proper `#include "protocol.h"` and `#include "task_imu.h"` at the top of the file. In-body `extern` declarations bypass the header system and won't catch signature changes.
 
 **Review**: okay do it.
+
+**Status**: ✅ FIXED — Replaced in-body `extern` with proper `#include "protocol.h"` in `hal_usart.c` and `#include "task_imu.h"` in `imu_driver.c`.
 
 ---
 

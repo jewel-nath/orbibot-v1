@@ -10,6 +10,7 @@
 
 #include "imu_driver.h"
 #include "robot_error.h"
+#include "task_imu.h"
 #include "hal_spi.h"
 #include "stm32f10x.h"
 #include "orbibot_config.h"
@@ -872,7 +873,5 @@ void imu_get_all_raw(int16_t gyro[3], int16_t accel[3], int16_t mag[3])
  */
 void imu_get_attitude(float *roll, float *pitch, float *yaw)
 {
-    /* Get attitude from IMU task (which does gyro integration) */
-    extern void imu_task_get_attitude(float *roll, float *pitch, float *yaw);
     imu_task_get_attitude(roll, pitch, yaw);
 }
