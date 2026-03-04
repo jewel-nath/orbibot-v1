@@ -745,6 +745,8 @@ At 100Hz the error per step is small, but it accumulates over time.
 
 **Review**: think deeply and write the best solution for this.
 
+**Status**: ✅ FIXED — Replaced Euler integration with midpoint (RK2). Uses `mid_theta = theta + delta_theta/2` for trig computation, reducing drift during rotation+translation.
+
 ---
 
 ### PERF-5: Battery Monitor — Use EMA Filter Instead of Simple Average

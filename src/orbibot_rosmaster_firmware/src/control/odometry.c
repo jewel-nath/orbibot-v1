@@ -36,16 +36,16 @@ void odometry_update(odometry_t *odom, const wheel_velocity_t *wheels, float dt)
     odom->vy = robot_vel.vy;
     odom->omega = robot_vel.omega;
     
-    // Integrate position (Runge-Kutta 2nd order or simple Euler)
-    // Using simple Euler for efficiency on MCU
-    
-    // Transform velocity to global frame
-    float cos_theta = cosf(odom->theta);
-    float sin_theta = sinf(odom->theta);
-    
+    // Midpoint (RK2) integration: use average heading over the time step.
+    // Significantly reduces drift during simultaneous translation + rotation
+    // compared to simple Euler, at the cost of one extra trig pair.
+    float delta_theta = robot_vel.omega * dt;
+    float mid_theta = odom->theta + delta_theta * 0.5f;
+    float cos_theta = cosf(mid_theta);
+    float sin_theta = sinf(mid_theta);
+
     float delta_x = (robot_vel.vx * cos_theta - robot_vel.vy * sin_theta) * dt;
     float delta_y = (robot_vel.vx * sin_theta + robot_vel.vy * cos_theta) * dt;
-    float delta_theta = robot_vel.omega * dt;
     
     // Update pose
     odom->x += delta_x;
