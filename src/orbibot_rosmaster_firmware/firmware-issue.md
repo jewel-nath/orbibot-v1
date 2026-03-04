@@ -253,6 +253,8 @@ For a 14.6V battery this works (146 fits in uint8), but:
 
 **Review**: Okay, fix it.
 
+**Status**: ✅ FIXED — Added negative voltage guard and upper clamp (25.5V). Kept uint8_t format to maintain protocol compatibility with ROS 2 driver.
+
 ---
 
 ### PROTO-4: Many Declared Function Codes Are Unhandled

@@ -508,8 +508,10 @@ void protocol_send_motion_data(void)
     data[4] = meas_vz & 0xFF;
     data[5] = (meas_vz >> 8) & 0xFF;
 
-    // Battery voltage (0-255, multiply by 0.1 for volts)
+    // Battery voltage (0-255, multiply by 0.1 for volts on ROS 2 side)
     float voltage = battery_get_voltage();
+    if (voltage < 0.0f) voltage = 0.0f;
+    if (voltage > 25.5f) voltage = 25.5f;
     data[6] = (uint8_t)(voltage * 10.0f);
 
     protocol_send_packet(FUNC_REPORT_SPEED, data, sizeof(data));
