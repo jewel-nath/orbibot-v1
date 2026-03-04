@@ -233,9 +233,7 @@ The comment says "gives extra headroom" but this contradicts the safety limit. T
 
 **Review**: okay, keep config constant.
 
-```c
-static const int16_t MAX_ANGULAR_SPEED_MRAD = (int16_t)(MAX_ANGULAR_VELOCITY_RPS * 1000.0f);
-```
+**Status**: ✅ FIXED — Both linear and angular clamps now derive from `MAX_LINEAR_VELOCITY_MPS` and `MAX_ANGULAR_VELOCITY_RPS` config constants.
 
 ---
 

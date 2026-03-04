@@ -425,11 +425,9 @@ void protocol_handle_motion(const uint8_t *data)
     int16_t vy_mm = (int16_t)((data[4] << 8) | data[3]);  // mm/s
     int16_t vz_raw = (int16_t)((data[6] << 8) | data[5]); // mrad/s (rad/s × 1000)
 
-    // Speed clamping for safety — limits map to config constants:
-    //   MAX_LINEAR_VELOCITY_MPS (1.0 m/s) = 1000 mm/s
-    //   MAX_ANGULAR_VELOCITY_RPS (2.0 rad/s) = 2000 mrad/s (5000 gives extra headroom)
-    static const int16_t MAX_LINEAR_SPEED_MM = 1000;   // mm/s
-    static const int16_t MAX_ANGULAR_SPEED_MRAD = 5000; // mrad/s
+    // Speed clamping from config constants
+    static const int16_t MAX_LINEAR_SPEED_MM = (int16_t)(MAX_LINEAR_VELOCITY_MPS * 1000.0f);
+    static const int16_t MAX_ANGULAR_SPEED_MRAD = (int16_t)(MAX_ANGULAR_VELOCITY_RPS * 1000.0f);
 
     if (vx_mm > MAX_LINEAR_SPEED_MM) vx_mm = MAX_LINEAR_SPEED_MM;
     if (vx_mm < -MAX_LINEAR_SPEED_MM) vx_mm = -MAX_LINEAR_SPEED_MM;
