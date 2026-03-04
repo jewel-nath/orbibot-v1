@@ -895,6 +895,8 @@ sum += bytes[i];  // Additive checksum, not XOR
 
 **Review**: okay do it.
 
+**Status**: ✅ FIXED — Removed 14 unimplemented `#define` codes (servo, RGB, arm, Ackerman, CAN, OLED, CAR_TYPE). Preserved as a commented reference block for protocol compatibility.
+
 ---
 
 ### REFACT-7: Inconsistent Error Return Types

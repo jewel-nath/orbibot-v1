@@ -46,10 +46,6 @@
  */
 #define FUNC_AUTO_REPORT        0x01    // Enable/disable auto-reporting
 #define FUNC_BEEP               0x02    // Beep control
-#define FUNC_PWM_SERVO          0x03    // PWM servo control (single)
-#define FUNC_PWM_SERVO_ALL      0x04    // PWM servo control (all 4)
-#define FUNC_RGB                0x05    // RGB LED control
-#define FUNC_RGB_EFFECT         0x06    // RGB effect control
 #define FUNC_RESET_ODOM         0x09    // Reset firmware odometry to zero
 #define FUNC_RESET_STATE        0x0F    // Reset system state
 
@@ -72,23 +68,7 @@
 #define FUNC_SET_YAW_PID        0x14    // Set yaw PID parameters
 #define FUNC_REPORT_ODOM        0x15    // Report firmware odometry (x, y, theta, vx, vy, omega)
 #define FUNC_SET_MAG_CAL        0x16    // Set magnetometer calibration data
-#define FUNC_CAR_TYPE           0x17    // Set car type (mecanum, ackerman, etc.)
 #define FUNC_SET_MOTOR_PID_MULTILEVEL 0x18  // Set multi-level PID (3 levels + thresholds)
-
-/**
- * Servo Functions (0x20-0x2F)
- */
-#define FUNC_UART_SERVO         0x20    // UART servo control
-#define FUNC_UART_SERVO_ID      0x21    // Set UART servo ID
-#define FUNC_UART_SERVO_TORQUE  0x22    // Set UART servo torque
-#define FUNC_ARM_CTRL           0x23    // Arm control
-#define FUNC_ARM_OFFSET         0x24    // Arm offset calibration
-
-/**
- * Ackerman Functions (0x30-0x3F)
- */
-#define FUNC_AKM_DEF_ANGLE      0x30    // Ackerman default angle
-#define FUNC_AKM_STEER_ANGLE    0x31    // Ackerman steering angle
 
 /**
  * Request Functions (0x50-0x5F)
@@ -100,11 +80,27 @@
 /**
  * Extended Functions (0x60+)
  */
-#define FUNC_CAN_RX_BEEP        0x60    // CAN receive beep
-#define FUNC_OLED_FLAG          0x70    // OLED display flag
 #define FUNC_RESET_FLASH        0xA0    // Reset flash settings
 #define FUNC_TEST_MODE          0xA1    // Test mode
 #define FUNC_TEST_CLEAR_YAW     0xA2    // Clear yaw test
+
+/* Reserved ROSMaster protocol codes — not implemented in this firmware.
+ * Kept as reference for protocol compatibility if hardware is added.
+ *   0x03  PWM_SERVO          (single servo)
+ *   0x04  PWM_SERVO_ALL      (all 4 servos)
+ *   0x05  RGB                (RGB LED)
+ *   0x06  RGB_EFFECT         (RGB effects)
+ *   0x17  CAR_TYPE           (mecanum/ackerman select)
+ *   0x20  UART_SERVO         (serial bus servo)
+ *   0x21  UART_SERVO_ID      (servo ID assignment)
+ *   0x22  UART_SERVO_TORQUE  (servo torque)
+ *   0x23  ARM_CTRL           (robotic arm)
+ *   0x24  ARM_OFFSET         (arm calibration)
+ *   0x30  AKM_DEF_ANGLE      (Ackerman default)
+ *   0x31  AKM_STEER_ANGLE    (Ackerman steering)
+ *   0x60  CAN_RX_BEEP        (CAN bus)
+ *   0x70  OLED_FLAG          (OLED display)
+ */
 
 /**
  * Verification Values
