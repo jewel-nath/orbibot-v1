@@ -39,7 +39,7 @@ typedef struct {
     // Magnetometer calibration
     mag_calibration_t mag_cal;                      // 3+9 floats + 1 byte = 49 bytes
 
-    uint8_t checksum;                               // XOR checksum over all preceding bytes
+    uint8_t checksum;                               // Additive sum checksum over all preceding bytes
 } flash_data_t;
 #pragma pack(pop)
 

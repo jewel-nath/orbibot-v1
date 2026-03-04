@@ -862,6 +862,8 @@ sum += bytes[i];  // Additive checksum, not XOR
 
 **Review**: update comment.
 
+**Status**: ✅ FIXED — Comment updated to "Additive sum checksum over all preceding bytes".
+
 ---
 
 ### REFACT-6: Remove Legacy/Dead Protocol Function Codes
