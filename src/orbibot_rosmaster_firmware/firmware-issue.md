@@ -2,7 +2,7 @@
 
 **Analyzed by**: Claude (deep firmware review)
 **Date**: 2026-03-04
-**Firmware Version**: v1.0.0 (as declared in `firmware_version.h`) — README says v2.0.0 (mismatch)
+**Firmware Version**: v2.0.0
 **Review**: I am already run a previous firmware with working condition. It almost work fine but found some odom drift issue, before I am calculate odom on ros2 node (on raspbery pi), now its calculate on firmware and now using magnetometer ( I am not test this magnetometer yet). So Its my second version orbibot firmware.
 **Scope**: All files under `src/`, `include/`, `lib/`, `README.md`, `firmware-architecture.md`, `hardware-doc.md`
 
@@ -300,6 +300,8 @@ The version components (`FIRMWARE_VERSION_MAJOR/MINOR/PATCH`) and the string `FI
 ```
 
 **Review**: Firmware version 2.
+
+**Status**: ✅ FIXED — Version updated to 2.0.0, `FIRMWARE_VERSION_STRING` now auto-generated via macro stringification.
 
 ---
 

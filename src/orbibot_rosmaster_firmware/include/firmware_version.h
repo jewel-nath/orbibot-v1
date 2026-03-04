@@ -9,7 +9,7 @@
 #define FIRMWARE_VERSION_H
 
 // Firmware version (Semantic Versioning: MAJOR.MINOR.PATCH)
-#define FIRMWARE_VERSION_MAJOR      1
+#define FIRMWARE_VERSION_MAJOR      2
 #define FIRMWARE_VERSION_MINOR      0
 #define FIRMWARE_VERSION_PATCH      0
 
@@ -31,11 +31,17 @@
 #define GIT_BRANCH                  "unknown"
 #endif
 
+// Macro stringification helpers
+#define _FW_STRINGIFY(x)    #x
+#define _FW_TOSTRING(x)     _FW_STRINGIFY(x)
+
 /**
- * @brief Get version string
- * @return Version string in format "vMAJOR.MINOR.PATCH"
+ * @brief Version string auto-generated from MAJOR.MINOR.PATCH
  */
-#define FIRMWARE_VERSION_STRING     "v1.0.0"
+#define FIRMWARE_VERSION_STRING \
+    "v" _FW_TOSTRING(FIRMWARE_VERSION_MAJOR) "." \
+        _FW_TOSTRING(FIRMWARE_VERSION_MINOR) "." \
+        _FW_TOSTRING(FIRMWARE_VERSION_PATCH)
 
 /**
  * @brief Get full version info
