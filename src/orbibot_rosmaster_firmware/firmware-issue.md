@@ -919,6 +919,8 @@ typedef enum {
 
 **Review**: yes, need a error enum. There I don't like robot name specific funtion name, may be another people can use my firmware with same Yahboom ros expansion board. so you give like ROBOT_OK, 
 
+**Status**: ✅ FIXED — Created `include/robot_error.h` with generic `robot_err_t` enum (`ROBOT_OK`, `ROBOT_ERR_PARAM`, `ROBOT_ERR_TIMEOUT`, `ROBOT_ERR_HW`, `ROBOT_ERR_CHECKSUM`, `ROBOT_ERR_BUSY`). Adopted in IMU driver (`imu_driver_init`, `imu_read_raw`, `imu_read_calibrated`, `imu_read_both`). Other modules can adopt incrementally.
+
 ---
 
 ### REFACT-8: `imu_delay_ms()` Is Inaccurate and Should Use FreeRTOS Delay Post-Init

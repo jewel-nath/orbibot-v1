@@ -21,6 +21,7 @@
 #define IMU_DRIVER_H
 
 #include <stdint.h>
+#include "robot_error.h"
 
 /**
  * @brief IMU data structure for raw sensor readings
@@ -95,31 +96,31 @@ typedef struct
  * 5. Configure sample rate
  * 6. Enable magnetometer (AK09916)
  *
- * @return 0 on success, -1 on failure
+ * @return ROBOT_OK on success, ROBOT_ERR_HW on failure
  */
-int imu_driver_init(void);
+robot_err_t imu_driver_init(void);
 
 /**
  * @brief Read raw sensor data from IMU
  * @param data Pointer to structure for raw data
- * @return 0 on success, -1 on failure
+ * @return ROBOT_OK on success, ROBOT_ERR_PARAM/ROBOT_ERR_HW on failure
  */
-int imu_read_raw(imu_raw_data_t *data);
+robot_err_t imu_read_raw(imu_raw_data_t *data);
 
 /**
  * @brief Read calibrated sensor data from IMU
  * @param data Pointer to structure for calibrated data
- * @return 0 on success, -1 on failure
+ * @return ROBOT_OK on success, ROBOT_ERR_PARAM/ROBOT_ERR_HW on failure
  */
-int imu_read_calibrated(imu_data_t *data);
+robot_err_t imu_read_calibrated(imu_data_t *data);
 
 /**
  * @brief Read both raw and calibrated data in a single SPI transaction
  * @param raw Pointer to raw data output (may be NULL)
  * @param cal Pointer to calibrated data output (may be NULL)
- * @return 0 on success, -1 on failure
+ * @return ROBOT_OK on success, ROBOT_ERR_HW on failure
  */
-int imu_read_both(imu_raw_data_t *raw, imu_data_t *cal);
+robot_err_t imu_read_both(imu_raw_data_t *raw, imu_data_t *cal);
 
 /**
  * @brief Read accelerometer only

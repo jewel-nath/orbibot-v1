@@ -9,6 +9,7 @@
  */
 
 #include "imu_driver.h"
+#include "robot_error.h"
 #include "hal_spi.h"
 #include "stm32f10x.h"
 #include "orbibot_config.h"
@@ -270,30 +271,25 @@ static int mag_init(void)
 /**
  * @brief Initialize ICM-20948 IMU
  */
-int imu_driver_init(void)
+robot_err_t imu_driver_init(void)
 {
     uint8_t who_am_i;
 
-    // Select User Bank 0
     imu_select_bank(0);
 
-    // Reset device
-    imu_write_register(ICM20948_PWR_MGMT_1, 0x80);  // Device reset
-    imu_delay_ms(100);  // Wait for reset to complete
+    imu_write_register(ICM20948_PWR_MGMT_1, 0x80);
+    imu_delay_ms(100);
 
-    // Wake up device and set clock to auto-select best
-    imu_write_register(ICM20948_PWR_MGMT_1, 0x01);  // Auto select clock
+    imu_write_register(ICM20948_PWR_MGMT_1, 0x01);
     imu_delay_ms(10);
 
-    // G7: Disable I2C interface (SPI-only mode) to avoid conflicts
-    imu_write_register(ICM20948_USER_CTRL, 0x10);  // I2C_IF_DIS bit 4
+    imu_write_register(ICM20948_USER_CTRL, 0x10);
     imu_delay_ms(1);
 
-    // Verify WHO_AM_I register
     who_am_i = imu_read_register(ICM20948_WHO_AM_I);
     if (who_am_i != ICM20948_WHO_AM_I_VALUE)
     {
-        return -1;  // Wrong device ID
+        return ROBOT_ERR_HW;
     }
 
     // Enable accelerometer and gyroscope
@@ -335,19 +331,19 @@ int imu_driver_init(void)
     // Device must be stationary during this ~1 second calibration
     imu_calibrate();
 
-    return 0;
+    return ROBOT_OK;
 }
 
 /**
  * @brief Read raw sensor data from IMU
  */
-int imu_read_raw(imu_raw_data_t *data)
+robot_err_t imu_read_raw(imu_raw_data_t *data)
 {
     uint8_t buffer[14];
 
     if (data == NULL)
     {
-        return -1;
+        return ROBOT_ERR_PARAM;
     }
 
     // Ensure we're in User Bank 0
@@ -406,25 +402,24 @@ int imu_read_raw(imu_raw_data_t *data)
         data->mag_z = 0;
     }
 
-    return 0;
+    return ROBOT_OK;
 }
 
 /**
  * @brief Read calibrated sensor data from IMU
  */
-int imu_read_calibrated(imu_data_t *data)
+robot_err_t imu_read_calibrated(imu_data_t *data)
 {
     imu_raw_data_t raw_data;
 
     if (data == NULL)
     {
-        return -1;
+        return ROBOT_ERR_PARAM;
     }
 
-    // Read raw data
-    if (imu_read_raw(&raw_data) != 0)
+    if (imu_read_raw(&raw_data) != ROBOT_OK)
     {
-        return -1;
+        return ROBOT_ERR_HW;
     }
 
     // Convert accelerometer to m/s²
@@ -472,14 +467,14 @@ int imu_read_calibrated(imu_data_t *data)
     // Convert temperature to °C
     data->temperature = ((float)raw_data.temperature / 333.87f) + 21.0f;
 
-    return 0;
+    return ROBOT_OK;
 }
 
-int imu_read_both(imu_raw_data_t *raw, imu_data_t *cal)
+robot_err_t imu_read_both(imu_raw_data_t *raw, imu_data_t *cal)
 {
     imu_raw_data_t raw_data;
-    if (imu_read_raw(&raw_data) != 0)
-        return -1;
+    if (imu_read_raw(&raw_data) != ROBOT_OK)
+        return ROBOT_ERR_HW;
 
     if (raw)
         *raw = raw_data;
@@ -513,7 +508,7 @@ int imu_read_both(imu_raw_data_t *raw, imu_data_t *cal)
         }
         cal->temperature = ((float)raw_data.temperature / 333.87f) + 21.0f;
     }
-    return 0;
+    return ROBOT_OK;
 }
 
 /**
