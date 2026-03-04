@@ -464,50 +464,32 @@ void hal_timer_set_motor_pwm(uint8_t motor, int16_t pwm)
     }
 }
 
+/* Previous counter values for atomic delta calculation.
+ * By tracking the previous count and using 16-bit modular subtraction,
+ * we avoid the non-atomic read-then-reset pattern entirely. */
+static uint16_t encoder_prev_cnt[4] = {
+    ENCODER_MIDPOINT, ENCODER_MIDPOINT, ENCODER_MIDPOINT, ENCODER_MIDPOINT
+};
+
 /**
- * @brief Read encoder delta and reset to midpoint
+ * @brief Read encoder delta (single read, no reset — fully atomic)
  *
- * Encoder reading method:
- * 1. Calculate delta from midpoint (0x7fff)
- * 2. Reset counter to midpoint for next reading
- *
- * This handles bidirectional counting without wrap-around issues.
- *
- * Encoder to Motor mapping:
- * - encoder 0 -> TIM2 -> M1 (Front-Left)
- * - encoder 1 -> TIM4 -> M2 (Back-Left)
- * - encoder 2 -> TIM5 -> M3 (Front-Right)
- * - encoder 3 -> TIM3 -> M4 (Back-Right)
+ * Uses subtraction from previous count instead of midpoint-reset.
+ * 16-bit unsigned subtraction handles hardware counter wrap correctly
+ * as long as |delta| < 32768 per read (always true at 100Hz).
  *
  * @param encoder Encoder index (0-3)
- * @return Delta count since last read (positive = forward, negative = backward)
+ * @return Delta count since last read
  */
 int16_t hal_timer_read_encoder_delta(uint8_t encoder)
 {
     if (encoder >= 4) return 0;
 
-    int16_t delta = 0;
+    static TIM_TypeDef * const encoder_tim[4] = { TIM2, TIM4, TIM5, TIM3 };
 
-    switch (encoder)
-    {
-        case 0:  // M1 - TIM2
-            delta = (int16_t)TIM2->CNT - ENCODER_MIDPOINT;  // G5: Fixed inverted formula
-            TIM2->CNT = ENCODER_MIDPOINT;
-            break;
-        case 1:  // M2 - TIM4
-            delta = (int16_t)TIM4->CNT - ENCODER_MIDPOINT;  // G5: Fixed inverted formula
-            TIM4->CNT = ENCODER_MIDPOINT;
-            break;
-        case 2:  // M3 - TIM5
-            delta = (int16_t)TIM5->CNT - ENCODER_MIDPOINT;  // G5: Fixed inverted formula
-            TIM5->CNT = ENCODER_MIDPOINT;
-            break;
-        case 3:  // M4 - TIM3
-            delta = (int16_t)TIM3->CNT - ENCODER_MIDPOINT;  // G5: Fixed inverted formula
-            TIM3->CNT = ENCODER_MIDPOINT;
-            break;
-    }
-
+    uint16_t current = (uint16_t)encoder_tim[encoder]->CNT;
+    int16_t delta = (int16_t)(current - encoder_prev_cnt[encoder]);
+    encoder_prev_cnt[encoder] = current;
     return delta;
 }
 
@@ -521,17 +503,8 @@ int32_t hal_timer_get_encoder_count(uint8_t encoder)
 {
     if (encoder >= 4) return 0;
 
-    int16_t count = 0;
-
-    switch (encoder)
-    {
-        case 0: count = (int16_t)TIM2->CNT - ENCODER_MIDPOINT; break;
-        case 1: count = (int16_t)TIM4->CNT - ENCODER_MIDPOINT; break;
-        case 2: count = (int16_t)TIM5->CNT - ENCODER_MIDPOINT; break;
-        case 3: count = (int16_t)TIM3->CNT - ENCODER_MIDPOINT; break;
-    }
-
-    return (int32_t)count;
+    static TIM_TypeDef * const encoder_tim[4] = { TIM2, TIM4, TIM5, TIM3 };
+    return (int32_t)((int16_t)encoder_tim[encoder]->CNT - ENCODER_MIDPOINT);
 }
 
 /**
@@ -541,13 +514,10 @@ void hal_timer_reset_encoder(uint8_t encoder)
 {
     if (encoder >= 4) return;
 
-    switch (encoder)
-    {
-        case 0: TIM2->CNT = ENCODER_MIDPOINT; break;
-        case 1: TIM4->CNT = ENCODER_MIDPOINT; break;
-        case 2: TIM5->CNT = ENCODER_MIDPOINT; break;
-        case 3: TIM3->CNT = ENCODER_MIDPOINT; break;
-    }
+    static TIM_TypeDef * const encoder_tim[4] = { TIM2, TIM4, TIM5, TIM3 };
+
+    encoder_tim[encoder]->CNT = ENCODER_MIDPOINT;
+    encoder_prev_cnt[encoder] = ENCODER_MIDPOINT;
 }
 
 /**

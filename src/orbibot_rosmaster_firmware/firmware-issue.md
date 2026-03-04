@@ -168,6 +168,8 @@ Encoder pulses arriving between the read and reset are lost. At 100Hz with typic
 
 **Review**: think clearly and fix this with best solution.
 
+**Status**: ✅ FIXED — Replaced midpoint-reset with a single-read delta pattern using `encoder_prev_cnt[]`. 16-bit modular subtraction handles counter wrap. Zero lost pulses since there is no write to the timer counter during reads.
+
 ---
 
 ### RACE-3: `protocol_receive_byte()` Writes to Primary Buffer Header During Processing
