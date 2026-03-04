@@ -34,39 +34,19 @@ static void hal_timer_pwm_init(void)
 {
     TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
     TIM_OCInitTypeDef TIM_OCInitStructure;
-    GPIO_InitTypeDef GPIO_InitStructure;
 
-    // ========== STEP 1: Enable clocks ==========
+    // Enable timer clocks and remap
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM8 | RCC_APB2Periph_TIM1, ENABLE);
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
-
-    // Enable TIM1 partial remap (required for M3/M4 on Port C)
     GPIO_PinRemapConfig(GPIO_PartialRemap_TIM1, ENABLE);
 
-    // Reset timers
     TIM_DeInit(TIM8);
     TIM_DeInit(TIM1);
 
-    // ========== STEP 2: Initialize GPIO pins ==========
-    // Enable all GPIO clocks
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOB | RCC_APB2Periph_GPIOC, ENABLE);
+    // GPIO AF_PP pins are configured by hal_gpio_init_motor_pwm_pins() in hal_gpio.c.
+    // No duplicate GPIO init here.
 
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
-
-    // M1A (PA11), M1B (PA8)
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_11 | GPIO_Pin_8;
-    GPIO_Init(GPIOA, &GPIO_InitStructure);
-
-    // M2A (PB0), M2B (PB1)
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0 | GPIO_Pin_1;
-    GPIO_Init(GPIOB, &GPIO_InitStructure);
-
-    // M3A (PC6), M3B (PC7), M4A (PC8), M4B (PC9)
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_6 | GPIO_Pin_7 | GPIO_Pin_8 | GPIO_Pin_9;
-    GPIO_Init(GPIOC, &GPIO_InitStructure);
-
-    // ========== STEP 3: Configure timer timebase ==========
+    // Configure timer timebase
     TIM_TimeBaseStructure.TIM_Prescaler = 0;
     TIM_TimeBaseStructure.TIM_Period = 3600 - 1;
     TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;

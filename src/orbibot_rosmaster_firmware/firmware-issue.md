@@ -860,6 +860,8 @@ extern void imu_task_get_attitude(float *roll, float *pitch, float *yaw);
 
 **Review**: okay do it.
 
+**Status**: ✅ FIXED — Removed redundant GPIO AF_PP init from `hal_timer_pwm_init()`. Motor PWM pin config is now solely in `hal_gpio_init_motor_pwm_pins()`.
+
 ---
 
 ### REFACT-5: `flash_storage.h` Comment Says "XOR Checksum" but Implementation Uses Additive
