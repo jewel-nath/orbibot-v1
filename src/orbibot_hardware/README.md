@@ -85,6 +85,9 @@ See [config/hardware_params.yaml](config/hardware_params.yaml) for all parameter
 | Section | Parameter | Default | Description |
 |---------|-----------|---------|-------------|
 | `hardware` | `serial_port` | `/dev/motordriver` | Serial device path |
+| `hardware` | `data_timeout` | `2.0` s | No firmware data for this long → hardware_connected=false |
+| `robot` | `wheel_radius` | `0.05` m | Wheel radius (50 mm) |
+| `robot` | `encoder_edges_per_rev` | `1320` | Encoder edges per wheel revolution |
 | `control` | `cmd_timeout` | `2.0` s | Stop if no `/cmd_vel` received in this window |
 | `control` | `max_velocity` | `1.0` m/s | Linear velocity clamp |
 | `control` | `max_angular_velocity` | `2.0` rad/s | Angular velocity clamp |
@@ -92,6 +95,9 @@ See [config/hardware_params.yaml](config/hardware_params.yaml) for all parameter
 | `rates` | `status_rate` | `10.0` Hz | System/safety status publish rate |
 | `safety` | `battery_low_threshold` | `11.0` V | Low battery warning level |
 | `safety` | `battery_critical_voltage` | `10.5` V | Emergency stop threshold |
+| `imu` | `linear_acceleration_covariance` | `0.01` | IMU accel covariance (diagonal) |
+| `imu` | `angular_velocity_covariance` | `0.0025` | IMU gyro covariance (diagonal) |
+| `imu` | `orientation_covariance` | `0.0025` | IMU orientation covariance (diagonal) |
 | `odometry` | `pose_base` | `0.001` | Base position variance (m²) |
 | `odometry` | `pose_drift` | `0.02` | Position variance drift per meter traveled |
 | `odometry` | `yaw_base` | `0.01` | Base yaw variance (rad²) |

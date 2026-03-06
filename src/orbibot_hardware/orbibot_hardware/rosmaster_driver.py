@@ -17,41 +17,24 @@ SERIAL_HEAD = 0xFF
 SERIAL_DEVICE_ID = 0xFC
 SERIAL_COMPLEMENT = 257 - SERIAL_DEVICE_ID
 
-# Function codes (Yahboom protocol)
+# Function codes (Yahboom protocol) — OrbiBot uses ICM-20948 only
 FUNC_AUTO_REPORT = 0x01
 FUNC_BEEP = 0x02
 FUNC_REPORT_SPEED = 0x0A
-FUNC_REPORT_MPU_RAW = 0x0B
 FUNC_REPORT_IMU_ATT = 0x0C
 FUNC_REPORT_ENCODER = 0x0D
 FUNC_REPORT_ICM_RAW = 0x0E
-FUNC_RESET_ODOM = 0x09    # Was 0x0E — collided with FUNC_REPORT_ICM_RAW
-FUNC_RESET_STATE = 0x0F
-FUNC_MOTOR = 0x10
-FUNC_CAR_RUN = 0x11
+FUNC_RESET_ODOM = 0x09
 FUNC_MOTION = 0x12
 FUNC_SET_MOTOR_PID = 0x13
 FUNC_SET_YAW_PID = 0x14
 FUNC_REPORT_ODOM = 0x15
 FUNC_SET_MAG_CAL = 0x16
-FUNC_SET_CAR_TYPE = 0x17
 FUNC_SET_MOTOR_PID_MULTILEVEL = 0x18
-FUNC_REQUEST_DATA = 0x50
-FUNC_VERSION = 0x51
 FUNC_RESET_FLASH = 0xA0
 
-# Car type identifiers
-CARTYPE_X3 = 0x01
-CARTYPE_X3_PLUS = 0x02
-CARTYPE_X1 = 0x04
-CARTYPE_R2 = 0x05
+# Car type (OrbiBot uses mecanum only; byte required in MOTION packet format)
 CARTYPE_ORBIBOT = 0x07
-
-# MPU9250 sensor conversion ratios
-# Gyroscope: ±500dps → (raw/32768*500)*PI/180 = raw/3754.9 (rad/s)
-MPU9250_GYRO_RATIO = 1 / 3754.9
-MPU9250_ACCEL_RATIO = 1 / 1671.84
-MPU9250_MAG_RATIO = 1
 
 # ICM-20948 sensor conversion ratios (pre-scaled by firmware, units in milli)
 ICM20948_GYRO_RATIO = 1 / 1000.0
@@ -62,8 +45,8 @@ ICM20948_MAG_RATIO = 1 / 1000.0
 RAD_TO_DEG = 57.2957795
 
 
-# V3.3.9
-class Rosmaster(object):
+# Driver version / Yahboom protocol compatibility (V3.3.9)
+class Rosmaster:
 
     def __init__(self, car_type=1, com="/dev/motordriver", delay=.002, debug=False):
         self._com_port = com
@@ -110,9 +93,8 @@ class Rosmaster(object):
 
         self._auto_report_enabled = False  # Track state for reconnect restoration
 
-        self._version_H = 0
-        self._version_L = 0
-        self._version = 0
+        # Data freshness for S1/S2 (timestamp of last successfully parsed packet)
+        self._last_data_timestamp = 0.0
 
         self._pid_index = 0
         self._kp1 = 0
@@ -175,9 +157,8 @@ class Rosmaster(object):
         print(f"Failed to reconnect after {max_retries} attempts")
         return False
 
-    # Parse data based on frame type
-    # Added bounds checking to prevent struct.unpack errors on malformed packets
-    # Uses lock to prevent data tearing when reading from another thread
+    # Parse data based on frame type (OrbiBot firmware sends ICM-20948 only)
+    # Bounds checking to prevent struct.unpack errors on malformed packets
     def _parse_data(self, ext_type, ext_data):
         if ext_type == FUNC_REPORT_SPEED:
             if len(ext_data) < 7:
@@ -187,21 +168,7 @@ class Rosmaster(object):
                 self._vy = int(struct.unpack('h', bytearray(ext_data[2:4]))[0]) / 1000.0
                 self._vz = int(struct.unpack('h', bytearray(ext_data[4:6]))[0]) / 1000.0
                 self._battery_voltage = struct.unpack('B', bytearray(ext_data[6:7]))[0]
-        # Parse MPU9250 raw gyroscope, accelerometer, magnetometer data
-        elif ext_type == FUNC_REPORT_MPU_RAW:
-            if len(ext_data) < 18:
-                return
-            with self._data_lock:
-                self._gx = struct.unpack('h', bytearray(ext_data[0:2]))[0] * MPU9250_GYRO_RATIO
-                self._gy = struct.unpack('h', bytearray(ext_data[2:4]))[0] * -MPU9250_GYRO_RATIO
-                self._gz = struct.unpack('h', bytearray(ext_data[4:6]))[0] * -MPU9250_GYRO_RATIO
-                self._ax = struct.unpack('h', bytearray(ext_data[6:8]))[0] * MPU9250_ACCEL_RATIO
-                self._ay = struct.unpack('h', bytearray(ext_data[8:10]))[0] * MPU9250_ACCEL_RATIO
-                self._az = struct.unpack('h', bytearray(ext_data[10:12]))[0] * MPU9250_ACCEL_RATIO
-                self._mx = struct.unpack('h', bytearray(ext_data[12:14]))[0] * MPU9250_MAG_RATIO
-                self._my = struct.unpack('h', bytearray(ext_data[14:16]))[0] * MPU9250_MAG_RATIO
-                self._mz = struct.unpack('h', bytearray(ext_data[16:18]))[0] * MPU9250_MAG_RATIO
-        # Parse ICM20948 raw gyroscope, accelerometer, magnetometer data
+                self._last_data_timestamp = time.time()
         elif ext_type == FUNC_REPORT_ICM_RAW:
             if len(ext_data) < 18:
                 return
@@ -215,7 +182,7 @@ class Rosmaster(object):
                 self._mx = struct.unpack('h', bytearray(ext_data[12:14]))[0] * ICM20948_MAG_RATIO
                 self._my = struct.unpack('h', bytearray(ext_data[14:16]))[0] * ICM20948_MAG_RATIO
                 self._mz = struct.unpack('h', bytearray(ext_data[16:18]))[0] * ICM20948_MAG_RATIO
-        # Parse board attitude angles
+                self._last_data_timestamp = time.time()
         elif ext_type == FUNC_REPORT_IMU_ATT:
             if len(ext_data) < 6:
                 return
@@ -223,7 +190,7 @@ class Rosmaster(object):
                 self._roll = struct.unpack('h', bytearray(ext_data[0:2]))[0] / 10000.0
                 self._pitch = struct.unpack('h', bytearray(ext_data[2:4]))[0] / 10000.0
                 self._yaw = struct.unpack('h', bytearray(ext_data[4:6]))[0] / 10000.0
-        # Parse encoder data for four wheels
+                self._last_data_timestamp = time.time()
         elif ext_type == FUNC_REPORT_ENCODER:
             if len(ext_data) < 16:
                 return
@@ -232,8 +199,7 @@ class Rosmaster(object):
                 self._encoder_m2 = struct.unpack('i', bytearray(ext_data[4:8]))[0]
                 self._encoder_m3 = struct.unpack('i', bytearray(ext_data[8:12]))[0]
                 self._encoder_m4 = struct.unpack('i', bytearray(ext_data[12:16]))[0]
-
-        # Parse firmware odometry (6× int32 LE, values in mm and mrad)
+                self._last_data_timestamp = time.time()
         elif ext_type == FUNC_REPORT_ODOM:
             if len(ext_data) < 24:
                 return
@@ -245,15 +211,7 @@ class Rosmaster(object):
                 self._odom_vx = vals[3] / 1000.0      # mm/s → m/s
                 self._odom_vy = vals[4] / 1000.0      # mm/s → m/s
                 self._odom_omega = vals[5] / 1000.0   # mrad/s → rad/s
-
-        elif ext_type == FUNC_VERSION:
-            if len(ext_data) < 2:
-                return
-            self._version_H = struct.unpack('B', bytearray(ext_data[0:1]))[0]
-            self._version_L = struct.unpack('B', bytearray(ext_data[1:2]))[0]
-            if self._debug:
-                print("FUNC_VERSION:", self._version_H, self._version_L)
-
+                self._last_data_timestamp = time.time()
         elif ext_type == FUNC_SET_MOTOR_PID:
             if len(ext_data) < 7:
                 return
@@ -333,16 +291,15 @@ class Rosmaster(object):
                     print("Receive thread exiting - reconnect failed or shutdown requested")
                     break
 
-    # Request data. function: function word to return, param: parameter passed in
-    def _request_data(self, function, param=0):
-        cmd = [SERIAL_HEAD, SERIAL_DEVICE_ID, 0x05, FUNC_REQUEST_DATA, int(function) & 0xff, int(param) & 0xff]
+    def _send_command(self, func_code, data_bytes):
+        """Build and send a packet: HEAD, DEVID, LEN, FUNC, [data...], checksum. (R5/Q13)"""
+        cmd = [SERIAL_HEAD, SERIAL_DEVICE_ID, 0x00, func_code] + list(data_bytes)
+        cmd[2] = len(cmd) - 1
         checksum = sum(cmd, SERIAL_COMPLEMENT) & 0xff
         cmd.append(checksum)
         with self._write_lock:
-            self.ser.write(cmd)
-        if self._debug:
-            print("request:", cmd)
-        time.sleep(0.002)
+            self.ser.write(bytearray(cmd))
+        time.sleep(self._delay_time)
 
     # Start thread for receiving and processing data
     def create_receive_threading(self):
@@ -359,46 +316,28 @@ class Rosmaster(object):
             print(f'---create_receive_threading error: {e}---')
 
     # MCU automatically returns data status bit (default enabled).
-    # enable=True: Expansion board sends four packets every 10ms (refresh rate 40ms).
-    # enable=False: Stop sending.
     # forever=True: Permanent (saved to flash), forever=False: Temporary.
     def set_auto_report_state(self, enable, forever=False):
         try:
             self._auto_report_enabled = bool(enable)
-            state1 = 0
-            state2 = 0
-            if enable:
-                state1 = 1
-            if forever:
-                state2 = 0x5F
-            cmd = [SERIAL_HEAD, SERIAL_DEVICE_ID, 0x05, FUNC_AUTO_REPORT, state1, state2]
-            checksum = sum(cmd, SERIAL_COMPLEMENT) & 0xff
-            cmd.append(checksum)
-            with self._write_lock:
-                self.ser.write(cmd)
+            state1 = 1 if enable else 0
+            state2 = 0x5F if forever else 0
+            self._send_command(FUNC_AUTO_REPORT, [state1, state2])
             if self._debug:
-                print("report:", cmd)
-            time.sleep(self._delay_time)
+                print("report: auto_report", state1, state2)
         except (serial.SerialException, OSError) as e:
             print(f'---set_auto_report_state error: {e}---')
 
-    # Buzzer switch. on_time=0: off, on_time=1: always on.
-    # on_time>=10: on for xx ms then auto off (on_time is multiple of 10).
+    # Buzzer: on_time=0 off, 1=always on, >=10 beep for N ms then auto off.
     def set_beep(self, on_time):
         try:
             if on_time < 0:
                 print("beep input error!")
                 return
             value = bytearray(struct.pack('h', int(on_time)))
-
-            cmd = [SERIAL_HEAD, SERIAL_DEVICE_ID, 0x05, FUNC_BEEP, value[0], value[1]]
-            checksum = sum(cmd, SERIAL_COMPLEMENT) & 0xff
-            cmd.append(checksum)
-            with self._write_lock:
-                self.ser.write(cmd)
+            self._send_command(FUNC_BEEP, [value[0], value[1]])
             if self._debug:
-                print("beep:", cmd)
-            time.sleep(self._delay_time)
+                print("beep:", on_time)
         except (serial.SerialException, OSError) as e:
             print(f'---set_beep error: {e}---')
 
@@ -539,70 +478,37 @@ class Rosmaster(object):
             print(f'---set_pid_multilevel error: {e}---')
 
     def set_mag_calibration(self, offset_x, offset_y, offset_z):
-        """Set magnetometer hard iron calibration offsets (in µT).
-
-        Sends hard iron offsets to firmware which applies them to raw
-        magnetometer readings before publishing.
-
-        Args:
-            offset_x: Hard iron offset X (µT)
-            offset_y: Hard iron offset Y (µT)
-            offset_z: Hard iron offset Z (µT)
-        """
+        """Set magnetometer hard iron calibration offsets (in µT)."""
         try:
-            cmd = [SERIAL_HEAD, SERIAL_DEVICE_ID, 0x09, 0x16]  # FUNC_SET_MAG_CAL
             ox = bytearray(struct.pack('h', int(offset_x * 100)))
             oy = bytearray(struct.pack('h', int(offset_y * 100)))
             oz = bytearray(struct.pack('h', int(offset_z * 100)))
-            cmd.extend([ox[0], ox[1], oy[0], oy[1], oz[0], oz[1]])
-            checksum = sum(cmd, SERIAL_COMPLEMENT) & 0xff
-            cmd.append(checksum)
-            with self._write_lock:
-                self.ser.write(cmd)
+            data = [ox[0], ox[1], oy[0], oy[1], oz[0], oz[1]]
+            self._send_command(FUNC_SET_MAG_CAL, data)
             if self._debug:
-                print("mag_cal:", cmd)
-            time.sleep(self._delay_time)
+                print("mag_cal:", offset_x, offset_y, offset_z)
         except (serial.SerialException, OSError) as e:
             print(f'---set_mag_calibration error: {e}---')
 
-    # Reset flash data to factory defaults
     def reset_flash_value(self):
         try:
-            cmd = [SERIAL_HEAD, SERIAL_DEVICE_ID, 0x04, FUNC_RESET_FLASH, 0x5F]
-            checksum = sum(cmd, SERIAL_COMPLEMENT) & 0xff
-            cmd.append(checksum)
-            with self._write_lock:
-                self.ser.write(cmd)
-            if self._debug:
-                print("flash:", cmd)
-            time.sleep(self._delay_time)
+            self._send_command(FUNC_RESET_FLASH, [0x5F])
             time.sleep(.1)
         except (serial.SerialException, OSError) as e:
             print(f'---reset_flash_value error: {e}---')
 
-    # Reset firmware odometry to zero
     def reset_odometry(self):
-        """Reset firmware odometry to zero."""
+        """Reset firmware odometry to zero. (BUG-4: length byte = len(cmd)-1 = 0x03.)"""
         try:
-            cmd = [SERIAL_HEAD, SERIAL_DEVICE_ID, 0x02, FUNC_RESET_ODOM]
-            checksum = sum(cmd, SERIAL_COMPLEMENT) & 0xff
-            cmd.append(checksum)
-            with self._write_lock:
-                self.ser.write(cmd)
-            if self._debug:
-                print("reset_odom:", cmd)
-            time.sleep(0.01)  # Small delay for firmware processing
+            self._send_command(FUNC_RESET_ODOM, [])
+            time.sleep(0.01)
         except (serial.SerialException, OSError) as e:
             print(f'---reset_odometry error: {e}---')
 
-    # Clear auto-report cache data
-    def clear_auto_report_data(self):
-        self._battery_voltage = 0
-        self._vx, self._vy, self._vz = 0, 0, 0
-        self._ax, self._ay, self._az = 0, 0, 0
-        self._gx, self._gy, self._gz = 0, 0, 0
-        self._mx, self._my, self._mz = 0, 0, 0
-        self._yaw, self._roll, self._pitch = 0, 0, 0
+    def get_last_data_timestamp(self):
+        """Return timestamp of last successfully parsed firmware packet (for data freshness)."""
+        with self._data_lock:
+            return self._last_data_timestamp
 
     # Get accelerometer triaxial data (a_x, a_y, a_z)
     # Uses lock to prevent data tearing
@@ -649,46 +555,3 @@ class Rosmaster(object):
         with self._data_lock:
             return (self._odom_x, self._odom_y, self._odom_theta,
                     self._odom_vx, self._odom_vy, self._odom_omega)
-
-    # Get firmware version
-    def get_version(self):
-        return self._version_H, self._version_L
-
-
-if __name__ == '__main__':
-    # Low-level processing library
-    com_index = 1
-    while True:
-        com_index = com_index + 1
-        try:
-            print("try COM%d" % com_index)
-            com = 'COM%d' % com_index
-            bot = Rosmaster(1, com, debug=True)
-            break
-        except:
-            if com_index > 256:
-                print("-----------------------No COM Open--------------------------")
-                exit(0)
-            continue
-    print("--------------------Open %s---------------------" % com)
-
-    bot.create_receive_threading()
-    time.sleep(.1)
-    bot.set_beep(50)
-    time.sleep(.1)
-
-    version = bot.get_version()
-    print("version=", version)
-
-    try:
-        while True:
-            ax, ay, az = bot.get_accelerometer_data()
-            gx, gy, gz = bot.get_gyroscope_data()
-            mx, my, mz = bot.get_magnetometer_data()
-            print("%3.3f, %3.3f, %3.3f, %3.3f, %3.3f, %3.3f, %3.3f, %3.3f, %3.3f" %
-            (ax, ay, az, gx, gy, gz, mx, my, mz))
-            time.sleep(.1)
-    except KeyboardInterrupt:
-        bot.set_car_motion(0, 0, 0)
-        pass
-    exit(0)

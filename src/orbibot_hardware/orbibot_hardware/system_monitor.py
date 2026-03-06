@@ -33,6 +33,9 @@ class SystemMonitorNode(Node):
         # Store last hardware status
         self.last_hardware_status = None
         
+        # P1: Seed CPU baseline once; then use interval=None to avoid blocking 100ms per cycle
+        self._cpu_seeded = False
+        
         # Timer for periodic publishing (1 Hz)
         self.timer = self.create_timer(1.0, self.publish_enriched_status)
         
@@ -77,8 +80,12 @@ class SystemMonitorNode(Node):
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = ''
         
-        # Enrich with system resources
-        msg.cpu_percent = psutil.cpu_percent(interval=0.1)
+        # Enrich with system resources (P1: interval=None after first seed — non-blocking)
+        if not self._cpu_seeded:
+            msg.cpu_percent = psutil.cpu_percent(interval=0.1)
+            self._cpu_seeded = True
+        else:
+            msg.cpu_percent = psutil.cpu_percent(interval=None)
         msg.ram_percent = psutil.virtual_memory().percent
         msg.cpu_temp = self.get_cpu_temperature()
         msg.disk_percent = psutil.disk_usage('/').percent

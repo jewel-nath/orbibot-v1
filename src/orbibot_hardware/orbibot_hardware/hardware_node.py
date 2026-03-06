@@ -79,9 +79,9 @@ class OrbiBotHardwareNode(Node):
         self.last_encoders = [0, 0, 0, 0]
         self.encoder_initialized = False
 
-        # Robot parameters
-        self.wheel_radius = 0.05  # 50mm
-        self.encoder_edges_per_rev = 1320  # 11 PPR × 30 gear × 4 quadrature (already includes quadrature)
+        # Robot parameters (overridden from YAML in _declare_parameters — R2)
+        self.wheel_radius = 0.05
+        self.encoder_edges_per_rev = 1320
 
         # Odometry adaptive covariance tracking
         self._accumulated_distance = 0.0
@@ -116,6 +116,9 @@ class OrbiBotHardwareNode(Node):
         """Declare and load ROS parameters"""
         # Hardware
         self.declare_parameter('hardware.serial_port', '/dev/motordriver')
+        self.declare_parameter('hardware.data_timeout', 2.0)  # S1/S2: seconds without data → hardware_connected=False
+        self.declare_parameter('robot.wheel_radius', 0.05)  # R2: 50mm
+        self.declare_parameter('robot.encoder_edges_per_rev', 1320)  # 11 PPR × 30 gear × 4 quadrature
         self.declare_parameter('control.cmd_timeout', 2.0)
         self.declare_parameter('control.max_velocity', 1.0)
         self.declare_parameter('control.max_angular_velocity', 2.0)
@@ -137,8 +140,14 @@ class OrbiBotHardwareNode(Node):
         self.declare_parameter('odometry.velocity_scale', 0.1)
         self.declare_parameter('odometry.covariance_decay', 0.99)  # G2: Decay factor for accumulated errors
 
+        # R4: IMU covariance (diagonal entries; -1 for orientation means "unknown")
+        self.declare_parameter('imu.linear_acceleration_covariance', 0.01)
+        self.declare_parameter('imu.angular_velocity_covariance', 0.0025)
+        self.declare_parameter('imu.orientation_covariance', 0.0025)
+
         # Load values
         self.serial_port = self.get_parameter('hardware.serial_port').value
+        self._data_timeout = self.get_parameter('hardware.data_timeout').value
         self.cmd_timeout = self.get_parameter('control.cmd_timeout').value
         self.max_velocity = self.get_parameter('control.max_velocity').value
         self.max_angular_velocity = self.get_parameter('control.max_angular_velocity').value
@@ -155,6 +164,15 @@ class OrbiBotHardwareNode(Node):
         self._cov_vel_base = self.get_parameter('odometry.velocity_base').value
         self._cov_vel_scale = self.get_parameter('odometry.velocity_scale').value
         self._cov_decay = self.get_parameter('odometry.covariance_decay').value
+
+        # Robot geometry (R2)
+        self.wheel_radius = self.get_parameter('robot.wheel_radius').value
+        self.encoder_edges_per_rev = self.get_parameter('robot.encoder_edges_per_rev').value
+
+        # IMU covariance (R4)
+        self._imu_accel_cov = self.get_parameter('imu.linear_acceleration_covariance').value
+        self._imu_gyro_cov = self.get_parameter('imu.angular_velocity_covariance').value
+        self._imu_orient_cov = self.get_parameter('imu.orientation_covariance').value
 
         # Validate parameters
         self._validate_parameters()
@@ -453,18 +471,27 @@ class OrbiBotHardwareNode(Node):
             self.get_logger().error(f"PID flash save failed: {e}")
 
     def _sensor_callback(self):
-        """Publish sensor data @ 50Hz"""
+        """Publish sensor data @ 50Hz. R1/Q4: single fetch per cycle. S1/S2: data freshness."""
         if not self.hardware_connected:
             return
+
+        # S1/S2: Data freshness — if no firmware data for data_timeout, mark disconnected
+        try:
+            last_ts = self.bot.get_last_data_timestamp()
+            if last_ts > 0 and (time.time() - last_ts) > self._data_timeout:
+                self.hardware_connected = False
+                self.get_logger().warn("Hardware data timeout — marking disconnected")
+                return
+            if last_ts > 0:
+                self.hardware_connected = True  # recover when data flows again
+        except (AttributeError, TypeError):
+            pass
 
         # Command timeout safety — G1: send stop once, G4: thread-safe state reads
         with self._cmd_time_lock:
             cmd_age = time.time() - self._last_cmd_time
         with self._state_lock:
             motors_active = self.motors_enabled
-        # Determine whether to send stop, then release lock before the serial write.
-        # set_car_motion() sleeps 2ms internally — holding _cmd_time_lock that long
-        # would block any arriving /cmd_vel callback for the duration.
         send_stop = False
         with self._cmd_time_lock:
             if cmd_age > self.cmd_timeout and motors_active and not self._timeout_stop_sent:
@@ -473,107 +500,90 @@ class OrbiBotHardwareNode(Node):
         if send_stop:
             self.bot.set_car_motion(0, 0, 0)
 
-        # Publish all sensor data (cache encoders to avoid double fetch)
-        self._publish_imu()
-        self._publish_imu_raw()
-        self._publish_mag()
-        self._publish_firmware_odom()
-        encoders = self.bot.get_motor_encoder() if self.hardware_connected else None
-        if encoders is not None:
-            self._publish_encoders(encoders)
-            self._publish_joint_states(encoders)
-
-    def _publish_imu(self):
-        """Publish IMU data"""
+        # R1/Q4: Fetch all sensor data once per cycle, then publish
         try:
+            accel_data = self.bot.get_accelerometer_data()
+            gyro_data = self.bot.get_gyroscope_data()
+            attitude_data = self.bot.get_imu_attitude_data(to_angle=False)
+            mag_data = self.bot.get_magnetometer_data()
+            odom_data = self.bot.get_firmware_odometry()
+            encoders = self.bot.get_motor_encoder()
+        except Exception as e:
+            self.get_logger().error(f"Sensor fetch failed: {e}")
+            return
+
+        self._publish_imu(accel_data, gyro_data, attitude_data)
+        self._publish_imu_raw(accel_data, gyro_data)
+        self._publish_mag(mag_data)
+        self._publish_firmware_odom(odom_data)
+        self._publish_encoders(encoders)
+        self._publish_joint_states(encoders)
+
+    def _publish_imu(self, accel_data, gyro_data, attitude_data):
+        """Publish IMU data (data from single fetch in _sensor_callback)."""
+        try:
+            if not all(len(data) == 3 for data in [accel_data, gyro_data, attitude_data]):
+                return
             msg = Imu()
             msg.header.stamp = self.get_clock().now().to_msg()
             msg.header.frame_id = 'imu_link'
 
-            # Get sensor data
-            accel_data = self.bot.get_accelerometer_data()
-            gyro_data = self.bot.get_gyroscope_data()
-            attitude_data = self.bot.get_imu_attitude_data(to_angle=False)
-
-            if not all(len(data) == 3 for data in [accel_data, gyro_data, attitude_data]):
-                return
-
-            # Linear acceleration (m/s^2)
             msg.linear_acceleration.x = float(accel_data[0])
             msg.linear_acceleration.y = float(accel_data[1])
             msg.linear_acceleration.z = float(accel_data[2])
-
-            # Angular velocity (rad/s)
             msg.angular_velocity.x = float(gyro_data[0])
             msg.angular_velocity.y = float(gyro_data[1])
             msg.angular_velocity.z = float(gyro_data[2])
 
-            # Orientation from attitude (quaternion)
             roll, pitch, yaw = float(attitude_data[0]), float(attitude_data[1]), float(attitude_data[2])
             cy, sy = math.cos(yaw * 0.5), math.sin(yaw * 0.5)
             cp, sp = math.cos(pitch * 0.5), math.sin(pitch * 0.5)
             cr, sr = math.cos(roll * 0.5), math.sin(roll * 0.5)
-
             msg.orientation.w = float(cr * cp * cy + sr * sp * sy)
             msg.orientation.x = float(sr * cp * cy - cr * sp * sy)
             msg.orientation.y = float(cr * sp * cy + sr * cp * sy)
             msg.orientation.z = float(cr * cp * sy - sr * sp * cy)
 
-            # Covariance (diagonal)
-            msg.linear_acceleration_covariance = [0.01, 0.0, 0.0, 0.0, 0.01, 0.0, 0.0, 0.0, 0.01]
-            msg.angular_velocity_covariance = [0.0025, 0.0, 0.0, 0.0, 0.0025, 0.0, 0.0, 0.0, 0.0025]
-            msg.orientation_covariance = [0.0025, 0.0, 0.0, 0.0, 0.0025, 0.0, 0.0, 0.0, 0.0025]
-
+            c = self._imu_accel_cov
+            msg.linear_acceleration_covariance = [c, 0.0, 0.0, 0.0, c, 0.0, 0.0, 0.0, c]
+            c = self._imu_gyro_cov
+            msg.angular_velocity_covariance = [c, 0.0, 0.0, 0.0, c, 0.0, 0.0, 0.0, c]
+            c = self._imu_orient_cov
+            msg.orientation_covariance = [c, 0.0, 0.0, 0.0, c, 0.0, 0.0, 0.0, c]
             self.imu_pub.publish(msg)
-
         except Exception as e:
             self.get_logger().error(f"IMU publish failed: {str(e)}")
 
-    def _publish_imu_raw(self):
+    def _publish_imu_raw(self, accel_data, gyro_data):
         """Publish raw IMU data (no orientation) for imu_filter_madgwick input."""
         try:
-            accel_data = self.bot.get_accelerometer_data()
-            gyro_data = self.bot.get_gyroscope_data()
-
             if not all(len(d) == 3 for d in [accel_data, gyro_data]):
                 return
-
             msg = Imu()
             msg.header.stamp = self.get_clock().now().to_msg()
             msg.header.frame_id = 'imu_link'
-
             msg.linear_acceleration.x = float(accel_data[0])
             msg.linear_acceleration.y = float(accel_data[1])
             msg.linear_acceleration.z = float(accel_data[2])
-
             msg.angular_velocity.x = float(gyro_data[0])
             msg.angular_velocity.y = float(gyro_data[1])
             msg.angular_velocity.z = float(gyro_data[2])
-
-            # orientation_covariance[0] = -1 signals "no orientation data"
             msg.orientation_covariance[0] = -1.0
-            msg.linear_acceleration_covariance = [
-                0.01, 0.0, 0.0, 0.0, 0.01, 0.0, 0.0, 0.0, 0.01]
-            msg.angular_velocity_covariance = [
-                0.0025, 0.0, 0.0, 0.0, 0.0025, 0.0, 0.0, 0.0, 0.0025]
-
+            c = self._imu_accel_cov
+            msg.linear_acceleration_covariance = [c, 0.0, 0.0, 0.0, c, 0.0, 0.0, 0.0, c]
+            c = self._imu_gyro_cov
+            msg.angular_velocity_covariance = [c, 0.0, 0.0, 0.0, c, 0.0, 0.0, 0.0, c]
             self.imu_raw_pub.publish(msg)
-
         except Exception as e:
             self.get_logger().error(f"IMU raw publish failed: {e}")
 
-    def _publish_mag(self):
+    def _publish_mag(self, mag_data):
         """Publish magnetometer data for imu_filter_madgwick."""
         try:
-            mag_data = self.bot.get_magnetometer_data()
-
             if len(mag_data) != 3:
                 return
-
-            # Skip if all zeros (magnetometer not yet initialized)
             if mag_data[0] == 0.0 and mag_data[1] == 0.0 and mag_data[2] == 0.0:
                 return
-
             msg = MagneticField()
             msg.header.stamp = self.get_clock().now().to_msg()
             msg.header.frame_id = 'imu_link'
@@ -591,16 +601,12 @@ class OrbiBotHardwareNode(Node):
         except Exception as e:
             self.get_logger().error(f"Mag publish failed: {e}")
 
-    def _publish_firmware_odom(self):
+    def _publish_firmware_odom(self, odom_data):
         """Publish firmware odometry on /odom with adaptive covariance."""
         try:
-            odom_data = self.bot.get_firmware_odometry()
-
-            # G3: Skip publishing if firmware data hasn't changed (50Hz pub, 25Hz firmware)
             if self._last_firmware_odom is not None and odom_data == self._last_firmware_odom:
                 return
             self._last_firmware_odom = odom_data
-
             x, y, theta, vx, vy, omega = odom_data
 
             # Track accumulated distance/rotation for adaptive covariance
@@ -808,9 +814,10 @@ class OrbiBotHardwareNode(Node):
 
     # Service Callbacks
     def _motor_enable_callback(self, request, response):
-        """Enable/disable motors"""
+        """Enable/disable motors. (BUG-3: set_car_motion called outside _state_lock.)"""
         try:
-            # G4: Thread-safe access to state variables
+            send_stop = False
+            # G4: Thread-safe access to state variables; do not call set_car_motion inside lock
             with self._state_lock:
                 if request.enable and not self.emergency_stop:
                     self.motors_enabled = True
@@ -818,14 +825,16 @@ class OrbiBotHardwareNode(Node):
                     response.message = "Motors enabled"
                     self.get_logger().info("Motors enabled")
                 elif not request.enable:
-                    self.bot.set_car_motion(0, 0, 0)
                     self.motors_enabled = False
                     response.success = True
                     response.message = "Motors disabled"
                     self.get_logger().info("Motors disabled")
+                    send_stop = True
                 else:
                     response.success = False
                     response.message = "Emergency stop active"
+            if send_stop:
+                self.bot.set_car_motion(0, 0, 0)
         except Exception as e:
             response.success = False
             response.message = f"Error: {str(e)}"

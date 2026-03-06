@@ -1,8 +1,36 @@
 # orbibot_hardware — Changelog
 
 **Audited:** 2026-03-04 (Deep Analysis)  
+**Phase 3 fixes:** 2026-03-06  
 **Files reviewed:** `rosmaster_driver.py`, `hardware_node.py`, `system_monitor.py`, `hardware_params.yaml`, `hardware.launch.py`, `setup.py`, `package.xml`  
 **References:** Firmware README, firmware protocol spec, `hardware-issue.md`
+
+---
+
+## Phase 3 — Fixes Applied (2026-03-06)
+
+| ID | Status |
+|----|--------|
+| BUG-3 | [x] Done — `set_car_motion(0,0,0)` moved outside `_state_lock` in `_motor_enable_callback` |
+| BUG-4 | [x] Done — `reset_odometry` uses `_send_command` (length = len(cmd)-1) |
+| BUG-5 / Q6 | [x] Done — `clear_auto_report_data()` removed (dead code, data race) |
+| Q4 | [x] Done — Single sensor fetch per cycle (R1) |
+| Q7 | [x] Done — Legacy `__main__` block removed from rosmaster_driver |
+| Q8 | [x] Done — MPU9250 constants and parsing branch removed (ICM-20948 only) |
+| Q9 | [x] Done — Unused FUNC_* and CARTYPE_* constants removed |
+| Q10 | [x] Done — `_request_data()` removed |
+| Q11 | [x] Done — Version fields and `get_version()` removed |
+| Q12 | [x] Done — `set_mag_calibration` uses `FUNC_SET_MAG_CAL` |
+| Q13 | [x] Done — `_send_command()` helper; beep, auto_report, mag_cal, reset_flash, reset_odom use it |
+| Q14 | [x] Done — `class Rosmaster:` (Python 3 style) |
+| R1 | [x] Done — Single fetch in `_sensor_callback`, pass to all `_publish_*` |
+| R2 | [x] Done — `robot.wheel_radius`, `robot.encoder_edges_per_rev` in YAML and node |
+| R4 | [x] Done — `imu.*_covariance` in YAML and publish methods |
+| R5 | [x] Done — `_send_command(func_code, data_bytes)` in rosmaster_driver |
+| S1 | [x] Done — `hardware.data_timeout`; `hardware_connected` set False on data timeout |
+| S2 | [x] Done — `_last_data_timestamp` in driver, checked in `_sensor_callback` |
+| P1 | [x] Done — system_monitor: seed `cpu_percent(interval=0.1)` once, then `interval=None` |
+| D1 | [x] Done — Comment clarified: "Driver version / Yahboom protocol compatibility (V3.3.9)" |
 
 ---
 
@@ -43,7 +71,7 @@ All items from the original audit have been resolved:
 - `set_car_motion()` contains `time.sleep(0.002)` — lock is held ~2ms.
 - Any concurrent callback reading `motors_enabled` or `emergency_stop` (50Hz sensor, 10Hz safety) is blocked.
 - Fix: move `set_car_motion(0, 0, 0)` outside the `_state_lock` block, same pattern as BUG-1 fix.
-- [ ] Not started
+- [x] Done (Phase 3)
 
 **BUG-4: `reset_odometry()` sends wrong packet length byte** (rosmaster_driver.py:587)
 - Current: `cmd = [SERIAL_HEAD, SERIAL_DEVICE_ID, 0x02, FUNC_RESET_ODOM]`
@@ -59,7 +87,7 @@ All items from the original audit have been resolved:
 - Impact: Firmware skips checksum validation for this command. Works because the function code
   alone identifies the command and there's no data to corrupt, but technically violates protocol.
 - Fix: change `0x02` to `0x03`, or use dynamic `cmd[2] = len(cmd) - 1` pattern.
-- [ ] Not started
+- [x] Done (Phase 3 — _send_command)
 
 **BUG-5: `clear_auto_report_data()` missing `_data_lock`** (rosmaster_driver.py:599-605)
 - Writes `_vx`, `_vy`, `_vz`, `_ax`, etc. without acquiring `_data_lock`.
@@ -67,7 +95,7 @@ All items from the original audit have been resolved:
 - This is a data race — partial writes can produce inconsistent readings.
 - Also dead code: never called from `hardware_node.py`.
 - Fix: either remove entirely (dead code) or add `with self._data_lock:` wrapper.
-- [ ] Not started
+- [x] Done (Phase 3 — removed)
 
 ---
 
@@ -79,7 +107,7 @@ All items from the original audit have been resolved:
 - `_publish_imu_raw()` fetches: `get_accelerometer_data()`, `get_gyroscope_data()` — duplicates!
 - Each getter acquires `_data_lock`. At 50Hz that's ~10 lock acquisitions/cycle instead of ~2.
 - Fix: fetch all sensor data once at the top of `_sensor_callback` and pass to publish methods.
-- [ ] Not started
+- [x] Done (Phase 3 — R1)
 
 **Q5: Duplicate rate-limiting boilerplate across 4 PID callbacks** (hardware_node.py:341-453)
 - `_pid_callback`, `_yaw_pid_callback`, `_pid_multilevel_callback`, `_pid_save_callback` each repeat:
@@ -95,13 +123,13 @@ All items from the original audit have been resolved:
 **Q6: `clear_auto_report_data()` is dead code** (rosmaster_driver.py:599-605)
 - Never called from `hardware_node.py` or any other consumer.
 - If needed in the future, needs `_data_lock` (see BUG-5). If not needed, remove.
-- [ ] Not started
+- [x] Done (Phase 3 — removed)
 
 **Q7: `__main__` block is legacy Windows test code** (rosmaster_driver.py:658-694)
 - Scans Windows COM ports (`COM1` through `COM256`) — OrbiBot runs on RPi Linux.
 - Uses bare `except:` which catches `SystemExit` and `KeyboardInterrupt`.
 - Not useful for production; should be removed or moved to `tests/`.
-- [ ] Not started
+- [x] Done (Phase 3 — removed)
 
 **Q8: MPU9250 constants and handler are dead code** (rosmaster_driver.py:51-54, 191-203)
 - OrbiBot uses ICM-20948 exclusively. Firmware only sends `FUNC_REPORT_ICM_RAW` (0x0E).
@@ -109,7 +137,7 @@ All items from the original audit have been resolved:
   `FUNC_REPORT_MPU_RAW` parsing branch are never executed.
 - Confusing for maintainers who might wonder which IMU is active.
 - Fix: remove MPU9250 constants and parsing branch. Add comment noting ICM-20948 only.
-- [ ] Not started
+- [x] Done (Phase 3)
 
 **Q9: Unused protocol constants** (rosmaster_driver.py:30-48)
 - Function codes never used by any caller:
@@ -121,36 +149,36 @@ All items from the original audit have been resolved:
 - Car type constants never used by any caller:
   - `CARTYPE_X3`, `CARTYPE_X3_PLUS`, `CARTYPE_X1`, `CARTYPE_R2`
 - Fix: remove unused constants. Keep only what OrbiBot actually uses.
-- [ ] Not started
+- [x] Done (Phase 3)
 
 **Q10: `_request_data()` method is dead code** (rosmaster_driver.py:337-345)
 - Auto-report mechanism means we never poll for data. Method is never called.
 - Fix: remove.
-- [ ] Not started
+- [x] Done (Phase 3)
 
 **Q11: Version fields never used** (rosmaster_driver.py:113-115, 249-255, 654-655)
 - `_version_H`, `_version_L`, `_version`, `get_version()` exist but are never called from
   `hardware_node.py`. The firmware version query (`FUNC_VERSION`) is never sent.
 - Fix: either expose firmware version in system status (useful!) or remove dead code.
-- [ ] Not started
+- [x] Done (Phase 3 — removed)
 
 **Q12: `set_mag_calibration` uses literal instead of constant** (rosmaster_driver.py:553)
 - `cmd = [SERIAL_HEAD, SERIAL_DEVICE_ID, 0x09, 0x16]` — uses `0x16` literal.
 - `FUNC_SET_MAG_CAL = 0x16` is already defined at line 36.
 - Fix: use `FUNC_SET_MAG_CAL`.
-- [ ] Not started
+- [x] Done (Phase 3)
 
 **Q13: Hardcoded packet length bytes are fragile** (rosmaster_driver.py)
 - Most commands hardcode the length byte (e.g., `0x05`, `0x0A`, `0x1C`).
 - Only `set_car_motion` uses the robust pattern: `cmd[2] = len(cmd) - 1`.
 - If someone adds/removes a data byte without updating the hardcoded length, packet is malformed.
 - Fix: use `cmd[2] = len(cmd) - 1` pattern in all send methods, or a `_build_packet()` helper.
-- [ ] Not started
+- [x] Done (Phase 3 — _send_command)
 
 **Q14: Old-style class declaration** (rosmaster_driver.py:66)
 - `class Rosmaster(object):` — explicit `object` base is unnecessary in Python 3.
 - Fix: `class Rosmaster:`.
-- [ ] Not started
+- [x] Done (Phase 3)
 
 ---
 
@@ -170,14 +198,14 @@ All items from the original audit have been resolved:
   Then pass to `_publish_imu(accel, gyro, attitude)`, etc.
 - Benefits: fewer lock acquisitions (~10 → ~5), consistent data across all published messages
   for the same cycle, cleaner separation between data acquisition and publishing.
-- [ ] Not started
+- [x] Done (Phase 3)
 
 **R2: Hardcoded robot constants should be parameters** (hardware_node.py:83-84)
 - `wheel_radius = 0.05` and `encoder_edges_per_rev = 1320` are hardcoded.
 - If wheel radius or encoder CPR ever changes (different wheel set, different gear ratio),
   requires code changes instead of YAML edits.
 - Fix: add to `hardware_params.yaml` under `robot:` section.
-- [ ] Not started
+- [x] Done (Phase 3)
 
 **R3: No dynamic parameter reconfiguration** (hardware_node.py)
 - All parameters are loaded once in `__init__`. ROS 2 `ros2 param set` commands have no effect
@@ -191,7 +219,7 @@ All items from the original audit have been resolved:
   are hardcoded in the publish methods.
 - Fix: make configurable via `hardware_params.yaml` under `imu:` section, or at minimum
   define as named class constants with comments explaining their derivation.
-- [ ] Not started
+- [x] Done (Phase 3 — imu.* in YAML)
 
 **R5: Packet builder helper for rosmaster_driver** (rosmaster_driver.py)
 - Every send method manually constructs packets: `cmd = [HEAD, DEVID, LEN, FUNC, ...]`,
@@ -203,7 +231,7 @@ All items from the original audit have been resolved:
   - Checksum computation
   - Write lock + serial write
   - Post-write delay
-- [ ] Not started
+- [x] Done (Phase 3)
 
 **R6: Receive thread could use buffered reads** (rosmaster_driver.py:278-334)
 - `_receive_data` reads one byte at a time via `self.ser.read(1)`.
@@ -222,7 +250,7 @@ All items from the original audit have been resolved:
   keeps publishing stale cached data as if the connection is healthy.
 - Fix: add data freshness monitoring. If no new firmware data arrives for N seconds,
   set `hardware_connected = False` and log a warning. Re-set to `True` when data resumes.
-- [ ] Not started
+- [x] Done (Phase 3)
 
 **S2: Stale data published during serial disconnect** (hardware_node.py)
 - Related to S1. During the reconnection window (up to 10 retries × 1s = 10s), the node
@@ -231,7 +259,7 @@ All items from the original audit have been resolved:
 - Fix: add a `_last_data_timestamp` in rosmaster_driver updated on each successful parse.
   hardware_node checks freshness before publishing. Alternatively, set a "stale" flag that
   consumers can check, or stop publishing and let topic timeouts handle it.
-- [ ] Not started
+- [x] Done (2026-03-06)
 
 **S3: After battery emergency recovery, motors stay disabled** (hardware_node.py:804-807)
 - When `critical_battery` is detected, `emergency_stop = True` and `motors_enabled = False`.
@@ -258,7 +286,7 @@ All items from the original audit have been resolved:
   (which system_monitor uses) it delays all other callbacks by 100ms.
 - Fix: use `psutil.cpu_percent(interval=None)` which returns instantly (percent since last call).
   Call once at startup with `interval=0.1` to seed the baseline, then `interval=None` afterward.
-- [ ] Not started
+- [x] Done (2026-03-06)
 
 ---
 
@@ -301,7 +329,7 @@ All items from the original audit have been resolved:
 **D1: `# V3.3.9` comment on class is opaque** (rosmaster_driver.py:65)
 - No context for what "V3.3.9" refers to (driver version? Yahboom protocol version?).
 - Fix: either expand to meaningful comment or move to module docstring.
-- [ ] Not started
+- [x] Done (2026-03-06)
 
 ---
 

@@ -4,6 +4,12 @@ orbibot_hardware_node:
     # Hardware Configuration
     hardware:
       serial_port: "/dev/motordriver"
+      data_timeout: 2.0   # seconds without firmware data → hardware_connected = false (S1/S2)
+
+    # Robot geometry (R2) — wheel radius (m), encoder edges per revolution
+    robot:
+      wheel_radius: 0.05
+      encoder_edges_per_rev: 1320
 
     # Control Parameters
     control:
@@ -20,6 +26,12 @@ orbibot_hardware_node:
     safety:
       battery_low_threshold: 11.0    # Volts - low battery warning
       battery_critical_voltage: 10.5 # Volts - critical battery level (auto-disable)
+
+    # IMU covariance (R4) — diagonal entries for accel, gyro, orientation
+    imu:
+      linear_acceleration_covariance: 0.01
+      angular_velocity_covariance: 0.0025
+      orientation_covariance: 0.0025
 
     # Odometry Covariance (adaptive, grows with distance/rotation)
     odometry:
