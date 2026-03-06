@@ -27,6 +27,7 @@ from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
+from rcl_interfaces.msg import SetParametersResult
 
 # ROS2 Messages
 from sensor_msgs.msg import Imu, JointState, MagneticField
@@ -107,6 +108,9 @@ class OrbiBotHardwareNode(Node):
         self._create_services()
         self._create_timers()
 
+        # R3: Dynamic parameter reconfiguration
+        self.add_on_set_parameters_callback(self._on_set_parameters)
+
         # Initialize hardware
         self._initialize_hardware()
 
@@ -176,6 +180,32 @@ class OrbiBotHardwareNode(Node):
 
         # Validate parameters
         self._validate_parameters()
+
+    def _on_set_parameters(self, params):
+        """R3: Apply runtime parameter changes (cmd_timeout, max_velocity, max_angular_velocity)."""
+        result = SetParametersResult(successful=True)
+        for p in params:
+            try:
+                if p.name == 'control.cmd_timeout':
+                    v = p.value.double_value if hasattr(p.value, 'double_value') else p.value
+                    if v <= 0:
+                        result.successful = False
+                        result.reason = 'cmd_timeout must be > 0'
+                        break
+                    self.cmd_timeout = float(v)
+                elif p.name == 'control.max_velocity':
+                    v = p.value.double_value if hasattr(p.value, 'double_value') else p.value
+                    v = max(0.0, min(2.0, float(v)))
+                    self.max_velocity = v
+                elif p.name == 'control.max_angular_velocity':
+                    v = p.value.double_value if hasattr(p.value, 'double_value') else p.value
+                    v = max(0.0, min(4.0, float(v)))
+                    self.max_angular_velocity = v
+            except (TypeError, AttributeError) as e:
+                result.successful = False
+                result.reason = str(e)
+                break
+        return result
 
     def _validate_parameters(self):
         """Validate parameter values and apply corrections if needed"""
@@ -356,16 +386,20 @@ class OrbiBotHardwareNode(Node):
         except Exception as e:
             self.get_logger().error(f"Beep command failed: {e}")
 
+    def _check_pid_rate_limit(self, last_update_attr: str) -> bool:
+        """Q5: Return True if rate limit passed and update last_update time. Max 10Hz per PID topic."""
+        t = time.time()
+        if t - getattr(self, last_update_attr) < self._pid_rate_limit:
+            return False
+        setattr(self, last_update_attr, t)
+        return True
+
     def _pid_callback(self, msg: Float32MultiArray):
         """Update motor PID gains on firmware via /orbibot/pid_params topic."""
         if not self.hardware_connected:
             return
-
-        # Rate limiting (HW-005): Max 10Hz to prevent serial overflow
-        current_time = time.time()
-        if current_time - self._last_pid_update < self._pid_rate_limit:
+        if not self._check_pid_rate_limit('_last_pid_update'):
             return
-        self._last_pid_update = current_time
 
         if len(msg.data) != 3:
             self.get_logger().warn(f"PID params requires [kp, ki, kd], got {len(msg.data)} values")
@@ -382,12 +416,8 @@ class OrbiBotHardwareNode(Node):
         """Update yaw PID gains on firmware via /orbibot/yaw_pid_params topic."""
         if not self.hardware_connected:
             return
-
-        # Rate limiting (HW-005): Max 10Hz to prevent serial overflow
-        current_time = time.time()
-        if current_time - self._last_yaw_pid_update < self._pid_rate_limit:
+        if not self._check_pid_rate_limit('_last_yaw_pid_update'):
             return
-        self._last_yaw_pid_update = current_time
 
         if len(msg.data) != 3:
             self.get_logger().warn(f"Yaw PID params requires [kp, ki, kd], got {len(msg.data)} values")
@@ -409,12 +439,8 @@ class OrbiBotHardwareNode(Node):
         """
         if not self.hardware_connected:
             return
-
-        # Rate limiting (HW-005): Max 10Hz to prevent serial overflow
-        current_time = time.time()
-        if current_time - self._last_pid_multilevel_update < self._pid_rate_limit:
+        if not self._check_pid_rate_limit('_last_pid_multilevel_update'):
             return
-        self._last_pid_multilevel_update = current_time
 
         if len(msg.data) != 12:
             self.get_logger().warn(
@@ -446,12 +472,8 @@ class OrbiBotHardwareNode(Node):
         """
         if not self.hardware_connected:
             return
-
-        # Rate limiting (HW-005): Max 10Hz to prevent flash wear
-        current_time = time.time()
-        if current_time - self._last_pid_save_update < self._pid_rate_limit:
+        if not self._check_pid_rate_limit('_last_pid_save_update'):
             return
-        self._last_pid_save_update = current_time
 
         try:
             if len(msg.data) >= 12:
@@ -810,7 +832,9 @@ class OrbiBotHardwareNode(Node):
         elif not critical_battery and emergency_stop:
             with self._state_lock:
                 self.emergency_stop = False
-            self.get_logger().info("Emergency stop cleared - battery recovered")
+            self.get_logger().info(
+                "Battery recovered. Motors disabled — call set_motor_enable to re-enable."  # S3
+            )
 
     # Service Callbacks
     def _motor_enable_callback(self, request, response):

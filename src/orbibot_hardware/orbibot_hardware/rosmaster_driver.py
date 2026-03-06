@@ -232,57 +232,50 @@ class Rosmaster:
             if self._debug:
                 print("FUNC_SET_YAW_PID:", self._pid_index, [self._kp1, self._ki1, self._kd1])
 
-    # Receive data
+    # Receive data (R6: buffered reads to reduce syscalls)
     def _receive_data(self):
         self.ser.reset_input_buffer()
+        buf = bytearray()
+        frame_header_len = 4  # HEAD, DEVID-1, LEN, TYPE
         while self._running:
             try:
-                # Handle timeout (empty read) gracefully
-                data = self.ser.read(1)
-                if not data:
+                # Read all available bytes
+                n = self.ser.in_waiting
+                if n > 0:
+                    buf.extend(self.ser.read(n))
+                elif len(buf) == 0:
+                    # Nothing to parse, yield to avoid busy loop
+                    time.sleep(0.001)
                     continue
-                head1 = bytearray(data)[0]
-                if head1 == SERIAL_HEAD:
-                    data = self.ser.read(1)
-                    if not data:
-                        continue
-                    head2 = bytearray(data)[0]
-                    check_sum = 0
-                    rx_check_num = 0
-                    if head2 == SERIAL_DEVICE_ID - 1:
-                        data = self.ser.read(1)
-                        if not data:
-                            continue
-                        ext_len = bytearray(data)[0]
-                        data = self.ser.read(1)
-                        if not data:
-                            continue
-                        ext_type = bytearray(data)[0]
-                        ext_data = []
-                        check_sum = ext_len + ext_type
-                        data_len = ext_len - 2
-                        while len(ext_data) < data_len:
-                            data = self.ser.read(1)
-                            if not data:
-                                break
-                            value = bytearray(data)[0]
-                            ext_data.append(value)
-                            if len(ext_data) == data_len:
-                                rx_check_num = value
-                            else:
-                                check_sum = check_sum + value
-                        if len(ext_data) < data_len:
-                            continue
-                        if check_sum % 256 == rx_check_num:
-                            self._parse_data(ext_type, ext_data)
-                        else:
-                            if self._debug:
-                                print("check sum error:", ext_len, ext_type, ext_data)
+
+                # Parse one frame if we have enough data
+                if len(buf) < frame_header_len:
+                    time.sleep(0.001)
+                    continue
+                if buf[0] != SERIAL_HEAD or buf[1] != SERIAL_DEVICE_ID - 1:
+                    buf.pop(0)
+                    continue
+                ext_len = buf[2]
+                frame_len = 2 + ext_len  # LEN byte counts TYPE + data (incl. checksum)
+                if ext_len < 2 or frame_len > 256:
+                    buf.pop(0)
+                    continue
+                if len(buf) < frame_len:
+                    time.sleep(0.001)
+                    continue
+                ext_type = buf[3]
+                ext_data = list(buf[4:frame_len])
+                check_sum = ext_len + ext_type + sum(ext_data[:-1])
+                rx_check_num = ext_data[-1]
+                if check_sum % 256 == rx_check_num:
+                    self._parse_data(ext_type, ext_data)
+                elif self._debug:
+                    print("check sum error:", ext_len, ext_type, ext_data)
+                del buf[:frame_len]
             except (serial.SerialException, OSError) as e:
                 print(f"Serial error in receive thread: {e}")
+                buf.clear()
                 if self._running and self._reconnect_serial():
-                    # Restore auto-report if it was enabled before disconnect.
-                    # Firmware may have rebooted, so re-send the command.
                     if self._auto_report_enabled:
                         self.set_auto_report_state(True)
                     print("Receive thread resuming after reconnect")

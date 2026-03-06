@@ -34,6 +34,24 @@
 
 ---
 
+## Phase 4 — Fixes Applied (2026-03-06)
+
+| ID | Status |
+|----|--------|
+| Q5 | [x] Done — `_check_pid_rate_limit(attr)` helper for PID callbacks |
+| R3 | [x] Done — `_on_set_parameters` for cmd_timeout, max_velocity, max_angular_velocity |
+| R6 | [x] Done — Buffered reads in `_receive_data` (buffer + in_waiting) |
+| S3 | [x] Done — Log: "Battery recovered. Motors disabled — call set_motor_enable to re-enable." |
+| S4 | [x] Done — Motor enable: 5s delay + retry at 10s in hardware.launch.py |
+| PKG-1 | [x] Done — Added orbibot_hardware/__init__.py |
+| PKG-2 | [x] Done — Added resource/orbibot_hardware |
+| T1 | [x] Done — test/test_rosmaster_protocol.py (checksum, packet length) |
+| T2 | [x] Done — test/test_launch_hardware.py (launch module importable) |
+
+All must-fix items are complete. Optional items (HW-003, HW-004) are in [hardware-issue.md](hardware-issue.md).
+
+---
+
 ## Progress Legend
 - `[ ]` Not started
 - `[~]` In progress
@@ -118,7 +136,7 @@ All items from the original audit have been resolved:
   self._last_*_update = current_time
   ```
 - Fix: extract to a `_rate_limit(attr_name)` helper or use a decorator.
-- [ ] Not started
+- [x] Done (Phase 4 — _check_pid_rate_limit)
 
 **Q6: `clear_auto_report_data()` is dead code** (rosmaster_driver.py:599-605)
 - Never called from `hardware_node.py` or any other consumer.
@@ -212,7 +230,7 @@ All items from the original audit have been resolved:
   until the node is restarted.
 - Fix: add `add_on_set_parameters_callback` for runtime-tunable parameters
   (at minimum: `cmd_timeout`, `max_velocity`, `max_angular_velocity`).
-- [ ] Not started
+- [x] Done (Phase 4 — _on_set_parameters)
 
 **R4: IMU covariance values are magic numbers** (hardware_node.py:523-525, 555-558)
 - Accel covariance `0.01`, gyro covariance `0.0025`, orientation covariance `0.0025`
@@ -238,7 +256,7 @@ All items from the original audit have been resolved:
 - Many syscalls per packet (minimum 4 for a simple command, 20+ for encoder report).
 - Fix: read available bytes into a buffer, parse from buffer. Use `self.ser.in_waiting`
   to batch reads. Significant CPU reduction on RPi at 50Hz+ data rate.
-- [ ] Not started
+- [x] Done (Phase 4 — buffered _receive_data)
 
 ---
 
@@ -267,14 +285,14 @@ All items from the original audit have been resolved:
 - User must manually call `set_motor_enable` service — may not realize motors need re-enabling.
 - This is arguably a safety feature (explicit re-enable after critical event), but should
   at minimum log a clear message: "Battery recovered. Motors disabled — call set_motor_enable."
-- [ ] Not started — decide if this is intended behavior or should auto-recover
+- [x] Done (Phase 4 — log message on battery recovery)
 
 **S4: Motor enable on startup has no retry** (hardware.launch.py:57-67)
 - `TimerAction(period=3.0)` calls `ros2 service call` once. If the hardware node hasn't
   finished initialization in 3s (e.g., serial port not ready), the service call fails silently.
 - Fix: use a longer delay (5s), or implement retry logic in the launch file,
   or move the auto-enable logic into the hardware_node itself with a startup timer.
-- [ ] Not started
+- [x] Done (Phase 4 — 5s delay + retry at 10s)
 
 ---
 
@@ -296,13 +314,13 @@ All items from the original audit have been resolved:
 - The `orbibot_hardware/` Python package directory has no `__init__.py`.
 - `find_packages()` in `setup.py` requires `__init__.py` to discover the package.
 - If the package builds and works on the RPi, this file must exist there — verify it's committed.
-- [ ] Not started — verify on build system
+- [x] Done (Phase 4 — added orbibot_hardware/__init__.py)
 
 **PKG-2: Missing `resource/orbibot_hardware` marker file**
 - `setup.py` references `resource/orbibot_hardware` for ament index registration.
 - File not found in repository — `colcon build` would fail without it.
 - Same as PKG-1: verify it exists on the build system and is committed.
-- [ ] Not started — verify on build system
+- [x] Done (Phase 4 — added resource/orbibot_hardware)
 
 ---
 
@@ -315,12 +333,12 @@ All items from the original audit have been resolved:
   - Covariance math (adaptive drift, decay, wraparound)
   - Parameter validation (boundary conditions)
 - These can all be tested without hardware using mocked serial data.
-- [ ] Not started
+- [x] Done (Phase 4 — test/test_rosmaster_protocol.py)
 
 **T2: No launch/integration tests**
 - No launch test to verify nodes start and produce expected topics.
 - ROS 2 launch_testing could verify topic existence and basic message flow.
-- [ ] Not started
+- [x] Done (Phase 4 — test/test_launch_hardware.py)
 
 ---
 
