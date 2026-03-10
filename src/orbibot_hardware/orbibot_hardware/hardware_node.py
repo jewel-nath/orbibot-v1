@@ -91,6 +91,7 @@ class OrbiBotHardwareNode(Node):
         self._last_odom_y = 0.0
         self._last_odom_theta = 0.0
         self._last_firmware_odom = None  # G3: Track last firmware data to skip duplicates
+        self._last_odom_publish_time = 0.0  # Node clock (s); updated only after successful publish
 
         # Rate limiting for PID topics (HW-005)
         self._pid_rate_limit = 0.1  # Max 10Hz (100ms between updates)
@@ -142,6 +143,7 @@ class OrbiBotHardwareNode(Node):
         self.declare_parameter('odometry.velocity_base', 0.01)
         self.declare_parameter('odometry.velocity_scale', 0.1)
         self.declare_parameter('odometry.covariance_decay', 0.99)  # G2: Decay factor for accumulated errors
+        self.declare_parameter('odometry.heartbeat_interval', 0.5)  # s; re-publish unchanged odom so late joiners get data; 0=disable
 
         # R4: IMU covariance (diagonal entries; -1 for orientation means "unknown")
         self.declare_parameter('imu.linear_acceleration_covariance', 0.01)
@@ -167,6 +169,7 @@ class OrbiBotHardwareNode(Node):
         self._cov_vel_base = self.get_parameter('odometry.velocity_base').value
         self._cov_vel_scale = self.get_parameter('odometry.velocity_scale').value
         self._cov_decay = self.get_parameter('odometry.covariance_decay').value
+        self._odom_heartbeat_interval = self.get_parameter('odometry.heartbeat_interval').value
 
         # Robot geometry (R2)
         self.wheel_radius = self.get_parameter('robot.wheel_radius').value
@@ -200,6 +203,13 @@ class OrbiBotHardwareNode(Node):
                     v = p.value.double_value if hasattr(p.value, 'double_value') else p.value
                     v = max(0.0, min(4.0, float(v)))
                     self.max_angular_velocity = v
+                elif p.name == 'odometry.heartbeat_interval':
+                    v = p.value.double_value if hasattr(p.value, 'double_value') else p.value
+                    if v < 0:
+                        result.successful = False
+                        result.reason = 'odometry.heartbeat_interval must be >= 0'
+                        break
+                    self._odom_heartbeat_interval = float(v)
             except (TypeError, AttributeError) as e:
                 result.successful = False
                 result.reason = str(e)
@@ -242,6 +252,11 @@ class OrbiBotHardwareNode(Node):
             self.get_logger().warn("battery_critical_voltage >= battery_low_threshold, adjusting")
             self.battery_critical_voltage = self.battery_low_threshold - 0.5
 
+        # Odometry heartbeat (0 = disable)
+        if self._odom_heartbeat_interval < 0:
+            self.get_logger().warn("Invalid odometry.heartbeat_interval (< 0), using 0 (disabled)")
+            self._odom_heartbeat_interval = 0.0
+
         self.get_logger().info(f"Parameters validated: max_vel={self.max_velocity:.1f} m/s, "
                                f"sensor_rate={self.sensor_rate:.0f} Hz")
 
@@ -257,7 +272,13 @@ class OrbiBotHardwareNode(Node):
         self.imu_raw_pub = self.create_publisher(Imu, '/imu/data_raw', sensor_qos)
         self.mag_pub = self.create_publisher(MagneticField, '/imu/mag', sensor_qos)
         self.encoder_pub = self.create_publisher(Int32MultiArray, '/orbibot/encoders', sensor_qos)
-        self.odom_pub = self.create_publisher(Odometry, '/odom', 10)
+        # /odom: TRANSIENT_LOCAL so late-joining subscribers (e.g. web dashboard) get last message
+        odom_qos = QoSProfile(
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+            depth=5
+        )
+        self.odom_pub = self.create_publisher(Odometry, '/odom', odom_qos)
         self.joint_states_pub = self.create_publisher(JointState, '/joint_states', 10)
 
         # Status — RELIABLE for important state data
@@ -583,7 +604,15 @@ class OrbiBotHardwareNode(Node):
     def _publish_firmware_odom(self, odom_data):
         """Publish firmware odometry on /odom with adaptive covariance."""
         try:
-            if self._last_firmware_odom is not None and odom_data == self._last_firmware_odom:
+            # Use node clock: on real robot this is system/wall time; consistent with header.stamp
+            now = self.get_clock().now().nanoseconds / 1e9
+            data_unchanged = (
+                self._last_firmware_odom is not None and odom_data == self._last_firmware_odom
+            )
+            heartbeat_interval = self._odom_heartbeat_interval
+            if data_unchanged and heartbeat_interval > 0 and (now - self._last_odom_publish_time) < heartbeat_interval:
+                return
+            if data_unchanged and heartbeat_interval <= 0:
                 return
             self._last_firmware_odom = odom_data
             x, y, theta, vx, vy, omega = odom_data
@@ -648,6 +677,7 @@ class OrbiBotHardwareNode(Node):
             ]
 
             self.odom_pub.publish(msg)
+            self._last_odom_publish_time = self.get_clock().now().nanoseconds / 1e9
 
         except Exception as e:
             self.get_logger().error(f"Odom publish failed: {e}")

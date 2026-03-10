@@ -42,3 +42,4 @@ orbibot_hardware_node:
       velocity_base: 0.01    # Base velocity variance ((m/s)²)
       velocity_scale: 0.1    # Velocity variance scale with speed
       covariance_decay: 0.99 # Exponential decay factor for accumulated drift (0–1)
+      heartbeat_interval: 0.5 # s; re-publish unchanged odom for late-joining subscribers (0=disable)

@@ -22,15 +22,16 @@ export function OdometryDisplay({ className, compact = false }: OdometryDisplayP
   const odom = useOdometry();
   const [showDetails, setShowDetails] = useState(false);
 
-  // Loading/offline state
+  // Loading / offline / waiting state
   if (!isConnected || !odom) {
+    const statusText = !isConnected ? 'Offline' : 'Waiting for data…';
     return (
       <div className={cn('glass-panel p-3 flex items-center justify-between', className)}>
         <div className="flex items-center gap-2 text-muted-foreground">
           <MapPin className="w-4 h-4" />
           <span className="text-sm font-medium">Odometry</span>
         </div>
-        <span className="text-xs text-muted-foreground">Offline</span>
+        <span className="text-xs text-muted-foreground">{statusText}</span>
       </div>
     );
   }

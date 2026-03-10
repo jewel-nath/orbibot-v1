@@ -44,6 +44,24 @@
 **Files Modified**:
 - `orbibot_hardware/hardware_node.py`: Implemented `_calibrate_imu_callback()`
 
+### Odometry late-joiner fix (industry-grade)
+
+**Fixed in:** `hardware_node.py`, `config/hardware_params.yaml`, `README.md`
+
+**Problem**: Web dashboard (and other late-joining subscribers) saw odom as "Offline" because `/odom` was VOLATILE and published only when data changed, so they missed the first message(s).
+
+**Solution**:
+- **QoS**: `/odom` now uses RELIABLE + TRANSIENT_LOCAL (depth 5) so TRANSIENT_LOCAL subscribers get last message on connect.
+- **Heartbeat**: When odom is unchanged, re-publish at configurable `odometry.heartbeat_interval` (default 0.5 s); set to `0` to disable. Ensures VOLATILE subscribers (e.g. rosbridge) get data within one interval.
+- **Node clock**: Heartbeat timing uses `get_clock().now()` (sim-time friendly).
+- **State consistency**: `_last_odom_publish_time` updated only after successful publish.
+- **Parameter**: `odometry.heartbeat_interval` (double, s); runtime-updatable via `_on_set_parameters`.
+
+**Files Modified**:
+- `orbibot_hardware/hardware_node.py`: odom QoS, heartbeat logic, parameter, validation
+- `config/hardware_params.yaml`: `odometry.heartbeat_interval`
+- `README.md`: Publications table, Configuration table, Implementation notes
+
 ---
 
 ## Summary

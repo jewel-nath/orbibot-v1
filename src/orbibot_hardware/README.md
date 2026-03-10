@@ -25,7 +25,7 @@ Publishes sensor data and accepts velocity/PID commands.
 
 | Topic | Type | QoS | Rate | Description |
 |-------|------|-----|------|-------------|
-| `/odom` | `nav_msgs/Odometry` | Reliable (depth 10) | ~20Hz | Firmware wheel odometry (deduplicated — skips unchanged frames) |
+| `/odom` | `nav_msgs/Odometry` | Reliable, TRANSIENT_LOCAL (depth 5) | ~20Hz (heartbeat when idle) | Firmware wheel odometry; deduplicated; re-published at `odometry.heartbeat_interval` when unchanged so late joiners (e.g. web GUI) get data |
 | `/imu/data` | `sensor_msgs/Imu` | Best Effort (depth 5) | 50Hz | Filtered attitude (orientation) + accel + gyro |
 | `/imu/data_raw` | `sensor_msgs/Imu` | Best Effort (depth 5) | 50Hz | Raw accel + gyro, no orientation (for imu_filter_madgwick) |
 | `/imu/mag` | `sensor_msgs/MagneticField` | Best Effort (depth 5) | 50Hz | Magnetometer in Tesla (skipped if all-zero) |
@@ -105,6 +105,7 @@ See [config/hardware_params.yaml](config/hardware_params.yaml) for all parameter
 | `odometry` | `velocity_base` | `0.01` | Base velocity variance ((m/s)²) |
 | `odometry` | `velocity_scale` | `0.1` | Velocity variance scale with speed |
 | `odometry` | `covariance_decay` | `0.99` | Exponential decay for accumulated drift (0–1) |
+| `odometry` | `heartbeat_interval` | `0.5` s | Re-publish unchanged odom so late-joining subscribers get data; `0` = disable |
 
 ---
 
@@ -175,7 +176,8 @@ screen /dev/motordriver 115200              # Direct serial monitor (Ctrl+A K to
 - **Thread-safe state flags** — `motors_enabled` and `emergency_stop` guarded by `_state_lock` (MultiThreadedExecutor safe)
 - **Cmd_vel timeout** — stop command sent once per timeout event; set outside `_cmd_time_lock` to avoid holding it during the 2ms serial delay
 - **Adaptive covariance** — accumulated position/rotation variance uses exponential decay (factor 0.99 by default) to prevent unbounded growth
-- **Odometry deduplication** — `/odom` publishes only when firmware data changes; skips duplicate frames at 50Hz sensor timer rate
+- **Odometry deduplication** — `/odom` publishes only when firmware data changes; skips duplicate frames at 50Hz sensor timer rate. When unchanged, re-publishes at `odometry.heartbeat_interval` (default 0.5 s) so late-joining subscribers (e.g. web dashboard) receive data within one interval
+- **Odometry QoS** — `/odom` uses RELIABLE + TRANSIENT_LOCAL (depth 5) so subscribers that support TRANSIENT_LOCAL receive the last message on connect; heartbeat ensures VOLATILE subscribers (e.g. rosbridge) get a message within `heartbeat_interval`
 - **Yaw wraparound** — angular difference uses modular arithmetic to prevent ±2π spikes in covariance accumulation
 - **Serial reconnect** — receive thread auto-reconnects after disconnect and re-enables auto-report if firmware rebooted
 - **Flash protection** — `set_auto_report_state` uses `forever=False` to avoid writing firmware flash on every startup
