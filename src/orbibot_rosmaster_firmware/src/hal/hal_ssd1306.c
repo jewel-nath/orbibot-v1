@@ -12,6 +12,7 @@
  */
 
 #include "hal_ssd1306.h"
+#include "hal_i2c.h"
 #include "string.h"
 
 // I2C command/data control bytes

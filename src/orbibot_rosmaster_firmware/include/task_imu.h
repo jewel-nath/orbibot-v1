@@ -11,6 +11,8 @@
 #ifndef TASK_IMU_H
 #define TASK_IMU_H
 
+#include <stdint.h>
+
 /**
  * @brief IMU Task Entry Point
  * @param params Task parameters (unused)

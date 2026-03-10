@@ -23,6 +23,8 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
+extern void xPortSysTickHandler(void);
+
 // HAL headers
 #include "hal_gpio.h"
 #include "hal_usart.h"
@@ -176,6 +178,7 @@ static void hardwareInit(void)
  * This test directly writes to timer CCR registers to verify the PWM
  * hardware is configured correctly. Motors should briefly twitch.
  */
+__attribute__((unused))
 static void motorTest(void)
 {
     BOOT_PRINTF("[TEST] Motor PWM test - pulsing each motor...\n");

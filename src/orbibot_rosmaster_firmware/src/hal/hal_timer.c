@@ -346,10 +346,11 @@ int hal_timer_init(void)
 
 /* Table-driven motor-to-timer mapping (ROSMaster V3.0).
  * Each entry maps a motor index to its forward/reverse CCR registers
- * and direction sign. Changing wiring is now a config change, not code. */
+ * and direction sign. Changing wiring is now a config change, not code.
+ * CCR registers are 16-bit on STM32F1. */
 typedef struct {
-    volatile uint32_t *ccr_fwd;
-    volatile uint32_t *ccr_rev;
+    volatile uint16_t *ccr_fwd;
+    volatile uint16_t *ccr_rev;
     int8_t direction;        // +1 normal, -1 inverted (left-side motors)
 } motor_hw_map_t;
 
@@ -372,13 +373,13 @@ void hal_timer_set_motor_pwm(uint8_t motor, int16_t pwm)
 
     if (pwm >= 0)
     {
-        *m->ccr_fwd = (uint32_t)pwm;
+        *m->ccr_fwd = (uint16_t)pwm;
         *m->ccr_rev = 0;
     }
     else
     {
         *m->ccr_fwd = 0;
-        *m->ccr_rev = (uint32_t)(-pwm);
+        *m->ccr_rev = (uint16_t)(-pwm);
     }
 }
 

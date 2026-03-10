@@ -16,6 +16,25 @@
 #include "orbibot_config.h"
 #include <math.h>
 
+/* DWT (Data Watchpoint and Trace) for cycle-accurate delay.
+ * Not all CMSIS versions define DWT; provide minimal definitions when missing. */
+#ifndef DWT
+#define DWT_BASE                (0xE0001000UL)
+#define DWT_CTRL_CYCCNTENA_Pos  (0U)
+#define DWT_CTRL_CYCCNTENA_Msk  (1UL << DWT_CTRL_CYCCNTENA_Pos)
+typedef struct {
+    volatile uint32_t CTRL;
+    volatile uint32_t CYCCNT;
+    volatile uint32_t CPICNT;
+    volatile uint32_t EXCCNT;
+    volatile uint32_t SLEEPCNT;
+    volatile uint32_t LSUCNT;
+    volatile uint32_t FOLDCNT;
+    volatile uint32_t PCSR;
+} DWT_Type;
+#define DWT ((DWT_Type *)DWT_BASE)
+#endif
+
 // ICM-20948 Register Map (User Bank 0)
 #define ICM20948_WHO_AM_I           0x00
 #define ICM20948_USER_CTRL          0x03
