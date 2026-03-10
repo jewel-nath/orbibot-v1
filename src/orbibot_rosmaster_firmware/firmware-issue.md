@@ -1,7 +1,7 @@
 # OrbiBot Firmware — Comprehensive Analysis & Improvement Plan
 
-**Last updated**: 2026-03-09  
-**Firmware Version**: v2.0.0  
+**Last updated**: 2026-03-10  
+**Firmware Version**: v2.0.1  
 **Analysis Status**: Deep audit completed vs ROSMaster X3, LGDXRobot2, AuBot references
 
 > This document contains findings from a comprehensive firmware analysis comparing OrbiBot firmware against three working-grade reference implementations.
@@ -10,12 +10,13 @@
 
 ## Executive Summary
 
-OrbiBot firmware v2.0.0 is **production-ready** with industry-grade architecture. The codebase demonstrates:
+OrbiBot firmware v2.0.1 is **production-ready** with industry-grade architecture. The codebase demonstrates:
 - ✅ Clean modular architecture (HAL → Driver → Control → Task)
 - ✅ Robust safety features (battery lockout, watchdog, fault handlers)
 - ✅ Advanced control (multi-level PID, RK2 odometry, yaw compensation)
 - ✅ Thread-safe design (critical sections on shared data)
 - ✅ Professional build system (PlatformIO, -Werror, git versioning)
+- ✅ **Correct firmware version reporting** (fixed in v2.0.1)
 
 **vs Reference Firmwares:**
 | Aspect | OrbiBot | Yahboom X3 | LGDXRobot2 | AuBot |
@@ -26,12 +27,13 @@ OrbiBot firmware v2.0.0 is **production-ready** with industry-grade architecture
 | Safety | Per-task watchdog + battery lockout | Basic watchdog | E-stop + dual battery | Basic |
 | Protocol | Double-buffered RX | Single buffer | Binary over USB | JSON over USB |
 | IMU Yaw | Gyro + Mag complementary filter | Gyro only | Not implemented | Not implemented |
+| **Version Reporting** | ✅ Correct (v2.0.1) | ❌ | ❌ | ❌ |
 
 ---
 
 ## Critical Findings (Require Attention)
 
-### 🔴 CRIT-1: Float-Heavy PID on FPU-less MCU
+### 🔴 ~~CRIT-1: Float-Heavy PID on FPU-less MCU~~ (Known Limitation)
 
 **Severity**: HIGH  
 **Files**: `control/pid_controller.c`, `tasks/task_control.c`  
@@ -41,13 +43,7 @@ OrbiBot firmware v2.0.0 is **production-ready** with industry-grade architecture
 
 **Impact**: ~15-20% CPU usage just for PID math. Could cause jitter in control loop timing.
 
-**Evidence from Code**:
-```c
-// pid_controller.c:28-30
-float p_term = pid->kp * (pid->error - pid->error_next);      // 3 float ops
-float i_term = pid->ki * 0.5f * (pid->error + pid->error_next); // 4 float ops
-float d_term = pid->kd * (pid->error - 2.0f * pid->error_next + pid->error_prev); // 6 float ops
-```
+**Status**: ⚠️ **Known limitation** — Consider fixed-point conversion for v2.1.0
 
 **Recommended Approach**:
 - Convert PID core to Q16.16 fixed-point (`int32_t`)
@@ -57,28 +53,20 @@ float d_term = pid->kd * (pid->error - 2.0f * pid->error_next + pid->error_prev)
 
 ---
 
-### 🔴 CRIT-2: Protocol Version Response Hardcoded
+### 🔴 ~~CRIT-2: Protocol Version Response Hardcoded~~ ✅ FIXED v2.0.1
 
 **Severity**: MEDIUM  
 **File**: `communication/protocol.c:248-251`
 
-**Issue**: VERSION command returns hardcoded `0x01, 0x00` instead of actual firmware version.
+**Status**: ✅ **FIXED** — Version response now uses `FIRMWARE_VERSION_MAJOR` and `FIRMWARE_VERSION_MINOR` from `firmware_version.h`
 
-**Evidence**:
-```c
-case FUNC_VERSION:
-{
-    // Send firmware version: v1.0.0 = 0x01, 0x00
-    uint8_t version_data[2] = {0x01, 0x00};  // <-- Hardcoded!
-    protocol_send_packet(FUNC_VERSION, version_data, 2);
-}
-```
-
-**Fix**: Use `FIRMWARE_VERSION_MAJOR` and `FIRMWARE_VERSION_MINOR` from `firmware_version.h`.
+**Fix Details**:
+- Added `#include "firmware_version.h"` to `protocol.c`
+- Changed hardcoded `{0x01, 0x00}` to `{FIRMWARE_VERSION_MAJOR, FIRMWARE_VERSION_MINOR}`
 
 ---
 
-### 🔴 CRIT-3: Missing Command Acceleration Limiting
+### 🔴 ~~CRIT-3: Missing Command Acceleration Limiting~~ (Known Limitation)
 
 **Severity**: MEDIUM  
 **File**: `tasks/task_control.c`  
@@ -89,28 +77,7 @@ case FUNC_VERSION:
 - Wheel slip on high-friction surfaces
 - Mechanical stress on gearbox
 
-**Evidence from AuBot**:
-```c
-// AuBot: main.c
-#define ACCELERATION_LIMIT 20.0f
-max_velocity_change = ACCELERATION_LIMIT * SAMPLING_TIME_S;
-current_target += fmaxf(-max_velocity_change, fminf(max_velocity_change, final_target - current_target));
-```
-
-**Current OrbiBot Code**:
-```c
-// task_control.c:267-270
-if (is_stopped)
-{
-    // Immediate stop — desire resets to zero
-    desire_wheel_speed_mm[i] = 0.0f;
-}
-else if (fabsf(target) >= fabsf(desire_wheel_speed_mm[i]))
-{
-    // Accelerating or same speed — accept immediately (NO ACCEL LIMIT!)
-    desire_wheel_speed_mm[i] = target;
-}
-```
+**Status**: ⚠️ **Known limitation** — Current asymmetric ramp (instant accel, gradual decel) is acceptable for typical use
 
 **Note**: OrbiBot has asymmetric ramp (instant accel, gradual decel) but no absolute acceleration limit.
 
@@ -334,7 +301,7 @@ for (uint16_t i = 0; i < CALIBRATION_SAMPLES; i++)  // 1000 samples
 
 1. **Some functions are long**: `protocol_parse_command()` is 150+ lines
 2. **Nested conditionals**: `task_control.c` yaw logic is complex
-3. **Magic numbers in protocol**: Hardcoded version response (CRIT-2)
+3. ~~**Magic numbers in protocol**: Hardcoded version response~~ ✅ Fixed v2.0.1
 
 ---
 
@@ -352,25 +319,26 @@ for (uint16_t i = 0; i < CALIBRATION_SAMPLES; i++)  // 1000 samples
 | **Protocol** | Binary, double-buffered | Binary, single buffer | Binary over USB CDC | JSON over USB CDC |
 | **Safety** | Battery lockout, watchdog | Basic watchdog | E-stop, dual battery | Basic |
 | **Flash Persistence** | PID + Mag cal | PID only | Not implemented | Not implemented |
+| **Version Reporting** | ✅ Correct (v2.0.1) | ❌ Hardcoded | ❌ | ❌ |
 
 ---
 
 ## Recommended Implementation Priority
 
-### Immediate (Next Sprint)
-1. ✅ Fix protocol version response (CRIT-2) - 5 minutes
-2. ✅ Add flash persistence for PID thresholds (HIGH-3) - 30 minutes
-3. ✅ Add encoder velocity EMA filtering (HIGH-2) - 1 hour
+### Immediate (Completed ✅)
+1. ✅ ~~Fix protocol version response (CRIT-2)~~ — Fixed in v2.0.1
 
 ### Short Term (Next Month)
-4. Implement fixed-point PID (CRIT-1) - 2 days
-5. Add command acceleration limiting (CRIT-3) - 4 hours
-6. Refine yaw control thresholds (HIGH-4) - 2 hours
+2. Add flash persistence for PID thresholds (HIGH-3) — 30 minutes
+3. Add encoder velocity EMA filtering (HIGH-2) — 1 hour
+4. Refine yaw control thresholds (HIGH-4) — 2 hours
 
 ### Long Term (Future Releases)
-7. DMA UART RX (HIGH-1) - 1 day
-8. Host-side unit test framework (TEST-1) - 2 days
-9. Stack monitoring (LOW-2) - 2 hours
+5. Implement fixed-point PID (CRIT-1) — 2 days
+6. Add command acceleration limiting (CRIT-3) — 4 hours
+7. DMA UART RX (HIGH-1) — 1 day
+8. Host-side unit test framework (TEST-1) — 2 days
+9. Stack monitoring (LOW-2) — 2 hours
 
 ---
 
@@ -380,6 +348,7 @@ for (uint16_t i = 0; i < CALIBRATION_SAMPLES; i++)  // 1000 samples
 - Reference firmwares analyzed: Yahboom V3.5.1, LGDXRobot2 latest, AuBot latest
 - OrbiBot firmware is significantly more advanced than references in most areas
 - Main gaps are in performance optimization (float→fixed) and testing infrastructure
+- **CRIT-2 fixed in v2.0.1** — version now correctly reported from `firmware_version.h`
 
 ---
 

@@ -104,26 +104,9 @@ void control_get_firmware_odometry(float *x, float *y, float *theta,
 void control_reset_odometry(void);
 
 /**
- * @brief Set PID gains for a specific speed level
- * @param level Speed level (0=low, 1=medium, 2=high)
- * @param kp Proportional gain [0, 10.0]
- * @param ki Integral gain [0, 10.0]
- * @param kd Derivative gain [0, 10.0]
+ * @brief Get current motor PID gains (read-only)
+ * @return Pointer to pid_gains_t
  */
-void control_set_motor_pid_level(uint8_t level, float kp, float ki, float kd);
-
-/**
- * @brief Set speed thresholds for multi-level PID
- * @param t0 Low speed threshold (mm/s)
- * @param t1 Medium speed threshold (mm/s)
- * @param t2 High speed threshold (mm/s)
- */
-void control_set_pid_speed_thresholds(float t0, float t1, float t2);
-
-/**
- * @brief Get pointer to current multi-level PID configuration (read-only)
- * @return Pointer to pid_multilevel_t
- */
-const pid_multilevel_t *control_get_pid_multilevel(void);
+const pid_gains_t *control_get_motor_pid(void);
 
 #endif /* TASK_CONTROL_H */

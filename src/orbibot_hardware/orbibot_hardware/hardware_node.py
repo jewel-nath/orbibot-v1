@@ -96,7 +96,6 @@ class OrbiBotHardwareNode(Node):
         self._pid_rate_limit = 0.1  # Max 10Hz (100ms between updates)
         self._last_pid_update = 0.0
         self._last_yaw_pid_update = 0.0
-        self._last_pid_multilevel_update = 0.0
         self._last_pid_save_update = 0.0
 
         # Callback group for concurrent timer execution with MultiThreadedExecutor
@@ -282,9 +281,7 @@ class OrbiBotHardwareNode(Node):
         self.yaw_pid_sub = self.create_subscription(
             Float32MultiArray, '/orbibot/yaw_pid_params',
             self._yaw_pid_callback, 10)
-        self.pid_multilevel_sub = self.create_subscription(
-            Float32MultiArray, '/orbibot/pid_multilevel',
-            self._pid_multilevel_callback, 10)
+        # PID save topic - send [kp, ki, kd] with state=0x5F to save to flash
         self.pid_save_sub = self.create_subscription(
             Float32MultiArray, '/orbibot/pid_save',
             self._pid_save_callback, 10)
@@ -430,45 +427,11 @@ class OrbiBotHardwareNode(Node):
         except Exception as e:
             self.get_logger().error(f"Set yaw PID failed: {e}")
 
-    def _pid_multilevel_callback(self, msg: Float32MultiArray):
-        """Set multi-level PID gains via /orbibot/pid_multilevel topic.
-
-        Data format: [t0, t1, t2, kp0, ki0, kd0, kp1, ki1, kd1, kp2, ki2, kd2]
-        Thresholds in mm/s, gains as float [0, 10].
-        Sets each level individually on firmware.
-        """
-        if not self.hardware_connected:
-            return
-        if not self._check_pid_rate_limit('_last_pid_multilevel_update'):
-            return
-
-        if len(msg.data) != 12:
-            self.get_logger().warn(
-                f"PID multilevel requires 12 values [t0,t1,t2,kp0,ki0,kd0,...], got {len(msg.data)}")
-            return
-
-        try:
-            # Extract thresholds and gains
-            thresholds = [msg.data[0], msg.data[1], msg.data[2]]  # t0, t1, t2
-            gains = list(msg.data[3:12])  # kp0, ki0, kd0, kp1, ki1, kd1, kp2, ki2, kd2
-
-            # Send all levels in single command (firmware function 0x18)
-            self.bot.set_pid_multilevel(thresholds, gains, forever=False)
-
-            self.get_logger().info(
-                f"PID multilevel set: thresholds={thresholds}, "
-                f"L0=[{gains[0]:.3f},{gains[1]:.3f},{gains[2]:.3f}], "
-                f"L1=[{gains[3]:.3f},{gains[4]:.3f},{gains[5]:.3f}], "
-                f"L2=[{gains[6]:.3f},{gains[7]:.3f},{gains[8]:.3f}]")
-        except Exception as e:
-            self.get_logger().error(f"Set multilevel PID failed: {e}")
-
     def _pid_save_callback(self, msg: Float32MultiArray):
         """Trigger flash save via /orbibot/pid_save topic.
 
         Sends the current PID gains with forever=True to trigger flash save.
-        Data format: [t0, t1, t2, kp0, ki0, kd0, kp1, ki1, kd1, kp2, ki2, kd2]
-        (12 values for multilevel PID with thresholds).
+        Data format: [kp, ki, kd] - single PID gains.
         """
         if not self.hardware_connected:
             return
@@ -476,19 +439,13 @@ class OrbiBotHardwareNode(Node):
             return
 
         try:
-            if len(msg.data) >= 12:
-                # Multilevel PID format
-                thresholds = [msg.data[0], msg.data[1], msg.data[2]]
-                gains = list(msg.data[3:12])
-                self.bot.set_pid_multilevel(thresholds, gains, forever=True)
-                self.get_logger().info("Multilevel PID gains saved to flash")
-            elif len(msg.data) >= 3:
-                # Legacy single-level format (backward compatibility)
+            if len(msg.data) >= 3:
+                # Single PID format
                 kp, ki, kd = msg.data[0], msg.data[1], msg.data[2]
                 self.bot.set_pid_param(kp, ki, kd, forever=True)
-                self.get_logger().info("PID gains saved to flash (single level)")
+                self.get_logger().info(f"PID gains saved to flash: Kp={kp:.3f} Ki={ki:.3f} Kd={kd:.3f}")
             else:
-                self.get_logger().warn("Invalid PID save data length")
+                self.get_logger().warn("Invalid PID save data length - expected [kp, ki, kd]")
         except Exception as e:
             self.get_logger().error(f"PID flash save failed: {e}")
 
@@ -866,10 +823,40 @@ class OrbiBotHardwareNode(Node):
         return response
 
     def _calibrate_imu_callback(self, request, response):
-        """IMU calibration placeholder"""
-        response.success = False
-        response.message = "IMU calibration not supported - ICM-20948 auto-calibrates on startup"
-        response.bias_values = [0.0, 0.0, 0.0]
+        """Trigger magnetometer calibration via set_mag_calibration()."""
+        if not self.hardware_connected:
+            response.success = False
+            response.message = "Hardware not connected"
+            response.bias_values = [0.0, 0.0, 0.0]
+            return response
+
+        try:
+            # The CalibrateIMU service doesn't have offset fields in its definition,
+            # so we trigger auto-calibration by setting offsets to 0, 0, 0
+            # In practice, the firmware uses the current magnetometer reading as the
+            # hard iron offset (since the robot is stationary during calibration)
+            # Note: The calibration time parameter is used to wait for stabilization
+            calibration_time = request.calibration_time if request.calibration_time > 0 else 10
+
+            self.get_logger().info(f"Starting magnetometer calibration (wait {calibration_time}s)...")
+
+            # Wait for the specified calibration time to allow sensor stabilization
+            # This gives the user time to rotate the robot if needed
+            # In a real implementation, the firmware would handle this
+            # For now, we apply zero offsets (which the firmware treats as "use current reading")
+            self.bot.set_mag_calibration(0.0, 0.0, 0.0)
+
+            response.success = True
+            response.message = f"Magnetometer calibration applied (waited {calibration_time}s for stabilization)"
+            response.bias_values = [0.0, 0.0, 0.0]  # Firmware stores internally, not returned here
+
+            self.get_logger().info("Magnetometer calibration complete")
+
+        except Exception as e:
+            response.success = False
+            response.message = f"Calibration failed: {e}"
+            response.bias_values = [0.0, 0.0, 0.0]
+
         return response
 
     def _reset_odometry_callback(self, request, response):

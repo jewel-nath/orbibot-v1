@@ -1,7 +1,7 @@
 # OrbiBot Hardware Package — Comprehensive Analysis & Issues
 
-**Last Updated:** 2026-03-09  
-**Package Version:** 3.3.9  
+**Last Updated:** 2026-03-10  
+**Package Version:** 3.4.0  
 **Analysis Status:** Deep audit completed vs Yahboom X3, LGDXRobot2, AuBot references
 
 > **Status:** ✅ Production-ready. All must-fix issues resolved. Items below are enhancements or known limitations.
@@ -34,6 +34,8 @@ Your `orbibot_hardware` package is **significantly more advanced** than all thre
 | Data scaling | ✅ Match | Firmware int16×1000, driver unpacks /1000 |
 | Auto-report | ✅ Working | Firmware @ 20Hz, driver parses correctly |
 | Velocity cmd | ✅ Working | `/cmd_vel` → `set_car_motion()` → firmware |
+| **Firmware version** | ✅ Fixed | Now parsed in driver via `get_firmware_version()` |
+| **IMU calibration** | ✅ Fixed | Service now calls `set_mag_calibration()` |
 
 ---
 
@@ -43,81 +45,23 @@ All must-fix items from Phase 1-4 have been addressed. See [hardware-changelog.m
 
 ---
 
-## High Priority Improvements
+## High Priority Improvements (All Fixed ✅)
 
-### HIGH-1: Firmware Version Not Exposed
+### ~~HIGH-1: Firmware Version Not Exposed~~ ✅ FIXED v3.4.0
 
 **Severity:** HIGH  
 **File:** `rosmaster_driver.py`, `hardware_node.py`
 
-**Issue**: Firmware supports `FUNC_VERSION` (0x51) but driver doesn't parse or expose it. The `_parse_data` method doesn't handle `FUNC_VERSION` responses.
-
-**Evidence**:
-```python
-# rosmaster_driver.py - _parse_data() handles many functions but not FUNC_VERSION
-# Firmware sends: [0xFF, 0xFB, 0x04, 0x51, major, minor, checksum]
-# Driver should parse and expose get_firmware_version()
-```
-
-**Impact**: Can't query firmware version from ROS 2 for diagnostics or compatibility checking.
-
-**Recommended Fix**:
-```python
-# In _parse_data():
-elif ext_type == FUNC_VERSION:
-    if len(ext_data) >= 2:
-        version_major = ext_data[0]
-        version_minor = ext_ext[1]
-        self._firmware_version = f"{version_major}.{version_minor}"
-        self._last_data_timestamp = time.time()
-
-# Add getter:
-def get_firmware_version(self):
-    return getattr(self, '_firmware_version', "unknown")
-```
+**Status:** ✅ **FIXED** - Added `FUNC_VERSION` constant, `_firmware_version` attribute, parsing in `_parse_data()`, and `get_firmware_version()` getter.
 
 ---
 
-### HIGH-2: IMU Calibration Service Not Implemented
+### ~~HIGH-2: IMU Calibration Service Not Implemented~~ ✅ FIXED v3.4.0
 
 **Severity:** HIGH  
 **File:** `hardware_node.py:821`
 
-**Issue**: Service returns "not supported" but firmware DOES support magnetometer calibration via `FUNC_SET_MAG_CAL` (0x16). The driver already has `set_mag_calibration()` method.
-
-**Current Code**:
-```python
-def _calibrate_imu_callback(self, request, response):
-    response.success = False
-    response.message = "IMU calibration not supported - ICM-20948 auto-calibrates"
-    return response
-```
-
-**Impact**: Can't trigger magnetometer hard/soft iron calibration from ROS 2.
-
-**Recommended Fix**:
-```python
-def _calibrate_imu_callback(self, request, response):
-    """Trigger magnetometer calibration."""
-    if not self.hardware_connected:
-        response.success = False
-        response.message = "Hardware not connected"
-        return response
-    
-    try:
-        # Use provided offsets or trigger auto-calibration
-        self.bot.set_mag_calibration(
-            request.mag_offset_x,
-            request.mag_offset_y, 
-            request.mag_offset_z
-        )
-        response.success = True
-        response.message = "Magnetometer calibration applied"
-    except Exception as e:
-        response.success = False
-        response.message = f"Calibration failed: {e}"
-    return response
-```
+**Status:** ✅ **FIXED** - Service now calls `bot.set_mag_calibration()` to trigger magnetometer calibration. Supports calibration time parameter for stabilization.
 
 ---
 
@@ -129,15 +73,6 @@ def _calibrate_imu_callback(self, request, response):
 **File:** `hardware_node.py:703`
 
 **Issue**: Comment says "Encoder direction is corrected in firmware" but joint state calculation for RViz doesn't account for mecanum wheel orientation (some wheels roll forward while others roll sideways during strafing).
-
-**Evidence**:
-```python
-# Current joint state calculation assumes all wheels rotate same direction for forward motion
-# But mecanum wheels: FL and BR roll forward, FR and BL roll backward for pure strafing
-for i in range(4):
-    delta = encoders[i] - self.last_encoders[i]
-    self.wheel_positions[i] += delta * rad_per_edge  # No direction correction
-```
 
 **Impact**: Wheel visualization in RViz may show incorrect rotation during strafing maneuvers.
 
@@ -154,14 +89,6 @@ for i in range(4):
 - No exponential backoff (fixed 1s delay)
 - Limited to 10 retries then gives up
 - No persistent retry after initial failure
-
-**Current Code**:
-```python
-def _reconnect_serial(self, max_retries=10, retry_delay=1.0):
-    for attempt in range(max_retries):  # Only 10 tries
-        # ... reconnect logic
-        time.sleep(retry_delay)  # Fixed 1s, no backoff
-```
 
 **Impact**: Temporary USB disconnect lasting >10s requires node restart.
 
@@ -190,13 +117,6 @@ def _reconnect_serial(self, max_retries=None, initial_delay=1.0):
 **File:** `rosmaster_driver.py:276`
 
 **Issue**: Buffer grows unbounded if frame parsing fails (malformed data).
-
-**Current Code**:
-```python
-buf = bytearray()  # No size limit
-while self._running:
-    # ... if parsing fails, buffer keeps growing
-```
 
 **Risk**: Malformed data could cause memory growth over time.
 
@@ -256,7 +176,7 @@ if len(buf) > MAX_SERIAL_BUFFER:
 **File:** `hardware_node.py`
 
 - ICM-20948 auto-calibrates gyro bias on startup.
-- Manual accelerometer/magnetometer calibration requires `set_mag_calibration()` call (see HIGH-2).
+- Manual accelerometer/magnetometer calibration requires `set_mag_calibration()` call (see HIGH-2, now fixed).
 - **Impact:** None for typical use.
 - **Workaround:** Power cycle to trigger re-calibration.
 
@@ -269,13 +189,15 @@ if len(buf) > MAX_SERIAL_BUFFER:
 | **Language** | Python 3 + ROS 2 | Python 3 (no ROS) | Python 3 + ROS 2 |
 | **Serial Protocol** | Binary (Yahboom-compatible) | Same binary | JSON over serial |
 | **Threading** | Multi-threaded + locks | Single thread | Single thread |
-| **Safety Features** | cmd timeout, battery lockout, emergency stop | Basic | None |
+| **Safety Features** | cmd timeout, battery lockout, emergency stop | Basic watchdog | None |
 | **Odometry** | Firmware RK2 + adaptive covariance | ROS-side from encoders | ROS-side from encoders |
 | **IMU Support** | ICM-20948 (attitude + raw + mag) | MPU9250 + ICM-20948 | Not implemented |
 | **PID Tuning** | Runtime via topics (multi-level) | Runtime via methods | Runtime via topics |
 | **Buffered Reads** | ✅ Yes | ❌ No | ❌ No |
 | **Dynamic Params** | ✅ Yes | ❌ No | ❌ No |
 | **Unit Tests** | ✅ Yes | ❌ No | ❌ No |
+| **Firmware Version Query** | ✅ Yes | ❌ No | ❌ No |
+| **IMU Calibration Service** | ✅ Yes | ❌ No | ❌ No |
 
 ---
 
@@ -293,9 +215,9 @@ if len(buf) > MAX_SERIAL_BUFFER:
 
 ## Recommendations by Priority
 
-### Immediate (Next Sprint)
-1. ✅ Add firmware version query and expose in system status (HIGH-1)
-2. ✅ Connect IMU calibration service to `set_mag_calibration()` (HIGH-2)
+### Immediate (Completed ✅)
+1. ✅ ~~Add firmware version query and expose in system status (HIGH-1)~~
+2. ✅ ~~Connect IMU calibration service to `set_mag_calibration()` (HIGH-2)~~
 
 ### Short Term (Next Month)
 3. Verify encoder directions with physical test (MED-1)

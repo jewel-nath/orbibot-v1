@@ -24,18 +24,11 @@ static volatile robot_velocity_t target_vel = {0};
 static volatile robot_velocity_t measured_vel = {0};  // Actual measured velocity from encoders
 static pid_controller_t pid_motor[4];
 
-// Multi-level PID configuration (speed-dependent gains)
-static pid_multilevel_t pid_multilevel = {
-    .levels = {
-        { .kp = PID_KP_L0, .ki = PID_KI_L0, .kd = PID_KD_L0 },  // Low speed
-        { .kp = PID_KP_L1, .ki = PID_KI_L1, .kd = PID_KD_L1 },  // Medium speed
-        { .kp = PID_KP_L2, .ki = PID_KI_L2, .kd = PID_KD_L2 },  // High speed
-    },
-    .speed_thresholds = {
-        PID_SPEED_THRESHOLD_0,
-        PID_SPEED_THRESHOLD_1,
-        PID_SPEED_THRESHOLD_2,
-    },
+// Single PID gains (stored for persistence and runtime updates)
+static pid_gains_t motor_pid_gains = {
+    .kp = PID_KP,
+    .ki = PID_KI,
+    .kd = PID_KD
 };
 
 // Yaw PID Controller (for heading drift compensation during straight-line motion)
@@ -131,14 +124,10 @@ void control_set_motor_pid(float kp, float ki, float kd)
     if (ki < 0.0f || ki > 10.0f) return;
     if (kd < 0.0f || kd > 10.0f) return;
 
-    // Backward compat: sets all 3 multi-level gains to the same value
     taskENTER_CRITICAL();
-    for (int level = 0; level < PID_NUM_LEVELS; level++)
-    {
-        pid_multilevel.levels[level].kp = kp;
-        pid_multilevel.levels[level].ki = ki;
-        pid_multilevel.levels[level].kd = kd;
-    }
+    motor_pid_gains.kp = kp;
+    motor_pid_gains.ki = ki;
+    motor_pid_gains.kd = kd;
     for (int i = 0; i < 4; i++)
     {
         pid_motor[i].kp = kp;
@@ -148,39 +137,12 @@ void control_set_motor_pid(float kp, float ki, float kd)
     }
     taskEXIT_CRITICAL();
 
-    DEBUG_INFO("Motor PID updated (all levels): Kp=%.3f Ki=%.3f Kd=%.3f\n", kp, ki, kd);
+    DEBUG_INFO("Motor PID updated: Kp=%.3f Ki=%.3f Kd=%.3f\n", kp, ki, kd);
 }
 
-void control_set_motor_pid_level(uint8_t level, float kp, float ki, float kd)
+const pid_gains_t *control_get_motor_pid(void)
 {
-    if (level >= PID_NUM_LEVELS) return;
-    if (kp < 0.0f || kp > 10.0f) return;
-    if (ki < 0.0f || ki > 10.0f) return;
-    if (kd < 0.0f || kd > 10.0f) return;
-
-    taskENTER_CRITICAL();
-    pid_multilevel.levels[level].kp = kp;
-    pid_multilevel.levels[level].ki = ki;
-    pid_multilevel.levels[level].kd = kd;
-    taskEXIT_CRITICAL();
-
-    DEBUG_INFO("Motor PID L%d: Kp=%.3f Ki=%.3f Kd=%.3f\n", level, kp, ki, kd);
-}
-
-void control_set_pid_speed_thresholds(float t0, float t1, float t2)
-{
-    taskENTER_CRITICAL();
-    pid_multilevel.speed_thresholds[0] = t0;
-    pid_multilevel.speed_thresholds[1] = t1;
-    pid_multilevel.speed_thresholds[2] = t2;
-    taskEXIT_CRITICAL();
-
-    DEBUG_INFO("PID speed thresholds: %.0f/%.0f/%.0f mm/s\n", t0, t1, t2);
-}
-
-const pid_multilevel_t *control_get_pid_multilevel(void)
-{
-    return &pid_multilevel;
+    return &motor_pid_gains;
 }
 
 void control_get_firmware_odometry(float *x, float *y, float *theta,
@@ -430,12 +392,8 @@ void task_control(void *params)
             }
             else
             {
-                // Look up speed-dependent PID gains based on desired wheel speed
-                pid_gains_t gains = pid_get_gains_for_speed(&pid_multilevel, target_wheel_speeds[i]);
-                pid_motor[i].kp = gains.kp;
-                pid_motor[i].ki = gains.ki;
-                pid_motor[i].kd = gains.kd;
-
+                // Single PID gains - already set in pid_motor structure
+                // Gains can be updated via control_set_motor_pid()
                 pid_set_target(&pid_motor[i], target_wheel_speeds[i]);
                 float pwm_out = pid_calculate_incremental(&pid_motor[i], wheel_speed_mm_s[i]);
 

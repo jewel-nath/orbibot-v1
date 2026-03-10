@@ -1,17 +1,16 @@
 /**
- * PIDTuningPanel - Multi-level PID gain tuning interface
+ * PIDTuningPanel - Single PID gain tuning interface
  *
  * Features:
- * - 3-level motor PID gains (low/medium/high speed) with speed thresholds
+ * - Single motor PID gains (optimized for mid-speed autonomous navigation)
  * - Yaw PID gains tab
- * - Per-level slider controls with numeric input
+ * - Slider controls with numeric input
  * - Apply sends gains to firmware, Save persists to flash
  * - Reset to defaults
  *
  * Topics Published:
- * - /orbibot/pid_params (Float32MultiArray) - [kp, ki, kd] (single-level compat)
+ * - /orbibot/pid_params (Float32MultiArray) - [kp, ki, kd]
  * - /orbibot/yaw_pid_params (Float32MultiArray) - [kp, ki, kd]
- * - /orbibot/pid_multilevel (Float32MultiArray) - [t0,t1,t2,kp0,ki0,kd0,kp1,ki1,kd1,kp2,ki2,kd2]
  * - /orbibot/pid_save (Float32MultiArray) - [kp, ki, kd] triggers flash save
  */
 
@@ -31,24 +30,14 @@ import { toast } from 'sonner';
 import { ROS_TOPICS } from '@/lib/constants';
 import ROSLIB from 'roslib';
 
-// Default multi-level PID values matching firmware orbibot_config.h
-const DEFAULT_PID_LEVELS = [
-  { kp: 1.2, ki: 0.04, kd: 0.6, label: 'Low Speed' },
-  { kp: 0.8, ki: 0.06, kd: 0.5, label: 'Medium Speed' },
-  { kp: 0.5, ki: 0.08, kd: 0.4, label: 'High Speed' },
-];
-
-const DEFAULT_SPEED_THRESHOLDS = [50, 200, 500]; // mm/s
-
-const DEFAULT_YAW_PID = { kp: 1.0, ki: 0.0, kd: 0.1 };
+// Default single PID values (optimized for mid-speed autonomous navigation)
+const DEFAULT_MOTOR_PID = { kp: 0.8, ki: 0.06, kd: 0.5 };
+const DEFAULT_YAW_PID = { kp: 0.4, ki: 0.0, kd: 0.1 };
 
 // PID parameter limits (firmware accepts 0-10)
 const PID_MIN = 0;
 const PID_MAX = 10;
 const PID_STEP = 0.01;
-const SPEED_MIN = 0;
-const SPEED_MAX = 1000;
-const SPEED_STEP = 10;
 
 interface PIDGains {
   kp: number;
@@ -86,10 +75,9 @@ function PIDSlider({
           value={value}
           onChange={(e) => {
             const val = parseFloat(e.target.value) || 0;
-            onChange(Math.max(min, Math.min(max, val)));  // Clamp to min/max range
+            onChange(Math.max(min, Math.min(max, val)));
           }}
           onBlur={(e) => {
-            // Ensure value is clamped on blur as well
             const val = parseFloat(e.target.value) || 0;
             const clamped = Math.max(min, Math.min(max, val));
             if (clamped !== value) {
@@ -117,71 +105,6 @@ function PIDSlider({
   );
 }
 
-function LevelGainsEditor({
-  level,
-  label,
-  gains,
-  threshold,
-  onGainsChange,
-  onThresholdChange,
-  disabled,
-}: {
-  level: number;
-  label: string;
-  gains: PIDGains;
-  threshold: number;
-  onGainsChange: (gains: PIDGains) => void;
-  onThresholdChange: (threshold: number) => void;
-  disabled: boolean;
-}) {
-  return (
-    <div className="space-y-2 p-2 bg-muted/30 rounded-md">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold text-muted-foreground">
-          L{level}: {label}
-        </span>
-        <div className="flex items-center gap-1">
-          <span className="text-[10px] text-muted-foreground">Threshold:</span>
-          <input
-            type="number"
-            value={threshold}
-            onChange={(e) => {
-              const val = parseFloat(e.target.value) || 0;
-              onThresholdChange(Math.max(SPEED_MIN, Math.min(SPEED_MAX, val)));  // G16: Clamp to min/max range
-            }}
-            min={SPEED_MIN}
-            max={SPEED_MAX}
-            step={SPEED_STEP}
-            disabled={disabled}
-            className="w-14 px-1 py-0.5 text-[10px] text-right bg-muted border rounded disabled:opacity-50"
-          />
-          <span className="text-[10px] text-muted-foreground">mm/s</span>
-        </div>
-      </div>
-      <PIDSlider
-        label="Kp"
-        value={gains.kp}
-        onChange={(v) => onGainsChange({ ...gains, kp: v })}
-        disabled={disabled}
-      />
-      <PIDSlider
-        label="Ki"
-        value={gains.ki}
-        onChange={(v) => onGainsChange({ ...gains, ki: v })}
-        max={2}
-        disabled={disabled}
-      />
-      <PIDSlider
-        label="Kd"
-        value={gains.kd}
-        onChange={(v) => onGainsChange({ ...gains, kd: v })}
-        max={5}
-        disabled={disabled}
-      />
-    </div>
-  );
-}
-
 export function PIDTuningPanel({ className }: PIDTuningPanelProps) {
   const { ros, connectionState } = useRosContext();
   const isConnected = connectionState === 'connected';
@@ -190,30 +113,27 @@ export function PIDTuningPanel({ className }: PIDTuningPanelProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState<'motor' | 'yaw'>('motor');
 
-  // Multi-level PID state
-  const [pidLevels, setPidLevels] = useState<PIDGains[]>(
-    DEFAULT_PID_LEVELS.map(({ kp, ki, kd }) => ({ kp, ki, kd }))
-  );
-  const [speedThresholds, setSpeedThresholds] = useState([...DEFAULT_SPEED_THRESHOLDS]);
+  // Single PID state
+  const [motorPID, setMotorPID] = useState<PIDGains>({ ...DEFAULT_MOTOR_PID });
   const [yawPID, setYawPID] = useState<PIDGains>({ ...DEFAULT_YAW_PID });
 
   // Publisher refs
-  const multilevelPubRef = useRef<ROSLIB.Topic | null>(null);
+  const pidPubRef = useRef<ROSLIB.Topic | null>(null);
   const savePubRef = useRef<ROSLIB.Topic | null>(null);
   const yawPubRef = useRef<ROSLIB.Topic | null>(null);
 
   // Setup publishers
   useEffect(() => {
     if (!ros || !isConnected) {
-      multilevelPubRef.current = null;
+      pidPubRef.current = null;
       savePubRef.current = null;
       yawPubRef.current = null;
       return;
     }
 
-    multilevelPubRef.current = new ROSLIB.Topic({
+    pidPubRef.current = new ROSLIB.Topic({
       ros,
-      name: ROS_TOPICS.pidMultilevel,
+      name: ROS_TOPICS.pidParams,
       messageType: 'std_msgs/Float32MultiArray',
     });
 
@@ -230,36 +150,27 @@ export function PIDTuningPanel({ className }: PIDTuningPanelProps) {
     });
 
     return () => {
-      multilevelPubRef.current = null;
+      pidPubRef.current = null;
       savePubRef.current = null;
       yawPubRef.current = null;
     };
   }, [ros, isConnected]);
 
-  // Apply multi-level PID (sends to firmware RAM, not flash)
+  // Apply motor PID (sends to firmware RAM, not flash)
   const applyMotorPID = useCallback(() => {
-    if (!multilevelPubRef.current) {
+    if (!pidPubRef.current) {
       toast.error('Not connected to ROS');
       return;
     }
 
-    // Format: [t0, t1, t2, kp0, ki0, kd0, kp1, ki1, kd1, kp2, ki2, kd2]
-    const data = [
-      ...speedThresholds,
-      ...pidLevels.flatMap((l) => [l.kp, l.ki, l.kd]),
-    ];
+    pidPubRef.current.publish(
+      new ROSLIB.Message({ data: [motorPID.kp, motorPID.ki, motorPID.kd] })
+    );
 
-    multilevelPubRef.current.publish(new ROSLIB.Message({ data }));
-
-    toast.success('Multi-level PID applied', {
-      description: pidLevels
-        .map(
-          (l, i) =>
-            `L${i}: Kp=${l.kp.toFixed(2)} Ki=${l.ki.toFixed(2)} Kd=${l.kd.toFixed(2)}`
-        )
-        .join(' | '),
+    toast.success('Motor PID applied', {
+      description: `Kp=${motorPID.kp.toFixed(3)} Ki=${motorPID.ki.toFixed(3)} Kd=${motorPID.kd.toFixed(3)}`,
     });
-  }, [pidLevels, speedThresholds]);
+  }, [motorPID]);
 
   // Save to flash
   const saveToFlash = useCallback(() => {
@@ -268,20 +179,17 @@ export function PIDTuningPanel({ className }: PIDTuningPanelProps) {
       return;
     }
 
-    // First apply, then save (send all levels + thresholds for multilevel PID)
+    // First apply, then save
     applyMotorPID();
 
-    // Format: [t0, t1, t2, kp0, ki0, kd0, kp1, ki1, kd1, kp2, ki2, kd2]
-    const data = [
-      ...speedThresholds,  // t0, t1, t2
-      ...pidLevels.flatMap(level => [level.kp, level.ki, level.kd])  // all 3 levels
-    ];
-    savePubRef.current.publish(new ROSLIB.Message({ data }));
+    savePubRef.current.publish(
+      new ROSLIB.Message({ data: [motorPID.kp, motorPID.ki, motorPID.kd] })
+    );
 
-    toast.success('Multilevel PID gains saved to flash', {
-      description: 'All 3 levels + thresholds will persist across power cycles',
+    toast.success('PID gains saved to flash', {
+      description: 'Settings will persist across power cycles',
     });
-  }, [pidLevels, speedThresholds, applyMotorPID]);
+  }, [motorPID, applyMotorPID]);
 
   // Apply yaw PID
   const applyYawPID = useCallback(() => {
@@ -301,8 +209,7 @@ export function PIDTuningPanel({ className }: PIDTuningPanelProps) {
 
   // Reset to defaults
   const resetMotorPID = useCallback(() => {
-    setPidLevels(DEFAULT_PID_LEVELS.map(({ kp, ki, kd }) => ({ kp, ki, kd })));
-    setSpeedThresholds([...DEFAULT_SPEED_THRESHOLDS]);
+    setMotorPID({ ...DEFAULT_MOTOR_PID });
     toast.info('Motor PID reset to defaults');
   }, []);
 
@@ -367,27 +274,34 @@ export function PIDTuningPanel({ className }: PIDTuningPanelProps) {
             </button>
           </div>
 
-          {/* Motor PID — 3-Level Editor */}
+          {/* Motor PID — Single Level */}
           {activeTab === 'motor' && (
-            <div className="space-y-2">
-              {pidLevels.map((gains, i) => (
-                <LevelGainsEditor
-                  key={i}
-                  level={i}
-                  label={DEFAULT_PID_LEVELS[i].label}
-                  gains={gains}
-                  threshold={speedThresholds[i]}
-                  onGainsChange={(g) =>
-                    setPidLevels((prev) => prev.map((p, j) => (j === i ? g : p)))
-                  }
-                  onThresholdChange={(t) =>
-                    setSpeedThresholds((prev) =>
-                      prev.map((p, j) => (j === i ? t : p))
-                    )
-                  }
+            <div className="space-y-3">
+              <div className="p-2 bg-muted/30 rounded-md">
+                <div className="text-xs font-semibold text-muted-foreground mb-2">
+                  Single PID (Mid-Speed Optimized)
+                </div>
+                <PIDSlider
+                  label="Kp (Proportional)"
+                  value={motorPID.kp}
+                  onChange={(v) => setMotorPID((prev) => ({ ...prev, kp: v }))}
                   disabled={!hardwareAvailable}
                 />
-              ))}
+                <PIDSlider
+                  label="Ki (Integral)"
+                  value={motorPID.ki}
+                  onChange={(v) => setMotorPID((prev) => ({ ...prev, ki: v }))}
+                  max={2}
+                  disabled={!hardwareAvailable}
+                />
+                <PIDSlider
+                  label="Kd (Derivative)"
+                  value={motorPID.kd}
+                  onChange={(v) => setMotorPID((prev) => ({ ...prev, kd: v }))}
+                  max={5}
+                  disabled={!hardwareAvailable}
+                />
+              </div>
 
               {/* Motor PID Buttons */}
               <div className="flex gap-2">
@@ -493,7 +407,7 @@ export function PIDTuningPanel({ className }: PIDTuningPanelProps) {
           {/* Help text */}
           <p className="text-xs text-muted-foreground">
             {activeTab === 'motor'
-              ? '3-level PID: gains interpolate between speed thresholds. Low speed uses high Kp for crisp starts, high speed uses lower Kp to reduce oscillation. "Flash" persists settings across power cycles.'
+              ? 'Single PID optimized for mid-speed autonomous navigation (100-300 mm/s). "Flash" persists settings across power cycles.'
               : 'Yaw PID controls rotation accuracy during straight-line motion.'}
           </p>
         </div>

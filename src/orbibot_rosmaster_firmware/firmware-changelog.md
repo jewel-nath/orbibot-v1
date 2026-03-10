@@ -4,6 +4,25 @@ All notable changes to the OrbiBot ROSMaster firmware.
 
 ---
 
+## v2.0.1 — 2026-03-10 (Issue Fixes)
+
+### CRIT-2: Protocol Version Response Fixed
+
+**Severity:** CRITICAL  
+**File:** `communication/protocol.c`
+
+**Problem**: `FUNC_VERSION` command returned hardcoded `{0x01, 0x00}` instead of actual firmware version from `firmware_version.h`.
+
+**Solution**:
+- Added `#include "firmware_version.h"` to `protocol.c`
+- Changed version response to use `FIRMWARE_VERSION_MAJOR` and `FIRMWARE_VERSION_MINOR` macros
+- Now correctly reports firmware version (e.g., v2.0.0 → `{0x02, 0x00}`)
+
+**Files Modified**:
+- `src/communication/protocol.c`: Added version header include, fixed hardcoded version
+
+---
+
 ## v2.0.0 — 2026-03-04 (Production Release)
 
 **Theme**: Deep Audit & Hardening — Comprehensive reliability, safety, and code-quality release based on audit vs ROSMaster X3, LGDXRobot2, and AuBot references.
@@ -91,4 +110,4 @@ SPI Mode 0, additive checksum, CommTask priority 7, IMU stack 1024, monitoring 1
 
 ---
 
-*Last updated: 2026-03-09*
+*Last updated: 2026-03-10*

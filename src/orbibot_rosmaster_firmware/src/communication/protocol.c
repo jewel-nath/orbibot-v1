@@ -16,6 +16,7 @@
 #include "battery_monitor.h"
 #include "flash_storage.h"
 #include "orbibot_config.h"
+#include "firmware_version.h"
 #include "FreeRTOS.h"
 #include "task.h"
 #include <string.h>
@@ -334,8 +335,8 @@ int8_t protocol_parse_command(void)
                 uint8_t request_type = rx_buf[4];
                 if (request_type == FUNC_VERSION)
                 {
-                    // Send firmware version: v1.0.0 = 0x01, 0x00
-                    uint8_t version_data[2] = {0x01, 0x00};
+                    // Send firmware version using actual version from firmware_version.h
+                    uint8_t version_data[2] = {FIRMWARE_VERSION_MAJOR, FIRMWARE_VERSION_MINOR};
                     protocol_send_packet(FUNC_VERSION, version_data, 2);
                 }
             }
@@ -379,9 +380,7 @@ int8_t protocol_parse_command(void)
             protocol_handle_set_yaw_pid(&rx_buf[4]);
             break;
 
-        case FUNC_SET_MOTOR_PID_MULTILEVEL:
-            protocol_handle_set_motor_pid_multilevel(&rx_buf[4]);
-            break;
+        // FUNC_SET_MOTOR_PID_MULTILEVEL removed - using single PID only
 
         case FUNC_SET_MAG_CAL:
             protocol_handle_set_mag_cal(&rx_buf[4]);
@@ -646,55 +645,6 @@ void protocol_handle_set_yaw_pid(const uint8_t *data)
     float kd = (float)kd_raw / 1000.0f;
 
     control_set_yaw_pid(kp, ki, kd);
-}
-
-void protocol_handle_set_motor_pid_multilevel(const uint8_t *data)
-{
-    // Data format: [t0_lo][t0_hi][t1_lo][t1_hi][t2_lo][t2_hi]
-    //              [kp0_lo][kp0_hi][ki0_lo][ki0_hi][kd0_lo][kd0_hi]
-    //              [kp1_lo][kp1_hi][ki1_lo][ki1_hi][kd1_lo][kd1_hi]
-    //              [kp2_lo][kp2_hi][ki2_lo][ki2_hi][kd2_lo][kd2_hi]
-    //              [state]
-    // Total: 25 bytes
-
-    // Parse speed thresholds (int16_t, mm/s)
-    int16_t t0_raw = (int16_t)((data[1] << 8) | data[0]);
-    int16_t t1_raw = (int16_t)((data[3] << 8) | data[2]);
-    int16_t t2_raw = (int16_t)((data[5] << 8) | data[4]);
-
-    float t0 = (float)t0_raw;
-    float t1 = (float)t1_raw;
-    float t2 = (float)t2_raw;
-
-    // Parse PID gains for all 3 levels (int16_t, scaled by 1000)
-    float kp[3], ki[3], kd[3];
-    for (uint8_t level = 0; level < 3; level++)
-    {
-        uint8_t offset = 6 + level * 6;  // 6 bytes thresholds + level * 6 bytes/level
-        int16_t kp_raw = (int16_t)((data[offset + 1] << 8) | data[offset + 0]);
-        int16_t ki_raw = (int16_t)((data[offset + 3] << 8) | data[offset + 2]);
-        int16_t kd_raw = (int16_t)((data[offset + 5] << 8) | data[offset + 4]);
-
-        kp[level] = (float)kp_raw / 1000.0f;
-        ki[level] = (float)ki_raw / 1000.0f;
-        kd[level] = (float)kd_raw / 1000.0f;
-    }
-
-    uint8_t state = data[24];
-
-    // Set speed thresholds
-    control_set_pid_speed_thresholds(t0, t1, t2);
-
-    // Set PID gains for each level
-    control_set_motor_pid_level(0, kp[0], ki[0], kd[0]);
-    control_set_motor_pid_level(1, kp[1], ki[1], kd[1]);
-    control_set_motor_pid_level(2, kp[2], ki[2], kd[2]);
-
-    // Save to flash when state byte == SAVE_VERIFY (0x5F)
-    if (state == SAVE_VERIFY)
-    {
-        flash_storage_save();
-    }
 }
 
 /* ========================================================================

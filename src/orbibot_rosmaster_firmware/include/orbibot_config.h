@@ -134,40 +134,13 @@
  * ======================================================================== */
 
 /**
- * Motor PID Controller — Multi-Level Gains
- * 3 gain levels with linear interpolation between speed thresholds.
+ * Motor PID Controller — Single PID Gains
  * Tuned for JGB37-520 motors with AM2857 drivers.
- *
- * Level 0 (low speed):   High Kp for crisp start, low Ki to avoid overshoot
- * Level 1 (mid speed):   Balanced — matches original single-level gains
- * Level 2 (high speed):  Lower Kp to reduce oscillation at speed
+ * Optimized for mid-speed autonomous navigation (100-300 mm/s).
  */
-#define PID_NUM_LEVELS              3
-
-// Speed thresholds (mm/s) — boundaries between PID gain levels
-#define PID_SPEED_THRESHOLD_0       50.0f       // Below this: use Level 0
-#define PID_SPEED_THRESHOLD_1       200.0f      // Between 0-1: interpolate
-#define PID_SPEED_THRESHOLD_2       500.0f      // Above this: use Level 2
-
-// Level 0: Low speed (0–50 mm/s)
-#define PID_KP_L0                   1.2f
-#define PID_KI_L0                   0.04f
-#define PID_KD_L0                   0.6f
-
-// Level 1: Medium speed (50–200 mm/s)
-#define PID_KP_L1                   0.8f
-#define PID_KI_L1                   0.06f
-#define PID_KD_L1                   0.5f
-
-// Level 2: High speed (200–500+ mm/s)
-#define PID_KP_L2                   0.5f
-#define PID_KI_L2                   0.08f
-#define PID_KD_L2                   0.4f
-
-// Legacy single-level defaults (backward compat for control_set_motor_pid)
-#define PID_KP                      PID_KP_L1
-#define PID_KI                      PID_KI_L1
-#define PID_KD                      PID_KD_L1
+#define PID_KP                      0.8f        // Proportional gain
+#define PID_KI                      0.06f       // Integral gain
+#define PID_KD                      0.5f        // Derivative gain
 
 #define PID_MAX_INTEGRAL            4000.0f     // Anti-windup limit
 #define PID_OUTPUT_MIN              -1.0f       // Minimum output (reverse)

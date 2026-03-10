@@ -31,6 +31,7 @@ FUNC_SET_YAW_PID = 0x14
 FUNC_REPORT_ODOM = 0x15
 FUNC_SET_MAG_CAL = 0x16
 FUNC_SET_MOTOR_PID_MULTILEVEL = 0x18
+FUNC_VERSION = 0x51
 FUNC_RESET_FLASH = 0xA0
 
 # Car type (OrbiBot uses mecanum only; byte required in MOTION packet format)
@@ -102,6 +103,9 @@ class Rosmaster:
         self._kd1 = 0
 
         self._battery_voltage = 0
+
+        # Firmware version (parsed from FUNC_VERSION response)
+        self._firmware_version = "unknown"
 
         # Firmware odometry (x, y, theta in m/rad; vx, vy, omega in m/s, rad/s)
         self._odom_x = 0.0
@@ -231,6 +235,14 @@ class Rosmaster:
             self._kd1 = struct.unpack('h', bytearray(ext_data[5:7]))[0]
             if self._debug:
                 print("FUNC_SET_YAW_PID:", self._pid_index, [self._kp1, self._ki1, self._kd1])
+        elif ext_type == FUNC_VERSION:
+            # Parse firmware version response: [major, minor, checksum]
+            if len(ext_data) >= 2:
+                version_major = ext_data[0]
+                version_minor = ext_data[1]
+                with self._data_lock:
+                    self._firmware_version = f"{version_major}.{version_minor}"
+                    self._last_data_timestamp = time.time()
 
     # Receive data (R6: buffered reads to reduce syscalls)
     def _receive_data(self):
@@ -422,53 +434,13 @@ class Rosmaster:
             print(f'---set_yaw_pid_param error: {e}---')
 
     def set_pid_multilevel(self, thresholds, gains, forever=False):
-        """Set multi-level PID parameters with speed thresholds.
-
-        Args:
-            thresholds: List of 3 speed thresholds [t0, t1, t2] in mm/s
-            gains: List of 9 gain values [kp0, ki0, kd0, kp1, ki1, kd1, kp2, ki2, kd2]
-            forever: If True, save to flash (permanent)
-        """
-        try:
-            if len(thresholds) != 3 or len(gains) != 9:
-                print("Multilevel PID requires 3 thresholds and 9 gains")
-                return
-
-            state = 0x5F if forever else 0
-            # Length: 0x1C (28 bytes total: 3 header + 1 func + 25 data - 1 header not counted = 27)
-            cmd = [SERIAL_HEAD, SERIAL_DEVICE_ID, 0x1C, FUNC_SET_MOTOR_PID_MULTILEVEL]
-
-            # Append 3 thresholds (int16, mm/s)
-            for t in thresholds:
-                t_bytes = bytearray(struct.pack('h', int(t)))
-                cmd.append(t_bytes[0])  # low
-                cmd.append(t_bytes[1])  # high
-
-            # Append 9 PID gains (int16, scaled by 1000)
-            for g in gains:
-                if g < 0 or g > 10:
-                    print(f"PID gain {g} out of range [0, 10.00]")
-                    return
-                g_bytes = bytearray(struct.pack('h', int(g * 1000)))
-                cmd.append(g_bytes[0])  # low
-                cmd.append(g_bytes[1])  # high
-
-            cmd.append(state)
-            checksum = sum(cmd, SERIAL_COMPLEMENT) & 0xff
-            cmd.append(checksum)
-
-            with self._write_lock:
-                self.ser.write(cmd)
-
-            if self._debug:
-                print("pid_multilevel:", cmd)
-
-            time.sleep(self._delay_time)
-            if forever:
-                time.sleep(.1)
-
-        except (serial.SerialException, OSError) as e:
-            print(f'---set_pid_multilevel error: {e}---')
+        """DEPRECATED: Multi-level PID removed. Use set_pid_param() instead."""
+        # This method is kept for API compatibility but does nothing
+        # Multi-level PID has been removed in favor of single PID
+        print("WARNING: Multi-level PID is deprecated. Using single PID via set_pid_param().")
+        if len(gains) >= 3:
+            # Use Level 1 gains (middle level) as the single PID setting
+            self.set_pid_param(gains[3], gains[4], gains[5], forever)
 
     def set_mag_calibration(self, offset_x, offset_y, offset_z):
         """Set magnetometer hard iron calibration offsets (in µT)."""
@@ -548,3 +520,8 @@ class Rosmaster:
         with self._data_lock:
             return (self._odom_x, self._odom_y, self._odom_theta,
                     self._odom_vx, self._odom_vy, self._odom_omega)
+
+    def get_firmware_version(self):
+        """Get firmware version string (e.g., '2.0' for v2.0.0)."""
+        with self._data_lock:
+            return self._firmware_version

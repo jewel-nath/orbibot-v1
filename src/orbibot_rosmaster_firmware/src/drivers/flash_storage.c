@@ -63,20 +63,11 @@ int flash_storage_load(void)
         return -1;
     }
 
-    // Apply PID gains
-    for (int level = 0; level < PID_MAX_LEVELS; level++)
-    {
-        control_set_motor_pid_level(
-            (uint8_t)level,
-            flash_cache.pid_levels[level].kp,
-            flash_cache.pid_levels[level].ki,
-            flash_cache.pid_levels[level].kd
-        );
-    }
-    control_set_pid_speed_thresholds(
-        flash_cache.pid_speed_thresholds[0],
-        flash_cache.pid_speed_thresholds[1],
-        flash_cache.pid_speed_thresholds[2]
+    // Apply single PID gains
+    control_set_motor_pid(
+        flash_cache.pid_gains.kp,
+        flash_cache.pid_gains.ki,
+        flash_cache.pid_gains.kd
     );
 
     // Apply mag calibration
@@ -91,13 +82,9 @@ int flash_storage_load(void)
 
 int flash_storage_save(void)
 {
-    // Collect current PID configuration
-    const pid_multilevel_t *ml = control_get_pid_multilevel();
-    for (int level = 0; level < PID_MAX_LEVELS; level++)
-    {
-        flash_cache.pid_levels[level] = ml->levels[level];
-        flash_cache.pid_speed_thresholds[level] = ml->speed_thresholds[level];
-    }
+    // Collect current PID gains (single PID)
+    const pid_gains_t *gains = control_get_motor_pid();
+    flash_cache.pid_gains = *gains;
 
     // Collect current mag calibration
     imu_get_mag_calibration(&flash_cache.mag_cal);

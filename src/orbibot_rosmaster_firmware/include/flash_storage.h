@@ -32,9 +32,10 @@
 typedef struct {
     uint8_t magic;                                  // FLASH_STORAGE_MAGIC if valid
 
-    // Multi-level PID gains (3 levels × {kp, ki, kd})
-    pid_gains_t pid_levels[PID_MAX_LEVELS];         // 3 × 12 = 36 bytes
-    float pid_speed_thresholds[PID_MAX_LEVELS];     // 3 × 4 = 12 bytes
+    // Single PID gains (3 floats)
+    pid_gains_t pid_gains;                          // 12 bytes
+
+    uint8_t reserved[36];                           // Reserved for future use (was multi-level PID)
 
     // Magnetometer calibration
     mag_calibration_t mag_cal;                      // 3+9 floats + 1 byte = 49 bytes
