@@ -72,7 +72,7 @@ ros2 launch orbibot_hardware hardware.launch.py motors_enabled:=false
 | Argument | Default | Description |
 |----------|---------|-------------|
 | `serial_port` | `/dev/motordriver` | Serial port for motor driver board |
-| `motors_enabled` | `true` | Auto-enable motors 3s after startup |
+| `motors_enabled` | `true` | Auto-enable motors 6s after startup (single call) |
 
 Both nodes launch with `respawn=True` for automatic recovery.
 

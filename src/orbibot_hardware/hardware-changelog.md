@@ -86,7 +86,7 @@
 |----|---------|---------|
 | S1/S2 | Data freshness monitoring | No stale data during disconnect |
 | S3 | Battery recovery logging | Clear user guidance |
-| S4 | Motor enable retry | Reliable startup |
+| S4 | Motor enable at 6s (single call) | Reliable startup, no redundant second call |
 | HW-005 | PID rate limiting | Prevents firmware overload |
 
 ## Code Quality (All Complete)

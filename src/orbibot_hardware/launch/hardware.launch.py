@@ -53,25 +53,14 @@ def generate_launch_description():
         ]
     )
     
-    # Motor enable service call (S4: 5s delay + retry at 10s if node starts late)
+    # Motor enable: single call after delay so hardware node and service are ready
     motor_enable_cmd = TimerAction(
-        period=5.0,
+        period=6.0,
         actions=[
             ExecuteProcess(
                 cmd=['ros2', 'service', 'call', '/orbibot/set_motor_enable',
                      'orbibot_msgs/srv/SetMotorEnable', '{enable: true}'],
                 name='motor_enable_startup',
-                condition=IfCondition(motors_enabled)
-            )
-        ]
-    )
-    motor_enable_retry = TimerAction(
-        period=10.0,
-        actions=[
-            ExecuteProcess(
-                cmd=['ros2', 'service', 'call', '/orbibot/set_motor_enable',
-                     'orbibot_msgs/srv/SetMotorEnable', '{enable: true}'],
-                name='motor_enable_retry',
                 condition=IfCondition(motors_enabled)
             )
         ]
@@ -102,7 +91,6 @@ def generate_launch_description():
         hardware_node,
         system_monitor_node,
 
-        # Actions (S4: initial enable + retry)
+        # Motor enable (when motors_enabled is true)
         motor_enable_cmd,
-        motor_enable_retry,
     ])
