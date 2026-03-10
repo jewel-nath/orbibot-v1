@@ -76,10 +76,10 @@ export function useMotorControl(): MotorControlState & MotorControlActions {
     const service = new ROSLIB.Service({
       ros,
       name: '/orbibot/set_motor_enable',
-      serviceType: 'std_srvs/SetBool',
+      serviceType: 'orbibot_msgs/srv/SetMotorEnable',
     });
 
-    const request = new ROSLIB.ServiceRequest({ data: enable });
+    const request = new ROSLIB.ServiceRequest({ enable });
 
     service.callService(request, (response: { success: boolean; message: string }) => {
       setIsChanging(false);
