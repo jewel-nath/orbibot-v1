@@ -11,7 +11,7 @@ safety:
 
 llm_providers:
   gemini:
-    model: "gemini-3-flash-preview"
+    model: "gemini-3.1-flash-lite-preview"
     api_key_env: "GEMINI_API_KEY"
 
   anthropic:

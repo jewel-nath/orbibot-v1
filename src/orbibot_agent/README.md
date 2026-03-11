@@ -137,9 +137,13 @@ CLI commands:
 - `/tools` - List available tools
 - `exit` or `quit` - Exit
 
-### 3. MCP Server (for Claude Desktop/Cline)
+### 3. MCP Server (Claude Desktop, Cline, Cursor)
 
-Add to your MCP config (Claude Desktop: `~/.claude/settings.json`):
+The MCP server speaks stdio and exposes OrbiBot tools (move, sensors, ROS services/actions) to any MCP client.
+
+**Cursor** (this workspace): A project config is already in `.cursor/mcp.json`. Restart Cursor and the **orbibot** server will appear under Tools & MCP. Agent can then use OrbiBot tools when chatting in this project.
+
+**Claude Desktop**: Add to `~/.claude/settings.json`:
 ```json
 {
   "mcpServers": {
@@ -154,12 +158,14 @@ Add to your MCP config (Claude Desktop: `~/.claude/settings.json`):
 }
 ```
 
+**Global Cursor / other projects**: Use `~/.cursor/mcp.json` with the same `orbibot` entry as above.
+
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────┐
 │         User Interfaces                  │
-│  Web GUI │ Terminal │ Claude/Cline      │
+│  Web GUI │ Terminal │ Claude/Cline/Cursor │
 └──────────┴──────────┴───────────────────┘
            │
            ▼
