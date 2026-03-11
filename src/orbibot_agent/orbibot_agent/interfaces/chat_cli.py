@@ -12,6 +12,7 @@ from rich.prompt import Prompt
 from rich.table import Table
 
 from ..agent_node import AgentNode
+from ..env_loader import load_dotenv_local
 
 try:
     from rich import print
@@ -218,6 +219,7 @@ Commands:
 
 def main():
     """Main entry point."""
+    load_dotenv_local()
     parser = argparse.ArgumentParser(description='OrbiBot Agent CLI')
     parser.add_argument('--provider', '-p', help='LLM provider to use (gemini, anthropic, moonshot, ollama)')
     args = parser.parse_args()

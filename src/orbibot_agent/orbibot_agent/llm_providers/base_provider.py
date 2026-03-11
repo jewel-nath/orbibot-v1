@@ -1,5 +1,6 @@
 """Base LLM provider interface for OrbiBot Agent."""
 
+import os
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Dict, List, Optional
 
@@ -16,6 +17,17 @@ class BaseLLMProvider(ABC):
         self.config = config
         self.name = config.get('name', 'unknown')
         self.model = config.get('model', 'unknown')
+
+    def _get_api_key(self, env_var: str) -> str:
+        """Get API key from the environment variable set by .env.local or shell export.
+
+        Args:
+            env_var: Name of the environment variable (e.g. 'GEMINI_API_KEY').
+
+        Returns:
+            API key string, or empty string if not set.
+        """
+        return os.environ.get(env_var, '').strip()
 
     @abstractmethod
     def initialize(self) -> bool:

@@ -20,6 +20,7 @@ except ImportError:
     MCP_AVAILABLE = False
 
 from ..agent_node import AgentNode
+from ..env_loader import load_dotenv_local
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +87,7 @@ class McpServerNode:
             logger.error('MCP SDK not installed. Install with: pip install mcp')
             return False
 
+        load_dotenv_local()
         rclpy.init()
 
         # Create ROS node
@@ -96,18 +98,25 @@ class McpServerNode:
         from rclpy.node import Node
         Node.__init__(self._agent, 'mcp_agent')
 
-        self._agent._load_config('')
+        self._agent._config = self._agent._load_config('')
         from ..core.safety_manager import SafetyManager
         from ..core.ros_bridge import RosBridge
         from ..tools.tool_registry import ToolRegistry
 
-        self._agent._safety_manager = SafetyManager()
+        safety_cfg = self._agent._config.get('safety', {})
+        self._agent._safety_manager = SafetyManager(
+            max_linear_vel=safety_cfg.get('max_linear_vel'),
+            max_angular_vel=safety_cfg.get('max_angular_vel'),
+            max_duration=safety_cfg.get('max_duration'),
+            sensor_timeout=safety_cfg.get('sensor_timeout'),
+        )
         self._agent._ros_bridge = RosBridge(self._node)
         self._agent._ros_bridge.set_safety_manager(self._agent._safety_manager)
         self._agent._tool_registry = ToolRegistry(
             self._agent._ros_bridge,
             self._agent._safety_manager
         )
+        self._agent._providers = {}
         self._agent._init_providers()
         self._agent._system_prompt = self._agent._load_system_prompt()
         self._agent._current_provider = None

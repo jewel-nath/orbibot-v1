@@ -1,7 +1,6 @@
 """Anthropic Claude LLM provider for OrbiBot Agent."""
 
 import logging
-import os
 from typing import Any, Dict, List, Optional
 
 try:
@@ -44,9 +43,9 @@ class AnthropicProvider(BaseLLMProvider):
             logger.error('anthropic not installed. Install with: pip install anthropic')
             return False
 
-        api_key = os.environ.get(self.api_key_env, '')
+        api_key = self._get_api_key(self.api_key_env)
         if not api_key:
-            logger.error(f'{self.api_key_env} not set')
+            logger.error(f'{self.api_key_env} not set and no api_key in config')
             return False
 
         try:
@@ -63,7 +62,7 @@ class AnthropicProvider(BaseLLMProvider):
         Returns:
             True if API key is set
         """
-        return ANTHROPIC_AVAILABLE and bool(os.environ.get(self.api_key_env, ''))
+        return ANTHROPIC_AVAILABLE and bool(self._get_api_key(self.api_key_env))
 
     def start_chat(self, system_prompt: Optional[str] = None) -> None:
         """Start a new chat session.

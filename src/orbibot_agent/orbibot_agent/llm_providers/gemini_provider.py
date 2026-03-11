@@ -1,12 +1,11 @@
-"""Google Gemini LLM provider for OrbiBot Agent."""
+"""Google Gemini LLM provider for OrbiBot Agent (google-genai SDK)."""
 
 import logging
-import os
 from typing import Any, Dict, List, Optional
 
 try:
-    import google.generativeai as genai
-    from google.generativeai.types import FunctionDeclaration, Tool
+    from google import genai
+    from google.genai import types
     GEMINI_AVAILABLE = True
 except ImportError:
     GEMINI_AVAILABLE = False
@@ -30,10 +29,11 @@ class GeminiProvider(BaseLLMProvider):
         super().__init__(config)
         self.model_name = config.get('model', DEFAULT_MODEL)
         self.api_key_env = config.get('api_key_env', 'GEMINI_API_KEY')
-        self._api_key = None
-        self._model = None
+        self._api_key: Optional[str] = None
+        self._client = None
         self._chat = None
-        self._tool_declarations = None
+        self._tool_declarations: List = []
+        self._system_prompt: Optional[str] = None
 
     def initialize(self) -> bool:
         """Initialize Gemini client.
@@ -42,17 +42,16 @@ class GeminiProvider(BaseLLMProvider):
             True if successful
         """
         if not GEMINI_AVAILABLE:
-            logger.error('google-generativeai not installed. Install with: pip install google-generativeai')
+            logger.error('google-genai not installed. Install with: pip install google-genai')
             return False
 
-        self._api_key = os.environ.get(self.api_key_env, '')
+        self._api_key = self._get_api_key(self.api_key_env)
         if not self._api_key:
-            logger.error(f'{self.api_key_env} not set')
+            logger.error(f'{self.api_key_env} not set and no api_key in config')
             return False
 
         try:
-            genai.configure(api_key=self._api_key)
-            self._model = genai.GenerativeModel(self.model_name)
+            self._client = genai.Client(api_key=self._api_key)
             logger.info(f'Gemini provider initialized with model: {self.model_name}')
             return True
         except Exception as e:
@@ -63,9 +62,21 @@ class GeminiProvider(BaseLLMProvider):
         """Check if Gemini is available.
 
         Returns:
-            True if API key is set
+            True if library is installed and API key is present
         """
-        return GEMINI_AVAILABLE and bool(os.environ.get(self.api_key_env, ''))
+        return GEMINI_AVAILABLE and bool(self._get_api_key(self.api_key_env))
+
+    def _make_chat(self) -> None:
+        """Create (or recreate) a chat session with current system prompt and tools."""
+        if not self._client:
+            if not self.initialize():
+                raise RuntimeError('Gemini not initialized')
+
+        config = types.GenerateContentConfig(
+            system_instruction=self._system_prompt,
+            tools=self._tool_declarations or None,
+        )
+        self._chat = self._client.chats.create(model=self.model_name, config=config)
 
     def start_chat(self, system_prompt: Optional[str] = None) -> None:
         """Start a new chat session.
@@ -73,49 +84,55 @@ class GeminiProvider(BaseLLMProvider):
         Args:
             system_prompt: System instruction for the chat
         """
-        if not self._model:
-            if not self.initialize():
-                raise RuntimeError('Gemini not initialized')
-
-        # Rebuild model with system instruction if provided
-        if system_prompt:
-            self._model = genai.GenerativeModel(
-                self.model_name,
-                system_instruction=system_prompt,
-                tools=self._tool_declarations,
-            )
-
-        self._chat = self._model.start_chat()
+        self._system_prompt = system_prompt
+        self._make_chat()
         logger.info('Started new Gemini chat session')
 
     def set_tools(self, tools: List[Dict]) -> None:
         """Set tool declarations for Gemini.
 
         Args:
-            tools: List of tool definitions
+            tools: List of tool definitions (OpenAI-compatible function schema)
         """
         if not GEMINI_AVAILABLE:
             return
 
-        gemini_tools = []
+        declarations = []
         for tool in tools:
             if tool.get('type') == 'function':
                 func = tool.get('function', {})
-                declaration = FunctionDeclaration(
+                declarations.append(types.FunctionDeclaration(
                     name=func.get('name'),
                     description=func.get('description'),
-                    parameters=func.get('parameters', {}),
-                )
-                gemini_tools.append(Tool(function_declarations=[declaration]))
+                    parameters_json_schema=func.get('parameters', {}),
+                ))
 
-        self._tool_declarations = gemini_tools
+        self._tool_declarations = [types.Tool(function_declarations=declarations)] if declarations else []
 
-        # Rebuild model with tools
-        if self._model:
-            self._model = genai.GenerativeModel(
-                self.model_name,
-                tools=self._tool_declarations,
-            )
+        # Rebuild the chat so it picks up the new tools
+        if self._chat is not None:
+            self._make_chat()
+
+    def _parse_response(self, response) -> Dict[str, Any]:
+        """Extract text and tool calls from a GenerateContentResponse."""
+        try:
+            text = response.text or ''
+        except Exception:
+            text = ''
+
+        tool_calls = []
+        if response.function_calls:
+            for fc in response.function_calls:
+                tool_calls.append({
+                    'name': fc.name,
+                    'arguments': dict(fc.args),
+                })
+
+        return {
+            'text': text,
+            'tool_calls': tool_calls,
+            'raw_response': response,
+        }
 
     def send_message(
         self,
@@ -141,28 +158,7 @@ class GeminiProvider(BaseLLMProvider):
 
         try:
             response = self._chat.send_message(message)
-
-            result = {
-                'text': '',
-                'tool_calls': [],
-                'raw_response': response,
-            }
-
-            # Extract text
-            for part in response.parts:
-                if part.text:
-                    result['text'] += part.text
-
-            # Extract function calls
-            for part in response.parts:
-                if part.function_call:
-                    result['tool_calls'].append({
-                        'name': part.function_call.name,
-                        'arguments': dict(part.function_call.args),
-                    })
-
-            return result
-
+            return self._parse_response(response)
         except Exception as e:
             logger.error(f'Gemini send_message failed: {e}')
             return {'text': f'Error: {e}', 'tool_calls': [], 'error': str(e)}
@@ -185,38 +181,16 @@ class GeminiProvider(BaseLLMProvider):
         try:
             parts = []
             for tr in tool_results:
-                parts.append(
-                    genai.protos.Part(
-                        function_response=genai.protos.FunctionResponse(
-                            name=tr['name'],
-                            response=tr['result'],
-                        )
-                    )
-                )
+                result = tr['result']
+                if not isinstance(result, dict):
+                    result = {'result': result}
+                parts.append(types.Part.from_function_response(
+                    name=tr['name'],
+                    response=result,
+                ))
 
-            response = self._chat.send_message(genai.protos.Content(parts=parts))
-
-            result = {
-                'text': '',
-                'tool_calls': [],
-                'raw_response': response,
-            }
-
-            # Extract text
-            for part in response.parts:
-                if part.text:
-                    result['text'] += part.text
-
-            # Extract function calls (for multi-turn)
-            for part in response.parts:
-                if part.function_call:
-                    result['tool_calls'].append({
-                        'name': part.function_call.name,
-                        'arguments': dict(part.function_call.args),
-                    })
-
-            return result
-
+            response = self._chat.send_message(parts)
+            return self._parse_response(response)
         except Exception as e:
             logger.error(f'Gemini send_tool_results failed: {e}')
             return {'text': f'Error: {e}', 'tool_calls': [], 'error': str(e)}

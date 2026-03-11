@@ -257,6 +257,8 @@ Always be helpful and explain what you're doing. If a command is unsafe or uncle
 
 def main(args=None):
     """Main entry point."""
+    from .env_loader import load_dotenv_local
+    load_dotenv_local()
     rclpy.init(args=args)
 
     node = AgentNode()

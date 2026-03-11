@@ -1,7 +1,6 @@
 """Moonshot AI (Kimi) LLM provider for OrbiBot Agent."""
 
 import logging
-import os
 from typing import Any, Dict, List, Optional
 
 try:
@@ -46,9 +45,9 @@ class MoonshotProvider(BaseLLMProvider):
             logger.error('openai not installed. Install with: pip install openai')
             return False
 
-        api_key = os.environ.get(self.api_key_env, '')
+        api_key = self._get_api_key(self.api_key_env)
         if not api_key:
-            logger.error(f'{self.api_key_env} not set')
+            logger.error(f'{self.api_key_env} not set and no api_key in config')
             return False
 
         try:
@@ -68,7 +67,7 @@ class MoonshotProvider(BaseLLMProvider):
         Returns:
             True if API key is set
         """
-        return MOONSHOT_AVAILABLE and bool(os.environ.get(self.api_key_env, ''))
+        return MOONSHOT_AVAILABLE and bool(self._get_api_key(self.api_key_env))
 
     def start_chat(self, system_prompt: Optional[str] = None) -> None:
         """Start a new chat session.

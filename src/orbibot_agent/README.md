@@ -24,7 +24,7 @@ source install/setup.bash
 Install optional dependencies:
 ```bash
 # For all LLM providers
-pip install google-generativeai anthropic openai
+pip install google-genai anthropic openai
 
 # For rich CLI interface
 pip install rich
@@ -35,14 +35,69 @@ pip install mcp
 
 ## Configuration
 
-Set API keys as environment variables:
+### 1. Set up your LLM provider(s)
+
+**Recommended: `.env.local`** – keeps keys out of the repo and works from any launch context:
+
 ```bash
-export GEMINI_API_KEY="your-key-here"      # For Gemini
-export ANTHROPIC_API_KEY="your-key-here"   # For Claude
-export MOONSHOT_API_KEY="your-key-here"    # For Kimi
+cd src/orbibot_agent
+cp .env.local.example .env.local
+# Edit .env.local and add your keys (do not commit .env.local)
 ```
 
-Or create a config file at `~/orbibot_ws/src/orbibot_agent/config/agent_params.yaml`.
+Format: one `KEY=value` per line. Example:
+
+```
+GEMINI_API_KEY=your-gemini-api-key-here
+ANTHROPIC_API_KEY=your-anthropic-api-key-here
+```
+
+**Search order** (first found wins):
+
+1. `~/.orbibot/.env.local` – most reliable; symlink: `ln -sf ~/orbibot_ws/src/orbibot_agent/.env.local ~/.orbibot/.env.local`
+2. `~/orbibot_ws/src/orbibot_agent/.env.local`
+3. `$ORBIBOT_WS/src/orbibot_agent/.env.local` (if set)
+4. Package root, cwd
+
+**Alternative: environment variables** – in the same shell before starting:
+
+```bash
+export GEMINI_API_KEY="your-key-here"
+export ANTHROPIC_API_KEY="your-key-here"
+```
+
+**Ollama (local)** – no key needed; ensure Ollama is running and the default URL is `http://localhost:11434`. Configure in `config/agent_params.yaml` if different.
+
+### 2. Choose default provider and options
+
+The package config is used by default: `config/agent_params.yaml`. Key options:
+
+- **`default_provider`** – which provider to use when none is specified (e.g. `gemini`, `anthropic`, `moonshot`, `ollama`).
+- **`llm_providers`** – model names and API key env vars per provider.
+- **`safety`** – velocity/duration limits.
+
+Example to use Claude as default:
+
+```yaml
+default_provider: "anthropic"
+```
+
+To use a custom config file when launching:
+
+```bash
+ros2 launch orbibot_agent chat_server.launch.py config:=/path/to/your_agent_params.yaml
+```
+
+### 3. Choosing provider when using the HTTP API
+
+- **Default**: The server uses `default_provider` from the config (or `gemini` if not set).
+- **Per request**: Send `provider` in the JSON body to use a specific provider for that request:
+  ```bash
+  curl -X POST http://localhost:8082/api/chat \
+    -H "Content-Type: application/json" \
+    -d '{"message": "Hello", "provider": "anthropic"}'
+  ```
+- **List providers**: `GET http://localhost:8082/api/providers` returns available providers and the current one.
 
 ## Usage
 
@@ -53,10 +108,10 @@ ros2 launch orbibot_agent chat_server.launch.py
 ```
 
 API endpoints:
-- `POST /api/chat` - Send message, get response
+- `POST /api/chat` - Send message, get response (optional body: `provider`)
 - `POST /api/reset` - Reset chat session
 - `GET /api/health` - Health check
-- `GET /api/providers` - List available providers
+- `GET /api/providers` - List available providers and current
 
 ### 2. Terminal CLI
 

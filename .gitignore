@@ -177,6 +177,7 @@ celerybeat.pid
 # Environments
 .env
 .venv
+src/orbibot_agent/.env.local
 env/
 venv/
 ENV/
