@@ -114,9 +114,17 @@ class GeminiProvider(BaseLLMProvider):
             self._make_chat()
 
     def _parse_response(self, response) -> Dict[str, Any]:
-        """Extract text and tool calls from a GenerateContentResponse."""
+        """Extract text and tool calls from a GenerateContentResponse.
+
+        Uses response.parts to build text so we avoid the SDK warning when
+        the response contains both text and function_call parts.
+        """
+        text_parts = []
         try:
-            text = response.text or ''
+            for part in (response.parts or []):
+                if getattr(part, 'text', None):
+                    text_parts.append(part.text)
+            text = ''.join(text_parts) if text_parts else ''
         except Exception:
             text = ''
 

@@ -38,7 +38,7 @@ def generate_launch_description():
         Node(
             package='orbibot_agent',
             executable='chat_server',
-            name='chat_server',
+            name='orbibot_chat_server',
             output='screen',
             parameters=[{
                 'port': LaunchConfiguration('port'),
