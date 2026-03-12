@@ -93,18 +93,45 @@ Add to `~/.claude/settings.json`:
 
 ## Available Skills
 
+Skills in `.claude/skills/` are auto-discovered. All names use **snake_case**. See `.claude/skills/README.md` for the full index and cross-references.
+
 | Skill | Description |
 |-------|-------------|
+| **ROS 2 core** | |
 | `ros2_node_creation` | Node templates with QoS profiles (Python & C++) |
 | `ros2_launch_config` | Launch file composition, parameter management |
 | `ros2_service_action` | Service/Action server-client patterns |
 | `ros2_messaging` | Pub/Sub patterns, thread-safe buffers |
-| `ros2_testing` | Unit, Integration, E2E test strategies |
+| `ros2_testing` | Unit, Integration, E2E test strategies (Clean Arch) |
 | `ros2_lifecycle` | Managed (Lifecycle) Node templates |
 | `ros2_transforms` | TF2 management patterns |
 | `ros2_diagnostics` | Health monitoring with diagnostic_updater |
 | `ros2_bag` | Bag recording and replay utilities |
-| `ai_integration` | LLM provider patterns, tool calling, MCP |
+| **Bringup & architecture** | |
+| `robot_bringup` | systemd, launch layering, udev, watchdog, graceful shutdown |
+| `robot_architecture` | Design patterns, BT/FSM, state estimation |
+| `robotics_design_patterns` | Behavior trees, HAL, safety, sim-to-real |
+| `robotics_software_principles` | SOLID, clean architecture, DI for robotics |
+| **Perception & sensors** | |
+| `robot_perception` | Cameras, LiDAR, depth, calibration, detection, fusion |
+| `camera_vision` | Calibration, OpenCV, detection, depth pipelines |
+| `lidar_pointcloud` | PCL, Open3D, filtering, ICP, segmentation |
+| `sensor_fusion_slam` | EKF/UKF, slam_toolbox, Cartographer, RTAB-Map |
+| **Navigation & control** | |
+| `nav2` | Nav2 stack, costmaps, planners, controllers, recovery |
+| `path_planning` | A*, RRT, costmaps, waypoint following |
+| `control_systems` | PID, LQR, MPC, trajectories |
+| `realtime_motor_control` | Motor drivers, PID tuning, PREEMPT_RT |
+| **Hardware, safety & security** | |
+| `microcontrollers` | STM32, firmware, HAL (e.g. Yahboom ROSMaster) |
+| `serial_can_protocols` | UART, CAN, EtherCAT — serial to firmware |
+| `safety_systems` | Watchdogs, functional safety |
+| `robotics_security` | SROS2, DDS security, hardening, network segmentation |
+| **Modeling, web & tooling** | |
+| `robot_modeling` | URDF, Xacro, TF2, robot_state_publisher |
+| `ros2_web_integration` | FastAPI/Flask bridges, WebSocket, MJPEG, REST APIs |
+| `robotics_testing` | Test pyramid, launch_testing, mock hardware, CI/CD |
+| `docker_ros2_development` | Docker, docker-compose, DDS in containers, GPU passthrough |
 
 ## Deprecated Packages
 

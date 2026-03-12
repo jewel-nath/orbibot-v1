@@ -7,6 +7,8 @@ description: ROS2 test strategies and patterns with Clean Architecture (Python &
 
 This skill provides test strategies for ROS2 applications adhering to Clean Architecture principles, covering Unit, Integration, and E2E tests in both Python and C++.
 
+**See also:** `robotics_testing` for the full robotics test pyramid (HIL, simulation, field tests), launch_testing, mock hardware, and CI/CD patterns.
+
 ## Test Pyramid
 
 ```
