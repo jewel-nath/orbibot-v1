@@ -21,17 +21,16 @@ import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import { KeyboardShortcutsDialog } from '@/components/common/KeyboardShortcutsDialog';
 import { Toaster } from 'sonner';
 import { ThemeProvider } from 'next-themes';
-import { isMobileDevice } from '@/lib/utils';
-
-// ... (imports remain the same)
 
 function App() {
   const showMobileController = window.location.pathname === '/controller';
 
-  // Auto-redirect mobile devices to controller
+  // Auto-redirect only devices with mobile User-Agent (phones/tablets), not narrow/touch desktop
   useEffect(() => {
     const preferDesktop = localStorage.getItem('preferDesktop') === 'true';
-    if (isMobileDevice() && !preferDesktop && !showMobileController) {
+    const ua = typeof navigator !== 'undefined' ? navigator.userAgent.toLowerCase() : '';
+    const isMobileUA = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(ua);
+    if (isMobileUA && !preferDesktop && !showMobileController) {
       window.location.pathname = '/controller';
     }
   }, [showMobileController]);
