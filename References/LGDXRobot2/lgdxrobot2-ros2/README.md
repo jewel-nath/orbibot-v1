@@ -2,15 +2,14 @@
 
 ## Overview
 
-|  |  |
-| ---------------- | ----------------- |
-| ![Img](img.png) | ![Demo](demo.gif) |
+![Demo](demo.gif) 
 
-> LGDXRobot2 fully uses GitLab CI/CD for builds.<br /> [![Latest Release](https://gitlab.com/lgdxrobotics/lgdxrobot2-ros2/-/badges/release.svg)](https://gitlab.com/lgdxrobotics/lgdxrobot2-ros2/-/releases) 
+> LGDXRobot2 fully uses GitLab CI/CD for builds.<br /> [![Latest Release](https://gitlab.com/lgdxrobotics/lgdxrobot2-ros2/-/badges/release.svg)](https://gitlab.com/lgdxrobotics/lgdxrobot2-ros2/-/releases) [![Release Strategy](https://img.shields.io/badge/Release_Strategy-821B1D)](https://docs.lgdxrobot.bristolgram.uk/release-strategy/)
+
 
 LGDXRobot2 ROS 2 is an integration software for the LGDXRobot2 utilising ROS 2 ecosystem, especially navigation with the NAV2 stack. It provides examples for both physical robots and simulations. Also, it offers Docker images with ready-to-use ROS 2 environment on a web interface.
 
-The project currently supports ROS 2 Jazzy on Ubuntu 24.04 and offers seamless integration with the [LGDXRobot Cloud](https://gitlab.com/yukaitung/lgdxrobot2-cloud).
+The project currently supports ROS 2 Jazzy on Ubuntu 24.04 and offers seamless integration with the [LGDXRobot Cloud](https://gitlab.com/lgdxrobotics/lgdxrobot2-cloud).
 
 ![LGDXRobot2 All Repositories](lgdxrobo2_repos.png)
 
@@ -29,12 +28,12 @@ The project currently supports ROS 2 Jazzy on Ubuntu 24.04 and offers seamless i
 
 The solution consists of the following packages:
 
-* `lgdxrobot2_agent`: A ROS agent node for integration with LGDXRobot2 hardware and LGDXRobot Cloud.
-* `lgdxrobot2_bringup`: Bringup launch files for LGDXRobot2 hardware.
-* `lgdxrobot2_description`: A description package for visualising LGDXRobot2 hardware as a 3D model.
-* `lgdxrobot2_msgs`: Interface for LGDXRobot2 ROS 2.
+* `lgdxrobot2_agent`: LGDXRobot2 hardware integration for ROS 2 and LGDXRobot Cloud.
+* `lgdxrobot2_bringup`: LGDXRobot2 launch files.
+* `lgdxrobot2_description`: LGDXRobot2 visualisation package.
+* `lgdxrobot2_msgs`: LGDXRobot2 ROS 2 interfaces.
 * `lgdxrobot2_navigation`: LGDXRobot2 Nav2 stack integration.
-* `lgdxrobot2_webots`: Simulation configuration and driver for Webots.
+* `lgdxrobot2sim_webots`: LGDXRobot2 simulation configuration and driver for Webots.
 
 ## Installation
 
@@ -54,9 +53,14 @@ sudo apt update
 ```bash
 sudo apt install lgdxrobot2-udev \
   ros-${ROS_DISTRO}-sllidar-ros2 \
-  ros-${ROS_DISTRO}-lgdxrobot2* \
-  ros-${ROS_DISTRO}-explore-lite \
-  ros-${ROS_DISTRO}-multirobot-map-merge
+  ros-${ROS_DISTRO}-lgdxrobot2-* \
+  ros-${ROS_DISTRO}-lgdxrobot-cloud* 
+```
+
+4. Optionally, install the simulation package for Webots.
+
+```bash
+sudo apt install ros-${ROS_DISTRO}-lgdxrobot2sim-webots
 ```
 
 ### 2. Docker
@@ -86,16 +90,6 @@ This tutorial assumes that Ubuntu 24.04 LTS has already been installed.
 ### 1. Prerequisites
 
 1. Install [ROS 2 Jazzy](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html) ensure that the development tools are installed.
-2. Install Packages for LiDAR:
-
-```bash
-mkdir -p ~/ros2_ws/src
-cd ~/ros2_ws/src
-git clone https://github.com/Slamtec/sllidar_ros2.git
-cd ..
-colcon build --symlink-install
-source src/rpldiar_ros2/scripts/create_udev_rules.sh
-```
 
 ### 2. Build
 
@@ -104,15 +98,20 @@ Clone the project and run the following commands:
 ```bash
 mkdir -p ~/lgdx_ws/src
 cd ~/lgdx_ws/src
-git clone --recurse-submodules https://gitlab.com/lgdxrobotics/lgdxrobot2-ros2
+git clone --recurse-submodules https://gitlab.com/lgdxrobotics/lgdxrobot2-ros2.git
 cd ..
+
+# Remove Cloud Adapter
+rm -rf ~/lgdx_ws/src/lgdxrobot2-ros2/third_party/cloud/lgdxrobot2_cloud_adapter
+rm -rf ~/lgdx_ws/src/lgdxrobot2-ros2/third_party/cloud/third_party
 
 # Install build dependencies
 rosdep update
 rosdep install --from-paths src --ignore-src -y
 
-# Ensure that lgdxrobot2_msgs is in the system
-colcon build --packages-select lgdxrobot2_msgs  --symlink-install
+# Ensure that interfaces is in the system
+colcon build --packages-select lgdxrobot2_msgs --symlink-install
+colcon build --packages-select lgdxrobot_cloud_msgs --symlink-install
 source install/setup.bash
 
 colcon build --symlink-install
@@ -120,9 +119,10 @@ colcon build --symlink-install
 
 ### 3. Configuration
 
-First, add the user to the `dialout` group to allow access to the controller board.
+First, configure the permissions for the hardwares.
 
 ```bash
+source  ~/lgdx_ws/src/lgdxrobot2-ros2/third_party/lidar/scripts/create_udev_rules.sh
 sudo usermod -a -G dialout $USER
 ```
 
@@ -130,22 +130,16 @@ Then, source the setup files for the ROS 2 workspaces. You can optionally ignore
 
 ```bash
 source ~/lgdx_ws/install/setup.bash
-source ~/ros2_ws/install/setup.bash
 ```
 
 ## License
 
 This project is licensed under the MIT Licence.
 
-## Extra Dependencies
-
-* [hwinfo](https://github.com/lfreist/hwinfo)
-* [sllidar_ros2](https://github.com/Slamtec/sllidar_ros2)
-* [m-explore-ros2](https://github.com/robo-friends/m-explore-ros2)
-
 ## Credits
 
 * [Docker images for Selkies](https://github.com/linuxserver/docker-baseimage-selkies/)
+* [sllidar_ros2](https://github.com/Slamtec/sllidar_ros2)
 
 ## Acknowledgements
 
