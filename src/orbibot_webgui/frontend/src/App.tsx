@@ -14,7 +14,6 @@ import { SystemInfo } from '@/features/telemetry/SystemInfo';
 import { Encoders } from '@/features/telemetry/Encoders';
 import { OdometryDisplay } from '@/features/telemetry/OdometryDisplay';
 import { IMUWidget } from '@/features/telemetry/IMUWidget';
-import { ObstacleIndicator } from '@/components/safety/ObstacleIndicator';
 import { UnifiedViewport } from '@/components/layout/UnifiedViewport';
 import { MissionControl } from '@/components/layout/MissionControl';
 import { ConnectionStatusBar } from '@/components/common/ConnectionStatusBar';
@@ -64,7 +63,6 @@ function App() {
                           <Encoders />
                           <OdometryDisplay />
                           <IMUWidget />
-                          <ObstacleIndicator compact />
                         </DashboardLeft>
 
                         {/* CENTER COLUMN: Map with Camera + LiDAR overlays */}

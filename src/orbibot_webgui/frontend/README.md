@@ -102,11 +102,6 @@ ThemeProvider
 | `WaypointManager` | Waypoint CRUD, drag reorder, patrol controls, import/export |
 | `ExplorationPanel` | Frontier exploration start/pause/stop + map save |
 
-#### Safety
-| Component | Description |
-|-----------|-------------|
-| `ObstacleIndicator` | Obstacle detection status (clear/warning/emergency) with distance |
-
 #### Video
 | Component | Description |
 |-----------|-------------|
@@ -173,7 +168,6 @@ src/
 │   ├── control/                    # MecanumController, DirectionButton, EmergencyStop
 │   ├── layout/                     # Dashboard, Header
 │   ├── navigation/                 # NavigationToolbar, WaypointManager, ExplorationPanel
-│   ├── safety/                     # ObstacleIndicator
 │   ├── telemetry/                  # BatteryGauge, IMUWidget, MotorStatus, OdometryDisplay
 │   ├── video/                      # WebRTCVideo
 │   └── visualization/              # CameraFeed, LidarView, MapView

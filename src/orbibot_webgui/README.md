@@ -39,9 +39,7 @@ Modern web-based dashboard for real-time monitoring, control, and autonomous nav
 - **Integration** - Works with orbibot_exploration package
 
 ### Safety
-- **Obstacle Indicator** - Real-time LiDAR-based obstacle detection (clear/warning/emergency states)
-- **Safety Zone Visualization** - Color-coded distance zones matching firmware thresholds (emergency: 0.25m, warning: 0.5m)
-- **Emergency Stop Monitor** - Monitors `/orbibot/emergency_stop` topic
+- **Emergency Stop Monitor** - Monitors `/orbibot/emergency_stop` topic (e.g. from hardware/battery)
 - **Connection Status Bar** - Top-of-screen warnings for ROS/network disconnection with auto-dismiss on reconnect
 
 ### Keyboard Shortcuts
@@ -252,9 +250,7 @@ ros2 launch orbibot_webgui webgui.launch.py \
 | `/orbibot/encoders` | `std_msgs/Int32MultiArray` | Raw encoder counts |
 | `/plan` | `nav_msgs/Path` | Planned navigation path |
 | `/navigate_to_pose/_action/status` | `action_msgs/GoalStatusArray` | Navigation goal status |
-| `/orbibot/obstacle_detected` | `std_msgs/Bool` | Obstacle detection flag |
-| `/orbibot/emergency_stop` | `std_msgs/Bool` | Emergency stop status |
-| `/orbibot/min_obstacle_distance` | `std_msgs/Float32` | Minimum obstacle distance |
+| `/orbibot/emergency_stop` | `std_msgs/Bool` | Emergency stop status (e.g. hardware/battery) |
 | `/orbibot/exploration/frontiers` | `visualization_msgs/MarkerArray` | Frontier markers |
 | `/orbibot/exploration/status` | `std_msgs/String` | Exploration state |
 
@@ -347,7 +343,6 @@ orbibot_webgui/
         │   ├── common/                 # ConnectionStatus, ErrorBoundary, etc.
         │   ├── navigation/             # Nav2 integration
         │   ├── visualization/          # MapView, LidarView
-        │   ├── safety/                 # ObstacleIndicator
         │   └── ui/                     # shadcn/ui primitives
         ├── types/                      # TypeScript type definitions
         └── styles/
