@@ -73,6 +73,25 @@ class ToolRegistry:
             handler=self._handle_stop_robot
         )
 
+        self.register_tool(
+            name='set_motor_enable',
+            description='Enable or disable robot motors via /orbibot/set_motor_enable. '
+                       'Use enable=true to turn motors on (required for movement). '
+                       'Use enable=false for emergency stop / motor off. '
+                       'If motors fail to enable, check for emergency stop or low battery.',
+            parameters={
+                'type': 'object',
+                'properties': {
+                    'enable': {
+                        'type': 'boolean',
+                        'description': 'True to enable motors, False to disable (emergency stop)'
+                    }
+                },
+                'required': ['enable']
+            },
+            handler=self._handle_set_motor_enable
+        )
+
         # Sensor tools
         self.register_tool(
             name='get_battery',
@@ -361,6 +380,15 @@ class ToolRegistry:
         """Handle stop_robot tool."""
         self._ros_bridge.publish_stop()
         return {'status': 'stopped'}
+
+    def _handle_set_motor_enable(self, enable: bool) -> Dict:
+        """Handle set_motor_enable tool. Uses correct 'enable' field for the service."""
+        return self._ros_bridge.call_service(
+            '/orbibot/set_motor_enable',
+            'orbibot_msgs/srv/SetMotorEnable',
+            {'enable': enable},
+            timeout=5.0
+        )
 
     def _handle_get_battery(self) -> Dict:
         """Handle get_battery tool."""

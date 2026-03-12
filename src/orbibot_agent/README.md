@@ -198,7 +198,8 @@ The MCP server speaks stdio and exposes OrbiBot tools (move, sensors, ROS servic
 | Tool | Description |
 |------|-------------|
 | `move_robot` | Move with velocities for duration |
-| `stop_robot` | Emergency stop |
+| `stop_robot` | Emergency stop (publish zero velocity) |
+| `set_motor_enable` | Enable/disable motors via `/orbibot/set_motor_enable` (use `enable: true` to enable, `enable: false` for motor off) |
 
 ### Sensor Tools
 | Tool | Description |
@@ -258,6 +259,18 @@ Example goal for NavigateToPose:
     }
   }
 }
+```
+
+## Motor Enable Example
+
+For enabling/disabling motors, use the dedicated `set_motor_enable` tool (not `ros2_service_call`):
+
+```bash
+# Enable motors (required for movement)
+set_motor_enable(enable: true)
+
+# Disable motors (emergency stop / motor off)
+set_motor_enable(enable: false)
 ```
 
 ## Service Call Examples

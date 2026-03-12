@@ -16,7 +16,12 @@ from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from rclpy.action import ActionClient
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
+from rclpy.qos import (
+    DurabilityPolicy,
+    QoSProfile,
+    ReliabilityPolicy,
+    qos_profile_sensor_data,
+)
 from rclpy.service import Service
 from sensor_msgs.msg import Imu, LaserScan
 from std_msgs.msg import Int32MultiArray
@@ -204,7 +209,13 @@ class RosBridge:
             Dictionary with position and velocity, or None if unavailable
         """
         try:
-            msg = self.wait_for_message(Odometry, '/odom')
+            # /odom from hardware uses RELIABLE + TRANSIENT_LOCAL; must match for compatibility
+            odom_qos = QoSProfile(
+                reliability=ReliabilityPolicy.RELIABLE,
+                durability=DurabilityPolicy.TRANSIENT_LOCAL,
+                depth=5,
+            )
+            msg = self.wait_for_message(Odometry, '/odom', qos=odom_qos)
             if msg is None:
                 return None
 
@@ -440,7 +451,17 @@ class RosBridge:
         """
         try:
             # Import service type dynamically
-            module_name, srv_name = service_type.split('/')
+            # ROS 2 service types: package/srv/ServiceName (3 parts)
+            parts = service_type.split('/')
+            if len(parts) == 3 and parts[1] == 'srv':
+                module_name, _, srv_name = parts
+            elif len(parts) == 2:
+                module_name, srv_name = parts  # legacy: package/ServiceName
+            else:
+                return {
+                    'success': False,
+                    'error': f'Invalid service type format: {service_type}. Expected package/srv/ServiceName'
+                }
             import importlib
             srv_module = importlib.import_module(f'{module_name}.srv')
             srv_class = getattr(srv_module, srv_name)

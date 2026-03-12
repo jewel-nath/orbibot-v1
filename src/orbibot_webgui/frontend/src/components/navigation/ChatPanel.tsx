@@ -21,6 +21,7 @@ import {
   Compass,
   MapPin,
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 import { useChat } from '@/hooks/useChat';
 import type { ChatMessage, ToolCallInfo } from '@/hooks/useChat';
 import { cn } from '@/lib/utils';
@@ -178,8 +179,20 @@ function MessageBubble({ message }: { message: ChatMessage }) {
           <ToolCallsSummary calls={message.toolCalls} />
         )}
 
-        {/* Message text with basic line breaks */}
-        <div className="whitespace-pre-wrap break-words">{message.content}</div>
+        {/* Message text: plain for user, markdown for assistant */}
+        {isUser ? (
+          <div className="whitespace-pre-wrap break-words">{message.content}</div>
+        ) : (
+          <div
+            className={cn(
+              'break-words [&>*]:my-0.5 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0',
+              '[&_strong]:font-semibold [&_ul]:list-disc [&_ul]:list-inside [&_ul]:ml-2',
+              '[&_li]:my-0.5 [&_code]:bg-muted/80 [&_code]:px-1 [&_code]:rounded [&_code]:font-mono [&_code]:text-xs'
+            )}
+          >
+            <ReactMarkdown>{message.content}</ReactMarkdown>
+          </div>
+        )}
       </div>
 
       {isUser && (
