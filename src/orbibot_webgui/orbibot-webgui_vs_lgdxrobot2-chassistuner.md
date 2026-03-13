@@ -1,6 +1,8 @@
 # OrbiBot WebGUI vs LGDXRobot2 ChassisTuner
 
-Comparison and improvement ideas for orbibot_webgui based on studying the [LGDXRobot2 ChassisTuner](https://gitlab.com/lgdxrobotics/lgdxrobot2-chassistuner) reference. Use this document to prioritize and implement improvements later.
+Comparison and improvement ideas for orbibot_webgui based on studying the [LGDXRobot2 ChassisTuner](https://gitlab.com/lgdxrobotics/lgdxrobot2-chassistuner) reference.
+
+**Implemented (2025):** Dedicated **Diagnostics** page (header link) with: Robot Status (safety, system, encoders, odom, IMU), PID Tuning (moved from Mission Control), **PID Response Graph** (Vx/Vy/Wz target vs actual from /odom), and **Magnetometer calibration** button. Save/Flash tooltip and README updated for clarity (motor PID only; no "save all").
 
 ---
 

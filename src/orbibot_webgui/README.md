@@ -21,8 +21,14 @@ Modern web-based dashboard for real-time monitoring, control, and autonomous nav
 - **Keyboard Teleop** - WASD/Arrow keys with speed adjustment (1-9 keys set 10-90%)
 - **Emergency Stop** - Immediate velocity reset with prominent button
 - **Speed Control** - Adjustable speed slider with real-time velocity readout
-- **PID Tuning** - Dynamic multi-level motor and yaw PID gain adjustment with input validation (gains clamped 0–10, speed thresholds 0–1000 mm/s) and flash persistence
+- **PID Tuning** - Single motor and yaw PID gain adjustment (sliders + Apply/Flash) with input validation (gains 0–10). Located on the **Diagnostics** page. "Flash" saves motor PID to robot flash only; there is no single "save all" for all settings.
 - **Settings Panel** - Configurable connection parameters and control limits
+
+### Diagnostics (dedicated page)
+- **Navigation** - Header link "Diagnostics" opens a full-page view (Robot Status, PID Tuning, PID Response Graph, Calibration).
+- **Robot Status** - Safety, system health, encoders, odometry, IMU in one section.
+- **PID Response Graph** - Set target Vx/Vy/Wz, Send to command the robot, record response from `/odom`; two lines per chart (target vs actual). Auto-stops after 8 s.
+- **Magnetometer calibration** - "Calibrate magnetometer" calls `/orbibot/calibrate_imu` (hard iron only; robot must be running).
 
 ### Autonomous Navigation
 - **Navigation Toolbar** - Floating toolbar for Init Pose, Nav Goal, and Waypoint placement modes
@@ -79,7 +85,7 @@ Press `?` to open the shortcuts dialog at any time.
 - **UI Library**: TailwindCSS + shadcn/ui components
 - **ROS Communication**: roslib via rosbridge_suite (WebSocket)
 - **Video Streaming**: WebRTC (RTCPeerConnection) with optimized frame buffer
-- **State Management**: React Context API (RosContext, WebRTCContext, NavigationContext)
+- **State Management**: React Context API (RosContext, WebRTCContext, NavigationContext, PathContext for Dashboard/Diagnostics routing)
 - **Notifications**: sonner toast library
 - **Theming**: next-themes with dark mode default
 - **Logging**: Development-only logger (no console noise in production)
@@ -181,7 +187,7 @@ cd src/orbibot_webgui/frontend
 npm run dev
 ```
 
-Open browser to: **http://localhost:5173**
+Open browser to: **http://localhost:5173** — Dashboard (map, telemetry, control) and **Diagnostics** (header link: Robot Status, PID Tuning, PID Response Graph, Calibration).
 
 ### Production Mode
 
@@ -267,14 +273,15 @@ ros2 launch orbibot_webgui webgui.launch.py \
 | `/cmd_vel` | `geometry_msgs/Twist` | Velocity commands |
 | `/goal_pose` | `geometry_msgs/PoseStamped` | Navigation goals |
 | `/initialpose` | `geometry_msgs/PoseWithCovarianceStamped` | Initial pose estimate |
-| `/orbibot/pid_multilevel` | `std_msgs/Float32MultiArray` | Multi-level motor PID: `[t0,t1,t2, kp0,ki0,kd0, kp1,ki1,kd1, kp2,ki2,kd2]` |
+| `/orbibot/pid_params` | `std_msgs/Float32MultiArray` | Motor PID gains: `[kp, ki, kd]` (single PID for all motors) |
 | `/orbibot/yaw_pid_params` | `std_msgs/Float32MultiArray` | Yaw PID gains: `[kp, ki, kd]` |
-| `/orbibot/pid_save` | `std_msgs/Float32MultiArray` | Save all levels to flash: `[t0,t1,t2, kp0,ki0,kd0, kp1,ki1,kd1, kp2,ki2,kd2]` |
+| `/orbibot/pid_save` | `std_msgs/Float32MultiArray` | Save motor PID to flash: `[kp, ki, kd]` (persists across power cycles; no "save all" for other settings) |
 | `/orbibot/exploration/command` | `std_msgs/String` | Exploration commands (start/pause/stop) |
 
 ### Services Called
 | Service | Type | Description |
 |---------|------|-------------|
+| `/orbibot/calibrate_imu` | `orbibot_msgs/CalibrateIMU` | Magnetometer (hard iron) calibration; used from Diagnostics → Calibration |
 | `/navigate_to_pose/_action/cancel_goal` | `action_msgs/CancelGoal` | Cancel active navigation |
 | `/map_saver/save_map` | `nav2_msgs/SaveMap` | Save current SLAM map |
 
@@ -315,7 +322,8 @@ orbibot_webgui/
         │   ├── RosContext.tsx
         │   ├── WebRTCContext.tsx
         │   ├── NavigationContext.tsx
-        │   └── SettingsContext.tsx
+        │   ├── SettingsContext.tsx
+        │   └── PathContext.tsx         # Dashboard vs Diagnostics routing
         ├── hooks/                      # Custom React hooks
         │   ├── useSubscriber.ts        # Generic ROS topic subscriber
         │   ├── usePublisher.ts         # Generic ROS topic publisher
@@ -327,6 +335,8 @@ orbibot_webgui/
         │   ├── useMap.ts
         │   ├── useMotors.ts
         │   ├── useOdometry.ts
+        │   ├── useOdomSampling.ts       # /odom sampling for PID Response Graph
+        │   ├── useMotorControl.ts       # Motor enable service + PID hardware check
         │   ├── useSafetyStatus.ts
         │   ├── useInitialPose.ts
         │   ├── useNavGoal.ts
@@ -337,9 +347,11 @@ orbibot_webgui/
         │   ├── useTouchGestures.ts
         │   ├── useWaypointPatrol.ts
         │   └── useSystemStatus.ts
+        ├── pages/
+        │   └── DiagnosticsPage.tsx     # Full-page: Robot Status, PID Tuning, PID Graph, Calibration
         ├── features/
         │   ├── control/                # Robot control components
-        │   ├── telemetry/              # Sensor data displays
+        │   ├── telemetry/              # PIDTuningPanel, PIDResponseGraph, ImuCalibrationSection, etc.
         │   └── video/                  # Camera feed
         ├── components/
         │   ├── layout/                 # Dashboard, Header, Viewport

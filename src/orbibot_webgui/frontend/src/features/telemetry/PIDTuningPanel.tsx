@@ -47,6 +47,8 @@ interface PIDGains {
 
 interface PIDTuningPanelProps {
   className?: string;
+  /** When true (e.g. on Diagnostics page), panel starts expanded */
+  defaultExpanded?: boolean;
 }
 
 function PIDSlider({
@@ -105,12 +107,12 @@ function PIDSlider({
   );
 }
 
-export function PIDTuningPanel({ className }: PIDTuningPanelProps) {
+export function PIDTuningPanel({ className, defaultExpanded = false }: PIDTuningPanelProps) {
   const { ros, connectionState } = useRosContext();
   const isConnected = connectionState === 'connected';
   const { serviceAvailable: hardwareAvailable } = useMotorControl();
 
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   const [activeTab, setActiveTab] = useState<'motor' | 'yaw'>('motor');
 
   // Single PID state
@@ -333,7 +335,7 @@ export function PIDTuningPanel({ className }: PIDTuningPanelProps) {
                     'bg-green-600 text-white hover:bg-green-700',
                     'disabled:opacity-50 disabled:cursor-not-allowed'
                   )}
-                  title="Save to flash (persists across power cycles)"
+                  title="Saves current motor PID gains to robot flash; persists across power cycles. (No single 'save all' — only PID is stored.)"
                 >
                   <Save className="w-3.5 h-3.5" />
                   Flash

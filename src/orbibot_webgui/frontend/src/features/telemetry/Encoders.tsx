@@ -34,7 +34,7 @@ export function Encoders({ className }: EncodersProps) {
                 setResetFeedback(response.success ? 'success' : 'error');
                 if (response.success) setTimeout(() => setResetFeedback('idle'), 2000);
             },
-            (error: string) => {
+            (_error: string) => {
                 setIsResetting(false);
                 setResetFeedback('error');
                 setTimeout(() => setResetFeedback('idle'), 2000);

@@ -3,7 +3,6 @@ import { WaypointManager } from '@/components/navigation/WaypointManager';
 import { ExplorationPanel } from '@/components/navigation/ExplorationPanel';
 import { ChatPanel } from '@/components/navigation/ChatPanel';
 import { MecanumController } from '@/features/control/MecanumController';
-import { PIDTuningPanel } from '@/features/telemetry/PIDTuningPanel';
 import { Route, Search, Gamepad2, Bot } from 'lucide-react';
 
 export function MissionControl() {
@@ -41,12 +40,7 @@ export function MissionControl() {
                     </TabsContent>
 
                     <TabsContent value="controller" className="m-0 h-full">
-                        <div className="flex flex-col h-full">
-                            <MecanumController className="border-none shadow-none p-0" />
-                            <div className="mt-8 pt-6 border-t-2 border-border/80">
-                                <PIDTuningPanel />
-                            </div>
-                        </div>
+                        <MecanumController className="border-none shadow-none p-0" />
                     </TabsContent>
 
                     <TabsContent value="chat" className="m-0 h-full">
