@@ -23,7 +23,7 @@ export function Dashboard({ children, className = '' }: DashboardProps) {
 export function DashboardLeft({ children, className = '' }: DashboardProps) {
   return (
     <div className={cn(
-      'lg:col-span-3 flex flex-col gap-3 overflow-y-auto overflow-x-visible',
+      'lg:col-span-3 flex flex-col gap-4 overflow-y-auto overflow-x-visible',
       'pr-1 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent',
       className
     )}>

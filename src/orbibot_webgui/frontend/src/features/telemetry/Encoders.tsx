@@ -31,21 +31,11 @@ export function Encoders({ className }: EncodersProps) {
                 <span className="text-sm font-medium">Encoders</span>
             </div>
 
-            <div className="grid grid-cols-4 gap-2">
+            <div className="flex items-center justify-between gap-3 text-xs">
                 {motors.map((motor) => (
-                    <div
-                        key={motor.id}
-                        className={cn(
-                            'p-2 rounded-md border text-center',
-                            motor.enabled
-                                ? 'bg-primary/10 border-primary/20 text-foreground'
-                                : 'bg-muted/30 border-border/30 text-muted-foreground'
-                        )}
-                    >
-                        <div className="text-[10px] font-bold uppercase opacity-70">{motor.abbreviation}</div>
-                        <div className="font-mono text-[10px] font-bold leading-tight mt-0.5 truncate">
-                            {motor.encoderCount}
-                        </div>
+                    <div key={motor.id} className="text-center flex-1 min-w-0">
+                        <span className="text-muted-foreground">{motor.abbreviation}</span>
+                        <span className="ml-1 font-mono font-semibold">{motor.encoderCount}</span>
                     </div>
                 ))}
             </div>

@@ -65,5 +65,6 @@ export function useIMU(): IMUData | null {
     pitch: euler.pitch,
     yaw: euler.yaw,
     angular_velocity: imu.angular_velocity,
+    linear_acceleration: imu.linear_acceleration,
   };
 }

@@ -7,7 +7,7 @@ import { SettingsPanel } from '@/components/common/SettingsPanel';
 import { ConnectionStatus } from '@/components/common/ConnectionStatus';
 import { EmergencyStop } from '@/features/control/EmergencyStop';
 import { HornButton } from '@/components/common/HornButton';
-import { Bot, Activity } from 'lucide-react';
+import { Car } from 'lucide-react';
 import { useRosContext } from '@/contexts/RosContext';
 
 export function Header() {
@@ -20,22 +20,15 @@ export function Header() {
       <div className="flex items-center gap-3">
         <div className={`
           p-2 rounded-xl transition-all duration-300
-          ${isConnected ? 'bg-green-500/20 shadow-[0_0_15px_rgba(34,197,94,0.3)]' : 'bg-primary/10'}
+          ${isConnected ? 'bg-primary/15 ring-1 ring-primary/20' : 'bg-muted/50'}
         `}>
-          <Bot className={`
+          <Car className={`
             w-6 h-6 transition-colors duration-300
-            ${isConnected ? 'text-green-500' : 'text-primary'}
-          `} />
+            ${isConnected ? 'text-primary' : 'text-muted-foreground'}
+          `} strokeWidth={2} />
         </div>
         <div className="hidden sm:block">
           <h1 className="text-lg font-bold tracking-tight">OrbiBot Dashboard</h1>
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Activity className={`
-              w-3 h-3 transition-colors duration-300
-              ${isConnected ? 'text-green-500 animate-pulse' : 'text-muted-foreground'}
-            `} />
-            <span>{isConnected ? 'System Online' : 'System Offline'}</span>
-          </div>
         </div>
       </div>
 

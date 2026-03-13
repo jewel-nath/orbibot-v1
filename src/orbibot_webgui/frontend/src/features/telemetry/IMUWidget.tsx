@@ -1,5 +1,5 @@
 /**
- * IMUWidget - Display IMU orientation (roll, pitch, yaw)
+ * IMUWidget - Display IMU orientation (roll, pitch, yaw), angular velocity, and linear acceleration
  */
 
 import { useIMU } from '@/hooks/useIMU';
@@ -29,8 +29,9 @@ export function IMUWidget({ className, compact = false }: IMUWidgetProps) {
     );
   }
 
-  // Compact mode - single row with orientation
+  // Compact mode - orientation + angular rate (Wz in °/s)
   if (compact) {
+    const wzDegPerSec = (imu.angular_velocity?.z ?? 0) * (180 / Math.PI);
     return (
       <div className={cn('glass-panel p-3', className)}>
         <div className="flex items-center justify-between gap-3">
@@ -53,11 +54,18 @@ export function IMUWidget({ className, compact = false }: IMUWidgetProps) {
             </div>
           </div>
         </div>
+        <div className="mt-2 pt-2 border-t border-border/40 flex justify-between text-[10px]">
+          <span className="text-muted-foreground">Wz</span>
+          <span className="font-mono">{wzDegPerSec.toFixed(1)} °/s</span>
+        </div>
       </div>
     );
   }
 
-  // Full mode - orientation only
+  // Full mode - orientation, angular velocity, linear acceleration
+  const w = imu.angular_velocity ?? { x: 0, y: 0, z: 0 };
+  const a = imu.linear_acceleration ?? { x: 0, y: 0, z: 0 };
+  const wzDeg = w.z * (180 / Math.PI);
   return (
     <div className={cn('glass-panel p-3', className)}>
       <div className="flex items-center gap-2 mb-3">
@@ -65,19 +73,34 @@ export function IMUWidget({ className, compact = false }: IMUWidgetProps) {
         <h3 className="text-sm font-semibold">IMU</h3>
       </div>
 
-      <div className="text-xs">
-        <div className="grid grid-cols-3 gap-2">
-          <div className="flex flex-col">
-            <span className="text-muted-foreground">Roll</span>
-            <span className="font-mono">{imu.roll.toFixed(1)}°</span>
+      <div className="text-xs space-y-3">
+        <div>
+          <div className="text-[10px] font-semibold text-muted-foreground uppercase mb-1">Orientation</div>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="flex flex-col">
+              <span className="text-muted-foreground">Roll</span>
+              <span className="font-mono">{imu.roll.toFixed(1)}°</span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-muted-foreground">Pitch</span>
+              <span className="font-mono">{imu.pitch.toFixed(1)}°</span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-muted-foreground">Yaw</span>
+              <span className="font-mono">{imu.yaw.toFixed(1)}°</span>
+            </div>
           </div>
-          <div className="flex flex-col">
-            <span className="text-muted-foreground">Pitch</span>
-            <span className="font-mono">{imu.pitch.toFixed(1)}°</span>
-          </div>
-          <div className="flex flex-col">
-            <span className="text-muted-foreground">Yaw</span>
-            <span className="font-mono">{imu.yaw.toFixed(1)}°</span>
+        </div>
+        <div>
+          <div className="text-[10px] font-semibold text-muted-foreground uppercase mb-1">Angular velocity</div>
+          <div className="font-mono">Wz {wzDeg.toFixed(2)} °/s</div>
+        </div>
+        <div>
+          <div className="text-[10px] font-semibold text-muted-foreground uppercase mb-1">Linear acceleration</div>
+          <div className="grid grid-cols-3 gap-2 font-mono">
+            <span>ax {a.x.toFixed(2)}</span>
+            <span>ay {a.y.toFixed(2)}</span>
+            <span>az {a.z.toFixed(2)} m/s²</span>
           </div>
         </div>
       </div>

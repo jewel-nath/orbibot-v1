@@ -1,10 +1,12 @@
-
 import { useSystemStatus } from '@/hooks/useSystemStatus';
 import { useBattery } from '@/hooks/useBattery';
+import { useSubscriber } from '@/hooks/useSubscriber';
+import { ROS_TOPICS, ROS_MESSAGE_TYPES } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 import { Activity, Cpu, HardDrive, Thermometer, Battery as BatteryIcon, BatteryWarning } from 'lucide-react';
 import { Widget } from '@/components/ui/Widget';
 import { useRos } from '@/contexts/RosContext';
+import type { SystemStatus as SystemStatusMsg } from '@/types/ros';
 
 interface CircularProgressProps {
     value: number;
@@ -91,10 +93,14 @@ export function SystemInfo({ className, compact = false }: SystemInfoProps) {
     const { isConnected } = useRos();
     const status = useSystemStatus();
     const battery = useBattery();
+    const { data: baseStatus } = useSubscriber<SystemStatusMsg>({
+        topic: ROS_TOPICS.systemStatus,
+        messageType: ROS_MESSAGE_TYPES.systemStatus,
+    });
 
-    // Compact mode for sidebar - show CPU/RAM/DISK/TEMP/Battery
+    // Compact mode for sidebar - show CPU/RAM/DISK/TEMP/Battery; fallback when enriched absent
     if (compact) {
-        if (!isConnected || !status) {
+        if (!isConnected) {
             return (
                 <div className={cn("glass-panel p-3 flex items-center justify-between", className)}>
                     <div className="flex items-center gap-2 text-muted-foreground">
@@ -106,7 +112,9 @@ export function SystemInfo({ className, compact = false }: SystemInfoProps) {
             );
         }
 
-        // Battery status colors
+        // Use enriched when available; otherwise fall back to base (battery + N/A for CPU/RAM/disk/temp)
+        const hasEnriched = status != null;
+
         const batteryColor = battery
             ? battery.status === 'critical'
                 ? 'text-red-500'
@@ -117,38 +125,55 @@ export function SystemInfo({ className, compact = false }: SystemInfoProps) {
                         : 'text-foreground'
             : 'text-muted-foreground';
 
+        const batteryVoltage = battery?.voltage ?? baseStatus?.battery_voltage;
+        const batteryLabel = batteryVoltage != null ? `${batteryVoltage.toFixed(1)}V` : 'N/A';
+
         return (
-            <div className={cn("glass-panel p-3", className)}>
+            <div className={cn("glass-panel p-3", className)} title={!hasEnriched ? 'Start system_monitor for CPU/RAM/temp' : undefined}>
                 <div className="flex items-center gap-2 mb-3">
                     <Activity className="w-4 h-4 text-primary" />
                     <span className="text-sm font-medium">System Health</span>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
-                    {/* Row 1 */}
+                    <div className="text-center">
+                        <span className="block text-[10px] text-muted-foreground">Battery</span>
+                        <span className={cn("text-xs font-bold font-mono", batteryColor)}>
+                            {batteryLabel}
+                        </span>
+                    </div>
                     <div className="text-center">
                         <span className="block text-[10px] text-muted-foreground">CPU</span>
-                        <span className={cn("text-xs font-bold font-mono", status.cpu_percent > 80 ? "text-red-500" : "text-foreground")}>
-                            {status.cpu_percent.toFixed(0)}%
-                        </span>
+                        {hasEnriched ? (
+                            <span className={cn("text-xs font-bold font-mono", status!.cpu_percent > 80 ? "text-red-500" : "text-foreground")}>
+                                {status!.cpu_percent.toFixed(0)}%
+                            </span>
+                        ) : (
+                            <span className="text-xs font-mono text-muted-foreground">N/A</span>
+                        )}
                     </div>
                     <div className="text-center">
                         <span className="block text-[10px] text-muted-foreground">RAM</span>
-                        <span className="text-xs font-bold font-mono">{status.ram_percent.toFixed(0)}%</span>
+                        {hasEnriched ? (
+                            <span className="text-xs font-bold font-mono">{status!.ram_percent.toFixed(0)}%</span>
+                        ) : (
+                            <span className="text-xs font-mono text-muted-foreground">N/A</span>
+                        )}
                     </div>
-                    <div className="text-center">
-                        <span className="block text-[10px] text-muted-foreground">BATT</span>
-                        <span className={cn("text-xs font-bold font-mono", batteryColor)}>
-                            {battery ? battery.voltage.toFixed(1) : 'N/A'}V
-                        </span>
-                    </div>
-                    {/* Row 2 */}
                     <div className="text-center">
                         <span className="block text-[10px] text-muted-foreground">DISK</span>
-                        <span className="text-xs font-bold font-mono">{status.disk_percent.toFixed(0)}%</span>
+                        {hasEnriched ? (
+                            <span className="text-xs font-bold font-mono">{status!.disk_percent.toFixed(0)}%</span>
+                        ) : (
+                            <span className="text-xs font-mono text-muted-foreground">N/A</span>
+                        )}
                     </div>
                     <div className="text-center">
                         <span className="block text-[10px] text-muted-foreground">TEMP</span>
-                        <span className="text-xs font-bold font-mono">{status.cpu_temp.toFixed(0)}°</span>
+                        {hasEnriched ? (
+                            <span className="text-xs font-bold font-mono">{status!.cpu_temp.toFixed(0)}°</span>
+                        ) : (
+                            <span className="text-xs font-mono text-muted-foreground">N/A</span>
+                        )}
                     </div>
                 </div>
             </div>

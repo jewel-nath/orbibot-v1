@@ -5,13 +5,14 @@ Modern web-based dashboard for real-time monitoring, control, and autonomous nav
 ## Features
 
 ### Real-Time Monitoring
+- **Left sidebar (Telemetry)** - Safety status, system health (BATT, CPU, RAM, disk, temp), motors ON/OFF, encoders (FL/BL/FR/BR), odometry (wheel or fused source), IMU (orientation + Wz °/s). Fallback to base system_status when system_monitor is not running.
 - **LiDAR Visualization** - Live 2D scan data with pan/zoom controls
-- **IMU Telemetry** - Orientation, angular velocity, and linear acceleration display
+- **IMU Telemetry** - Orientation, angular velocity (Wz °/s), and linear acceleration (full mode)
 - **Camera Feed** - Low-latency video streaming via WebRTC (~50-100ms latency)
-- **Odometry Display** - Position, velocity, and trajectory visualization
+- **Odometry Display** - Position, velocity, and source label (Wheel vs Fused)
 - **SLAM Map View** - Real-time occupancy grid with robot pose overlay
-- **Battery Gauge** - Voltage monitoring with visual gauge and percentage
-- **Motor Status** - Encoder feedback and motor states
+- **Battery Gauge** - Voltage as primary metric with status colors
+- **Motor Status** - Encoder feedback and Motors ON/OFF badge
 - **System Monitor** - CPU, RAM, temperature, disk usage via enriched system status
 
 ### Robot Control
@@ -241,12 +242,13 @@ ros2 launch orbibot_webgui webgui.launch.py \
 ### Subscribed Topics (Frontend reads via rosbridge)
 | Topic | Type | Description |
 |-------|------|-------------|
-| `/odom` | `nav_msgs/Odometry` | Robot odometry |
+| `/odom` | `nav_msgs/Odometry` | Robot odometry (or `/odometry/filtered` when localization running) |
 | `/scan` | `sensor_msgs/LaserScan` | LiDAR scan data |
 | `/imu/data` | `sensor_msgs/Imu` | IMU sensor data |
 | `/map` | `nav_msgs/OccupancyGrid` | SLAM map data |
 | `/orbibot/system_status` | `orbibot_msgs/SystemStatus` | Battery, motor status |
 | `/orbibot/system_status_enriched` | `orbibot_msgs/SystemStatus` | CPU, RAM, temp, disk metrics |
+| `/orbibot/safety_status` | `orbibot_msgs/SafetyStatus` | E-stop, cmd timeout, low battery, faults |
 | `/orbibot/encoders` | `std_msgs/Int32MultiArray` | Raw encoder counts |
 | `/plan` | `nav_msgs/Path` | Planned navigation path |
 | `/navigate_to_pose/_action/status` | `action_msgs/GoalStatusArray` | Navigation goal status |
@@ -325,6 +327,7 @@ orbibot_webgui/
         │   ├── useMap.ts
         │   ├── useMotors.ts
         │   ├── useOdometry.ts
+        │   ├── useSafetyStatus.ts
         │   ├── useInitialPose.ts
         │   ├── useNavGoal.ts
         │   ├── usePath.ts

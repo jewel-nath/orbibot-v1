@@ -11,6 +11,7 @@ import { Header } from '@/components/layout/Header';
 import { Dashboard, DashboardLeft, DashboardCenter, DashboardRight } from '@/components/layout/Dashboard';
 import { MobileJoystick } from '@/features/control/MobileJoystick';
 import { SystemInfo } from '@/features/telemetry/SystemInfo';
+import { SafetyStatusWidget } from '@/features/telemetry/SafetyStatusWidget';
 import { Encoders } from '@/features/telemetry/Encoders';
 import { OdometryDisplay } from '@/features/telemetry/OdometryDisplay';
 import { IMUWidget } from '@/features/telemetry/IMUWidget';
@@ -58,6 +59,7 @@ function App() {
                       <Dashboard>
                         {/* LEFT COLUMN: Compact Telemetry */}
                         <DashboardLeft>
+                          <SafetyStatusWidget />
                           <SystemInfo compact />
                           <Encoders />
                           <OdometryDisplay />

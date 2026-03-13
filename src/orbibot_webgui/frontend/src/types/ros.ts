@@ -124,6 +124,19 @@ export interface SystemStatus {
   hardware_ok: boolean;         // True if all hardware is responding
 }
 
+// orbibot_msgs/SafetyStatus (matches SafetyStatus.msg)
+export interface SafetyStatus {
+  header: Header;
+  emergency_stop: boolean;
+  cmd_timeout: boolean;
+  low_battery: boolean;
+  hardware_fault: boolean;
+  velocity_limit: boolean;
+  temperature_limit: boolean;
+  motors_disabled: boolean;
+  fault_code: number;
+}
+
 // std_msgs/Int32MultiArray (actual type for /orbibot/encoders)
 export interface EncoderStamped {
   layout: {
@@ -175,6 +188,7 @@ export interface IMUData {
   pitch: number;  // degrees
   yaw: number;    // degrees
   angular_velocity: Vector3;
+  linear_acceleration?: Vector3;  // m/s²
 }
 
 export interface OdometryData {
