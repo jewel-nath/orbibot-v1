@@ -1,0 +1,5 @@
+# srv/ResetEncoders.srv
+# No request fields — call with empty request to reset encoder counts to zero
+---
+bool success     # True if reset was successful
+string message   # Status message

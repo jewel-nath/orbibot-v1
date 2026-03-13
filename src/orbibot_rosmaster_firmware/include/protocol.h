@@ -46,6 +46,7 @@
  */
 #define FUNC_AUTO_REPORT        0x01    // Enable/disable auto-reporting
 #define FUNC_BEEP               0x02    // Beep control
+#define FUNC_RESET_ENCODERS     0x08    // Reset encoder counts to zero (odometry unchanged)
 #define FUNC_RESET_ODOM         0x09    // Reset firmware odometry to zero
 #define FUNC_RESET_STATE        0x0F    // Reset system state
 
@@ -230,6 +231,11 @@ void protocol_handle_reset_state(void);
  * @brief Handle FUNC_RESET_ODOM command
  */
 void protocol_handle_reset_odom(void);
+
+/**
+ * @brief Handle FUNC_RESET_ENCODERS command
+ */
+void protocol_handle_reset_encoders(void);
 
 /**
  * @brief Handle FUNC_SET_MOTOR_PID command

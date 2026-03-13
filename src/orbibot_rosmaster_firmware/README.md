@@ -319,7 +319,8 @@ V_RR = Vx - Vy + (a + b) * omega
 |------|-----|------|------|
 | `0x01` | H->F | `AUTO_REPORT` | `[enable]` — 1=stream, 0=stop |
 | `0x02` | H->F | `BEEP` | `[dur_lo][dur_hi]` — 0=off, 1=continuous, >=10=ms |
-| `0x09` | H->F | `RESET_ODOM` | _(no data)_ — reset position/heading to zero |
+| `0x08` | H->F | `RESET_ENCODERS` | _(no data)_ — reset encoder counts to zero; odometry unchanged |
+| `0x09` | H->F | `RESET_ODOM` | _(no data)_ — reset firmware odometry (position/heading) to zero; encoders unchanged |
 | `0x0F` | H->F | `RESET_STATE` | _(no data)_ — restart protocol state machine |
 | `0x12` | H->F | `MOTION` | `[car_type][vx_lo][vx_hi][vy_lo][vy_hi][vz_lo][vz_hi]` |
 | `0x13` | H->F | `SET_MOTOR_PID` | `[kp][ki][kd]` as int16 x 1000 + `[save]` flag |

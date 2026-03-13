@@ -2,11 +2,14 @@
  * OdometryDisplay - Display robot position and velocity from odometry
  */
 
+import { useState, useCallback } from 'react';
+import ROSLIB from 'roslib';
 import { useOdometry } from '@/hooks/useOdometry';
-import { useRos } from '@/contexts/RosContext';
+import { useRos, useRosContext } from '@/contexts/RosContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { cn } from '@/lib/utils';
-import { MapPin } from 'lucide-react';
+import { MapPin, RotateCcw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 function odomSourceLabel(topic: string): string {
   if (topic === '/odometry/filtered') return 'Fused';
@@ -24,12 +27,46 @@ interface OdometryDisplayProps {
  */
 export function OdometryDisplay({ className, compact = false }: OdometryDisplayProps) {
   const { isConnected } = useRos();
+  const { ros, connectionState } = useRosContext();
   const { settings } = useSettings();
   const odom = useOdometry();
+  const [isResetting, setIsResetting] = useState(false);
+  const [resetFeedback, setResetFeedback] = useState<'idle' | 'success' | 'error'>('idle');
+
   const sourceLabel = odomSourceLabel(settings.odomTopic);
   const sourceTitle = settings.odomTopic === '/odometry/filtered'
     ? 'EKF-fused odometry (localization running)'
     : 'Wheel odometry from /odom';
+
+  const handleResetOdometry = useCallback(() => {
+    if (!ros || connectionState !== 'connected') return;
+    setIsResetting(true);
+    setResetFeedback('idle');
+    const service = new ROSLIB.Service({
+      ros,
+      name: '/orbibot/reset_odometry',
+      serviceType: 'orbibot_msgs/srv/ResetOdometry',
+    });
+    const request = new ROSLIB.ServiceRequest({
+      reset_pose: {
+        position: { x: 0, y: 0, z: 0 },
+        orientation: { x: 0, y: 0, z: 0, w: 1 },
+      },
+    });
+    service.callService(
+      request,
+      (response: { success: boolean; message: string }) => {
+        setIsResetting(false);
+        setResetFeedback(response.success ? 'success' : 'error');
+        if (response.success) setTimeout(() => setResetFeedback('idle'), 2000);
+      },
+      () => {
+        setIsResetting(false);
+        setResetFeedback('error');
+        setTimeout(() => setResetFeedback('idle'), 2000);
+      }
+    );
+  }, [ros, connectionState]);
 
   // Loading / offline / waiting state
   if (!isConnected || !odom) {
@@ -45,6 +82,26 @@ export function OdometryDisplay({ className, compact = false }: OdometryDisplayP
     );
   }
 
+  const serviceAvailable = connectionState === 'connected' && !!ros;
+  const resetButton = (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="h-5 min-w-0 px-1.5 text-[10px] font-normal"
+      onClick={handleResetOdometry}
+      disabled={!serviceAvailable || isResetting}
+      title="Reset firmware odometry to zero (encoders unchanged)"
+    >
+      <RotateCcw className={cn('w-3 h-3 mr-0.5 shrink-0', isResetting && 'animate-spin')} />
+      {isResetting ? '…' : 'Reset'}
+    </Button>
+  );
+  const feedbackLine = (resetFeedback === 'success' && (
+    <p className="text-xs text-green-600 dark:text-green-400 mb-1">Odometry reset</p>
+  )) || (resetFeedback === 'error' && (
+    <p className="text-xs text-destructive mb-1">Reset failed</p>
+  ));
+
   // Compact mode - same structure as IMUWidget: one header row, one border-t row
   if (compact) {
     return (
@@ -57,7 +114,10 @@ export function OdometryDisplay({ className, compact = false }: OdometryDisplayP
               ({sourceLabel})
             </span>
           </div>
-          <div className="flex items-center gap-3 text-xs">
+          {resetButton}
+        </div>
+        {feedbackLine}
+        <div className="flex items-center gap-3 text-xs">
             <div className="text-center">
               <span className="text-muted-foreground">X </span>
               <span className="font-mono font-semibold">{odom.x.toFixed(2)} m</span>
@@ -70,7 +130,6 @@ export function OdometryDisplay({ className, compact = false }: OdometryDisplayP
               <span className="text-muted-foreground">θ </span>
               <span className="font-mono font-semibold">{odom.theta.toFixed(1)}°</span>
             </div>
-          </div>
         </div>
         <div className="mt-2 pt-2 border-t border-border/40 flex justify-between text-[10px]">
           <span className="text-muted-foreground">Distance</span>
@@ -83,14 +142,17 @@ export function OdometryDisplay({ className, compact = false }: OdometryDisplayP
   // Full mode - IMUWidget-style sections with same spacing and typography
   return (
     <div className={cn('glass-panel p-3', className)}>
-      <div className="flex items-center gap-2 mb-3">
-        <MapPin className="w-4 h-4 text-primary" />
-        <span className="text-sm font-semibold">Odometry</span>
-        <span className="text-[10px] font-medium text-muted-foreground" title={sourceTitle}>
-          ({sourceLabel})
-        </span>
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <div className="flex items-center gap-2">
+          <MapPin className="w-4 h-4 text-primary" />
+          <span className="text-sm font-semibold">Odometry</span>
+          <span className="text-[10px] font-medium text-muted-foreground" title={sourceTitle}>
+            ({sourceLabel})
+          </span>
+        </div>
+        {resetButton}
       </div>
-
+      {feedbackLine}
       <div className="text-xs space-y-3">
         <div>
           <div className="text-[10px] font-semibold text-muted-foreground uppercase mb-1">Position</div>

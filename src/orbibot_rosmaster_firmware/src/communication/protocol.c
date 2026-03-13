@@ -325,6 +325,10 @@ int8_t protocol_parse_command(void)
             protocol_handle_reset_odom();
             break;
 
+        case FUNC_RESET_ENCODERS:
+            protocol_handle_reset_encoders();
+            break;
+
         case FUNC_RESET_STATE:
             protocol_handle_reset_state();
             break;
@@ -484,6 +488,14 @@ void protocol_handle_reset_odom(void)
     control_reset_odometry();
 
     DEBUG_INFO("Firmware odometry reset to zero\n");
+}
+
+void protocol_handle_reset_encoders(void)
+{
+    // Reset encoder counts to zero (odometry unchanged)
+    encoder_reset_all();
+
+    DEBUG_INFO("Encoder counts reset to zero\n");
 }
 
 /* ========================================================================

@@ -24,6 +24,7 @@ FUNC_REPORT_SPEED = 0x0A
 FUNC_REPORT_IMU_ATT = 0x0C
 FUNC_REPORT_ENCODER = 0x0D
 FUNC_REPORT_ICM_RAW = 0x0E
+FUNC_RESET_ENCODERS = 0x08
 FUNC_RESET_ODOM = 0x09
 FUNC_MOTION = 0x12
 FUNC_SET_MOTOR_PID = 0x13
@@ -469,6 +470,14 @@ class Rosmaster:
             time.sleep(0.01)
         except (serial.SerialException, OSError) as e:
             print(f'---reset_odometry error: {e}---')
+
+    def reset_encoders(self):
+        """Reset encoder counts to zero on the MCU. Odometry is unchanged."""
+        try:
+            self._send_command(FUNC_RESET_ENCODERS, [])
+            time.sleep(0.01)
+        except (serial.SerialException, OSError) as e:
+            print(f'---reset_encoders error: {e}---')
 
     def get_last_data_timestamp(self):
         """Return timestamp of last successfully parsed firmware packet (for data freshness)."""

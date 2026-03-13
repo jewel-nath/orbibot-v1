@@ -41,7 +41,8 @@ Publishes sensor data and accepts velocity/PID commands.
 |---------|------|-------------|
 | `/orbibot/set_motor_enable` | `orbibot_msgs/SetMotorEnable` | Enable/disable motors |
 | `/orbibot/calibrate_imu` | `orbibot_msgs/CalibrateIMU` | IMU calibration (ICM-20948 auto-calibrates on startup — returns not supported) |
-| `/orbibot/reset_odometry` | `orbibot_msgs/ResetOdometry` | Reset firmware position + covariance accumulators to zero |
+| `/orbibot/reset_odometry` | `orbibot_msgs/ResetOdometry` | Reset firmware odometry (pose) to zero; encoder counts unchanged |
+| `/orbibot/reset_encoders` | `orbibot_msgs/ResetEncoders` | Reset encoder counts to zero (MCU + node state); odometry unchanged |
 
 ---
 
@@ -156,8 +157,11 @@ ros2 topic echo /orbibot/system_status       # Battery, motor enable state
 ros2 service call /orbibot/set_motor_enable orbibot_msgs/srv/SetMotorEnable '{enable: true}'
 ros2 service call /orbibot/set_motor_enable orbibot_msgs/srv/SetMotorEnable '{enable: false}'
 
-# Reset odometry
+# Reset odometry (pose only; encoders unchanged)
 ros2 service call /orbibot/reset_odometry orbibot_msgs/srv/ResetOdometry '{}'
+
+# Reset encoder counts (odometry unchanged)
+ros2 service call /orbibot/reset_encoders orbibot_msgs/srv/ResetEncoders '{}'
 
 # Manual velocity test (motors must be enabled first)
 ros2 topic pub --once /cmd_vel geometry_msgs/msg/Twist \

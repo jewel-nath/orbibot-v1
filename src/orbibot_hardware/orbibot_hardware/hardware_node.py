@@ -38,7 +38,7 @@ from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 
 # Custom Messages
 from orbibot_msgs.msg import SystemStatus, SafetyStatus
-from orbibot_msgs.srv import SetMotorEnable, CalibrateIMU, ResetOdometry
+from orbibot_msgs.srv import SetMotorEnable, CalibrateIMU, ResetOdometry, ResetEncoders
 
 # ROSMaster Driver
 try:
@@ -317,6 +317,8 @@ class OrbiBotHardwareNode(Node):
             CalibrateIMU, '/orbibot/calibrate_imu', self._calibrate_imu_callback)
         self.reset_odometry_srv = self.create_service(
             ResetOdometry, '/orbibot/reset_odometry', self._reset_odometry_callback)
+        self.reset_encoders_srv = self.create_service(
+            ResetEncoders, '/orbibot/reset_encoders', self._reset_encoders_callback)
 
     def _create_timers(self):
         """Create periodic timers"""
@@ -910,6 +912,22 @@ class OrbiBotHardwareNode(Node):
             response.success = False
             response.message = f"Reset failed: {e}"
 
+        return response
+
+    def _reset_encoders_callback(self, request, response):
+        """Reset encoder counts to zero (firmware + node encoder/joint state). Odometry unchanged."""
+        try:
+            self.bot.reset_encoders()
+            self.last_encoders = [0, 0, 0, 0]
+            self.wheel_positions = [0.0, 0.0, 0.0, 0.0]
+            self.encoder_initialized = True
+            self.get_logger().info("Encoder counts reset to zero")
+            response.success = True
+            response.message = "Encoder counts reset to zero (odometry unchanged)"
+        except Exception as e:
+            self.get_logger().error(f"Reset encoders failed: {e}")
+            response.success = False
+            response.message = f"Reset failed: {e}"
         return response
 
     def cleanup(self):
