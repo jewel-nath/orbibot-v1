@@ -113,7 +113,7 @@ export function MapView({ className }: MapViewProps) {
       const sin = Math.sin(r);
 
       const dx = screenX * cos + screenY * sin;
-      const dy = -screenX * sin + screenY * cos;  // G13: Fixed inverse rotation
+      const dy = screenX * sin - screenY * cos;
 
       // Convert from meters offset to map coordinates (global frame)
       const mapX = dx + info.origin.position.x + (info.width * info.resolution) / 2;
