@@ -151,12 +151,54 @@ FK (odom) was already correct. Fix applied in firmware IK only.
 
 ---
 
-## 8. TODO / Next Steps
+## 9. Yaw / Rotation PID Test
 
-- [ ] Check IMU accelerometer scale factor in firmware (`orbibot_config.h`)
-- [ ] Save final motor PID to flash
-- [ ] Tune Yaw PID to reduce wz drift during forward motion
-- [ ] Left strafe test (vy=+0.25 should go LEFT)
+### WZ Rotation Test (wz=0.5 rad/s, in-place)
+| Metric | Value |
+|---|---|
+| WZ MAE | 0.1511 rad/s (30%) |
+| Overshoot | 26.6% (peak: 0.633 rad/s) |
+| Steady state avg | ~0.505 rad/s (target 0.5) ✅ |
+| Steady state oscillation | ±0.08 rad/s (16%) |
+| VX crosscoupling | 0.006 m/s ✅ |
+| Note | Higher oscillation than linear — 4 wheels opposing each other |
+
+### Yaw Drift During Forward Motion (vx=0.28 m/s, 4s)
+| Metric | Value | Conclusion |
+|---|---|---|
+| WZ MAE | 0.0195 rad/s | ✅ Encoder quantization noise |
+| WZ max | 0.076 rad/s | ✅ = 4× encoder step (0.019 rad/s) |
+| Systematic drift | None detected | ✅ Values are random ± |
+| VX overshoot | 21.1% | ✅ Best result today |
+| VX steady state | 0.282 m/s (target 0.28) | ✅ 0.7% error |
+
+**Yaw PID conclusion:** Current drift is encoder-resolution-limited. Tuning will not improve further.
+Yaw PID is working acceptably for Nav2 use.
+
+---
+
+## 10. Final Status
+
+| System | Status |
+|---|---|
+| Battery | ✅ 12.8V Normal |
+| Firmware serial | ✅ Stable |
+| Motor PID | ✅ Kp=2.5, Ki=0.3, Kd=0.8 |
+| Forward/Backward | ✅ 0.28 m/s, 21% overshoot |
+| Rotation | ✅ 179.5° accuracy at wz=0.6 rad/s |
+| **Strafe vy sign bug** | ✅ **Fixed in firmware + webgui** |
+| Right strafe | ✅ Verified |
+| Yaw drift | ✅ Encoder-limited, acceptable |
+| Odom static drift | ✅ Zero |
+
+---
+
+## 11. Remaining TODOs
+
+- [ ] Check IMU accelerometer scale factor (z=15.25 m/s² anomaly)
+- [ ] Save motor PID to flash (permanent)
+- [ ] Left strafe explicit verify (vy=+0.25 → LEFT)
+- [ ] Magnetometer calibration check
 
 ---
 
