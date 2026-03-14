@@ -45,16 +45,14 @@ robot_localization_ekf:
     odom0_pose_rejection_threshold: 5.0
     odom0_twist_rejection_threshold: 1.0
 
-    # IMU input (from Madgwick filter — gyro yaw rate only)
-    # Absolute yaw (magnetometer) is DISABLED: indoor magnetometer is unreliable due
-    # to metal/electronics interference → causes slow yaw drift when fused.
-    # AMCL corrects accumulated gyro yaw drift via LiDAR scan matching.
-    # TODO: re-enable absolute yaw after magnetometer is calibrated.
+    # IMU input (from Madgwick filter — magnetometer-corrected orientation)
+    # Hard-iron calibration applied 2026-03-15 via 3×360° rotation sweep.
+    # Absolute yaw re-enabled: provides stable compass heading to EKF.
     imu0: /imu/data_filtered
     imu0_config: [false, false, false,   # x, y, z
-                  false, false, false,   # roll, pitch, yaw — DON'T fuse (magnetometer uncalibrated)
+                  false, false, true,    # roll, pitch, yaw — FUSE absolute yaw (calibrated mag)
                   false, false, false,   # vx, vy, vz
-                  false, false, true,    # vroll, vpitch, vyaw — fuse yaw rate (gyro only)
+                  false, false, true,    # vroll, vpitch, vyaw — fuse yaw rate
                   false, false, false]   # ax, ay, az — DISABLED (mecanum vibration causes noise)
     imu0_queue_size: 10
     imu0_nodelay: false

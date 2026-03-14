@@ -54,9 +54,9 @@ def generate_launch_description():
             'fixed_frame': 'odom',
             'gain': 0.1,
             'zeta': 0.0,
-            'mag_bias_x': 0.0,
-            'mag_bias_y': 0.0,
-            'mag_bias_z': 0.0,
+            'mag_bias_x': -0.00005452,  # Hard-iron calibrated 2026-03-15 (3 × 360°)
+            'mag_bias_y': -0.00000832,
+            'mag_bias_z': 0.00007170,
             'frequency': 50.0,
             'constant_dt': 0.0,
             'stateless': False,
