@@ -44,8 +44,8 @@ controller_server:
     general_goal_checker:
       stateful: true
       plugin: "nav2_controller::SimpleGoalChecker"
-      xy_goal_tolerance: 0.15
-      yaw_goal_tolerance: 0.15
+      xy_goal_tolerance: 0.20
+      yaw_goal_tolerance: 0.5
 
     # MPPI Controller — Omnidirectional for mecanum wheels
     FollowPath:
@@ -89,8 +89,8 @@ controller_server:
       GoalAngleCritic:
         enabled: true
         cost_power: 1
-        cost_weight: 3.0
-        threshold_to_consider: 0.5
+        cost_weight: 1.5
+        threshold_to_consider: 0.2
       CostCritic:
         enabled: true
         cost_power: 1
