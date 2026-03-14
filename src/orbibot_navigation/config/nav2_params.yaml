@@ -231,7 +231,7 @@ amcl:
     save_pose_rate: 0.5
     sigma_hit: 0.2
     tf_broadcast: true
-    transform_tolerance: 0.5  # Relaxed for RPi — prevents "no transform" errors (was 0.3)
+    transform_tolerance: 1.0  # Relaxed for RPi — prevents "extrapolation into future" errors
     set_initial_pose: true     # Explicitly set initial pose on startup
     update_min_a: 0.1
     update_min_d: 0.05         # More frequent AMCL updates (was 0.10)

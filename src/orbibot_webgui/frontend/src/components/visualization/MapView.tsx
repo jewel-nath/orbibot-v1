@@ -13,6 +13,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useMap } from '@/hooks/useMap';
 import { useOdometry } from '@/hooks/useOdometry';
+import { useRobotMapPose } from '@/hooks/useRobotMapPose';
 import { useNavigationContext } from '@/contexts/NavigationContext';
 import { useInitialPose } from '@/hooks/useInitialPose';
 import { useNavGoal } from '@/hooks/useNavGoal';
@@ -35,6 +36,7 @@ interface MapViewProps {
 export function MapView({ className }: MapViewProps) {
   const map = useMap();
   const odom = useOdometry();
+  const robotMapPose = useRobotMapPose(); // map-frame pose (amcl or odom fallback)
   const { mode, setMode, path, waypoints, addWaypoint } = useNavigationContext();
   const { publishInitialPose } = useInitialPose();
   const { sendGoal } = useNavGoal();
@@ -71,10 +73,10 @@ export function MapView({ className }: MapViewProps) {
   // Compute pixels-per-meter so the map auto-fits the container
   // Auto-rotate map if Track Up is enabled
   useEffect(() => {
-    if (trackUp && odom) {
-      setRotation(-odom.theta - 90);
+    if (trackUp && robotMapPose) {
+      setRotation(-(robotMapPose.theta * 180 / Math.PI) - 90);
     }
-  }, [trackUp, odom]);
+  }, [trackUp, robotMapPose]);
 
   // Compute pixels-per-meter so the map auto-fits the container
   const computeFitScale = useCallback(() => {
@@ -351,10 +353,14 @@ export function MapView({ className }: MapViewProps) {
       ctx.fillText(`${index + 1}`, pos.x, pos.y);
     });
 
-    // Draw robot pose (Car Icon) — scaled to real physical dimensions
-    if (odom) {
-      const robotPos = mapToCanvas(odom.x, odom.y);
-      const visualTheta = (odom.theta - rotation) * (Math.PI / 180);
+    // Draw robot pose (Car Icon) — uses map-frame pose (amcl_pose when available,
+    // falls back to /odometry/filtered). This correctly reflects Init Pose updates.
+    const displayPose = robotMapPose;
+    if (displayPose) {
+      const robotPos = mapToCanvas(displayPose.x, displayPose.y);
+      // theta from useRobotMapPose is in radians; convert to degrees for visualTheta
+      const thetaDeg = displayPose.theta * (180 / Math.PI);
+      const visualTheta = (thetaDeg - rotation) * (Math.PI / 180);
 
       // Real robot dimensions (meters) → screen pixels
       const realLength = 0.35 * effectiveScale;
@@ -453,7 +459,7 @@ export function MapView({ className }: MapViewProps) {
 
       ctx.restore();
     }
-  }, [map, odom, scale, offset, path, waypoints, isDraggingPose, poseStart, poseEnd, mode, computeFitScale, rotation]);
+  }, [map, odom, robotMapPose, scale, offset, path, waypoints, isDraggingPose, poseStart, poseEnd, mode, computeFitScale, rotation]);
 
   // Get cursor style based on mode
   const getCursor = () => {
