@@ -29,7 +29,7 @@ void mecanum_inverse_kinematics(const robot_velocity_t *robot, wheel_velocity_t 
     // - APB: (wheelbase + trackwidth) / 2
 
     float vx = robot->vx;
-    float vy = robot->vy;
+    float vy = -robot->vy;  // Physical wheel layout has vy inverted vs ROS standard (positive=left)
     float v_rot = robot->omega * ROBOT_APB;
 
     wheels->fl = vx - vy - v_rot;

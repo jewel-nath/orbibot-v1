@@ -89,8 +89,7 @@ export function MecanumController({ className }: MecanumControllerProps) {
     (vx: number, vy: number, wz: number) => {
       // Scale the normalized velocity (-1, 0, 1) by max velocities and speed percentage
       const scaledVx = vx * maxLinear * speedScale;
-      // Fix: Invert Y axis because vy=1 moves robot Right (instead of Left)
-      const scaledVy = -vy * maxLinear * speedScale;
+      const scaledVy = vy * maxLinear * speedScale;
       const scaledWz = wz * maxAngular * speedScale;
 
       startPublishing(scaledVx, scaledVy, scaledWz);
@@ -112,8 +111,7 @@ export function MecanumController({ className }: MecanumControllerProps) {
       joystickMoveRef.current = { x, y };
       // Combine with current rotation
       const vx = y * maxLinear * speedScale;
-      // Fix: Joystick X (Right) should give positive vy (Right)
-      const vy = x * maxLinear * speedScale;
+      const vy = -x * maxLinear * speedScale;  // Joystick X-right = negative vy = robot right (ROS standard: positive=left)
       const wz = joystickRotateRef.current * maxAngular * speedScale;
       publishVelocity({ vx, vy, wz });
       setCurrentVelocity({ vx, vy, wz });
@@ -127,7 +125,7 @@ export function MecanumController({ className }: MecanumControllerProps) {
       joystickRotateRef.current = w;
       // Combine with current movement
       const vx = joystickMoveRef.current.y * maxLinear * speedScale;
-      const vy = joystickMoveRef.current.x * maxLinear * speedScale;
+      const vy = -joystickMoveRef.current.x * maxLinear * speedScale;
       const wz = w * maxAngular * speedScale;
       publishVelocity({ vx, vy, wz });
       setCurrentVelocity({ vx, vy, wz });
@@ -155,7 +153,7 @@ export function MecanumController({ className }: MecanumControllerProps) {
       setCurrentVelocity({ vx: 0, vy: 0, wz: 0 });
     } else {
       const vx = joystickMoveRef.current.y * maxLinear * speedScale;
-      const vy = joystickMoveRef.current.x * maxLinear * speedScale;
+      const vy = -joystickMoveRef.current.x * maxLinear * speedScale;
       publishVelocity({ vx, vy, wz: 0 });
       setCurrentVelocity({ vx, vy, wz: 0 });
     }
