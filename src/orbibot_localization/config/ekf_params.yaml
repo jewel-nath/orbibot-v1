@@ -45,19 +45,21 @@ robot_localization_ekf:
     odom0_pose_rejection_threshold: 5.0
     odom0_twist_rejection_threshold: 1.0
 
-    # IMU input (from Madgwick filter — magnetometer-corrected orientation)
-    # Madgwick fuses raw accel/gyro + magnetometer → absolute orientation quaternion
-    # EKF now fuses absolute yaw (drift-free) + yaw rate
+    # IMU input (from Madgwick filter — gyro yaw rate only)
+    # Absolute yaw (magnetometer) is DISABLED: indoor magnetometer is unreliable due
+    # to metal/electronics interference → causes slow yaw drift when fused.
+    # AMCL corrects accumulated gyro yaw drift via LiDAR scan matching.
+    # TODO: re-enable absolute yaw after magnetometer is calibrated.
     imu0: /imu/data_filtered
     imu0_config: [false, false, false,   # x, y, z
-                  false, false, true,    # roll, pitch, yaw — FUSE absolute yaw (Madgwick output)
+                  false, false, false,   # roll, pitch, yaw — DON'T fuse (magnetometer uncalibrated)
                   false, false, false,   # vx, vy, vz
-                  false, false, true,    # vroll, vpitch, vyaw — fuse yaw rate
+                  false, false, true,    # vroll, vpitch, vyaw — fuse yaw rate (gyro only)
                   false, false, false]   # ax, ay, az — DISABLED (mecanum vibration causes noise)
     imu0_queue_size: 10
     imu0_nodelay: false
-    imu0_differential: false  # Use ABSOLUTE orientation from Madgwick (not differential)
-    imu0_relative: true       # Relative to first measurement (avoids startup offset)
+    imu0_differential: false
+    imu0_relative: true
     imu0_remove_gravitational_acceleration: true
     # Sensor covariance - IMU uncertainty
     # Raised rejection thresholds to reduce noise rejection on mecanum platform
