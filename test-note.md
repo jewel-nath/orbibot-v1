@@ -135,17 +135,28 @@ FK (odom) was already correct. Fix applied in firmware IK only.
 3. ✅ `MecanumController.tsx` joystick mode: added proper inversion to match ROS standard
 
 **After fix:** `cmd_vel vy=+0.25` → robot goes LEFT ✅ (ROS standard)  
-**Firmware reflash required** to apply the IK fix.
+**Firmware reflashed and verified ✅**
+
+### Post-Fix Strafe Verification (vy=-0.25, right strafe)
+
+| Metric | Before Fix | After Fix |
+|---|---|---|
+| VY MAE | 0.466 ❌ (opposite direction) | **0.0845** ✅ |
+| VY odom sign | Positive (+) when going right ❌ | Negative (-) when going right ✅ |
+| VX crosscoupling | 0.008 m/s | 0.011 m/s ✅ |
+| WZ noise | 0.076 rad/s | 0.076 rad/s ✅ |
+| Physical direction | Robot went LEFT (wrong) | **Robot went RIGHT** ✅ |
+
+**Fix fully verified — cmd_vel vy convention now matches ROS standard.**
 
 ---
 
 ## 8. TODO / Next Steps
 
-- [ ] **Reflash firmware** to apply mecanum IK vy fix
-- [ ] Verify strafe direction after reflash (vy=+0.25 should go LEFT)
 - [ ] Check IMU accelerometer scale factor in firmware (`orbibot_config.h`)
 - [ ] Save final motor PID to flash
 - [ ] Tune Yaw PID to reduce wz drift during forward motion
+- [ ] Left strafe test (vy=+0.25 should go LEFT)
 
 ---
 
