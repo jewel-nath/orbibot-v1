@@ -53,6 +53,7 @@ interface NavigationContextValue {
   isNavigating: boolean;
   goalStatus: GoalStatus;
   navigationAvailable: boolean;
+  localizationAvailable: boolean;
 }
 
 const NavigationContext = createContext<NavigationContextValue | undefined>(
@@ -87,6 +88,7 @@ export function NavigationProvider({ children }: NavigationProviderProps) {
   const [isNavigating, setIsNavigating] = useState(false);
   const [goalStatus, setGoalStatus] = useState<GoalStatus>('idle');
   const [navigationAvailable, setNavigationAvailable] = useState(false);
+  const [localizationAvailable, setLocalizationAvailable] = useState(false);
 
   // Set mode with toast notification
   const setMode = useCallback((newMode: InteractionMode) => {
@@ -224,18 +226,55 @@ export function NavigationProvider({ children }: NavigationProviderProps) {
     };
   }, [ros, connectionState]);
 
-  // Subscribe to navigation status (navigate_to_pose action feedback)
+  // Poll node list to check navigation and localization availability
   useEffect(() => {
     if (!ros || connectionState !== 'connected') {
-      setIsNavigating(false);
-      setGoalStatus('idle');
       setNavigationAvailable(false);
+      setLocalizationAvailable(false);
       return;
     }
 
-    let messageReceived = false;
+    const checkAvailability = () => {
+      // Use getNodes() — more reliable than topic list for action servers
+      // bt_navigator = Nav2 navigation available
+      // amcl = localization available
+      ros.getNodes(
+        (nodes: string[]) => {
+          setNavigationAvailable(nodes.some((n) => n.includes('bt_navigator') || n.includes('controller_server')));
+          setLocalizationAvailable(nodes.some((n) => n === '/amcl' || n.includes('amcl')));
+        },
+        () => {
+          // Fallback: check topics if getNodes fails
+          ros.getTopics(
+            (result: { topics: string[] }) => {
+              const topics = result.topics;
+              setNavigationAvailable(topics.includes('/plan') || topics.includes('/navigate_to_pose/_action/status'));
+              setLocalizationAvailable(topics.includes('/amcl_pose'));
+            },
+            () => {
+              setNavigationAvailable(false);
+              setLocalizationAvailable(false);
+            }
+          );
+        }
+      );
+    };
 
-    // Subscribe to action status topic
+    // Check immediately then every 5 seconds
+    checkAvailability();
+    const pollInterval = setInterval(checkAvailability, 5000);
+
+    return () => clearInterval(pollInterval);
+  }, [ros, connectionState]);
+
+  // Subscribe to navigation action status for goal tracking
+  useEffect(() => {
+    if (!ros || connectionState !== 'connected' || !navigationAvailable) {
+      setIsNavigating(false);
+      setGoalStatus('idle');
+      return;
+    }
+
     const statusTopic = new ROSLIB.Topic({
       ros,
       name: '/navigate_to_pose/_action/status',
@@ -243,12 +282,6 @@ export function NavigationProvider({ children }: NavigationProviderProps) {
     });
 
     const handleStatus = (msg: ROSLIB.Message) => {
-      // Mark navigation as available when we receive first message
-      if (!messageReceived) {
-        messageReceived = true;
-        setNavigationAvailable(true);
-      }
-
       const { status_list } = msg as unknown as { status_list: Array<{ status: number }> };
       if (status_list.length === 0) {
         setIsNavigating(false);
@@ -256,26 +289,24 @@ export function NavigationProvider({ children }: NavigationProviderProps) {
         return;
       }
 
-      // Get most recent goal status
       const latestStatus = status_list[status_list.length - 1].status;
 
-      // Map ROS action status codes to our GoalStatus
-      // STATUS_EXECUTING = 2, STATUS_SUCCEEDED = 4, STATUS_CANCELED = 5, STATUS_ABORTED = 6
+      // STATUS_ACCEPTED=1, EXECUTING=2, SUCCEEDED=4, CANCELED=5, ABORTED=6
       switch (latestStatus) {
-        case 1: // ACCEPTED
-        case 2: // EXECUTING
+        case 1:
+        case 2:
           setIsNavigating(true);
           setGoalStatus('navigating');
           break;
-        case 4: // SUCCEEDED
+        case 4:
           setIsNavigating(false);
           setGoalStatus('succeeded');
           break;
-        case 5: // CANCELED
+        case 5:
           setIsNavigating(false);
           setGoalStatus('canceled');
           break;
-        case 6: // ABORTED
+        case 6:
           setIsNavigating(false);
           setGoalStatus('failed');
           break;
@@ -285,22 +316,14 @@ export function NavigationProvider({ children }: NavigationProviderProps) {
       }
     };
 
-    // Set a timeout to check if we receive any message
-    const availabilityTimeout = setTimeout(() => {
-      if (!messageReceived) {
-        setNavigationAvailable(false);
-      }
-    }, 3000); // Wait 3 seconds for first message
-
     statusTopic.subscribe(handleStatus);
     console.log('[NavigationContext] Subscribed to navigation status');
 
     return () => {
       statusTopic.unsubscribe();
-      clearTimeout(availabilityTimeout);
       console.log('[NavigationContext] Unsubscribed from navigation status');
     };
-  }, [ros, connectionState]);
+  }, [ros, connectionState, navigationAvailable]);
 
   const value: NavigationContextValue = {
     mode,
@@ -319,6 +342,7 @@ export function NavigationProvider({ children }: NavigationProviderProps) {
     isNavigating,
     goalStatus,
     navigationAvailable,
+    localizationAvailable,
   };
 
   return (
