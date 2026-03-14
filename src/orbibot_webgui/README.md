@@ -27,7 +27,7 @@ Modern web-based dashboard for real-time monitoring, control, and autonomous nav
 ### Diagnostics (dedicated page)
 - **Navigation** - Header link "Diagnostics" opens a full-page view (Robot Status, PID Tuning, PID Response Graph, Calibration).
 - **Robot Status** - Safety, system health, encoders, odometry, IMU in one section.
-- **PID Response Graph** - Set target Vx/Vy/Wz, Send to command the robot, record response from `/odom`; two lines per chart (target vs actual). Auto-stops after 8 s.
+- **PID Response Graph** - Set target Vx/Vy/Wz, Send to command the robot, record response from `/odom`; two lines per chart (target vs actual). Auto-stops after 8 s. See [pid-test-checklist.md](pid-test-checklist.md) for a step-by-step checklist (সব ঠিক আছে কিনা + ভালো PID মান বের করা).
 - **Magnetometer calibration** - "Calibrate magnetometer" calls `/orbibot/calibrate_imu` (hard iron only; robot must be running).
 
 ### Autonomous Navigation

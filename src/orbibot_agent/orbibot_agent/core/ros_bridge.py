@@ -24,7 +24,7 @@ from rclpy.qos import (
 )
 from rclpy.service import Service
 from sensor_msgs.msg import Imu, LaserScan
-from std_msgs.msg import Int32MultiArray
+from std_msgs.msg import Float32MultiArray, Int32MultiArray
 
 from orbibot_msgs.msg import SystemStatus
 
@@ -45,6 +45,10 @@ class RosBridge:
 
         # Publishers
         self._cmd_vel_pub = node.create_publisher(Twist, '/cmd_vel', 10)
+        self._pid_params_pub = node.create_publisher(Float32MultiArray, '/orbibot/pid_params', 10)
+        self._yaw_pid_params_pub = node.create_publisher(
+            Float32MultiArray, '/orbibot/yaw_pid_params', 10
+        )
 
         # Cached subscriptions (created on demand)
         self._subscriptions: Dict[str, Any] = {}
@@ -96,6 +100,20 @@ class RosBridge:
         """Publish zero velocity (emergency stop)."""
         self.publish_cmd_vel(0.0, 0.0, 0.0)
         logger.info('Published stop command')
+
+    def set_motor_pid(self, kp: float, ki: float, kd: float) -> None:
+        """Set motor PID gains (all wheels). Takes effect immediately; use pid_save to persist."""
+        msg = Float32MultiArray()
+        msg.data = [float(kp), float(ki), float(kd)]
+        self._pid_params_pub.publish(msg)
+        logger.info(f'Published motor PID: kp={kp}, ki={ki}, kd={kd}')
+
+    def set_yaw_pid(self, kp: float, ki: float, kd: float) -> None:
+        """Set yaw (heading) PID gains. Takes effect immediately."""
+        msg = Float32MultiArray()
+        msg.data = [float(kp), float(ki), float(kd)]
+        self._yaw_pid_params_pub.publish(msg)
+        logger.info(f'Published yaw PID: kp={kp}, ki={ki}, kd={kd}')
 
     def wait_for_message(
         self,
@@ -235,6 +253,106 @@ class RosBridge:
         except Exception as e:
             logger.error(f'Failed to get odometry: {e}')
             return None
+
+    def run_pid_test(
+        self,
+        vx: float,
+        vy: float,
+        wz: float,
+        duration: float = 5.0,
+        sample_hz: float = 20.0,
+    ) -> Dict[str, Any]:
+        """Run a PID test: publish cmd_vel and record /odom velocity response.
+
+        Used to tune motor/yaw PID by comparing target vs actual (MAE, overshoot).
+
+        Args:
+            vx: Target linear x velocity (m/s)
+            vy: Target linear y velocity (m/s)
+            wz: Target angular z velocity (rad/s)
+            duration: Test duration in seconds (clamped 1–15)
+            sample_hz: Approximate sampling rate for /odom (Hz)
+
+        Returns:
+            Dict with samples (t, vx, vy, wz), metrics (MAE, max_error, overshoot_pct per axis),
+            and target. Samples may be downsampled if > 200 points.
+        """
+        if self._safety_manager:
+            vx, vy, wz = self._safety_manager.validate_velocity(vx, vy, wz)
+        duration = max(1.0, min(15.0, float(duration)))
+        dt = 1.0 / max(10.0, min(50.0, sample_hz))
+
+        odom_qos = QoSProfile(
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+            depth=5,
+        )
+        latest: Dict[str, float] = {'vx': 0.0, 'vy': 0.0, 'wz': 0.0}
+
+        def _odom_cb(msg):
+            latest['vx'] = msg.twist.twist.linear.x
+            latest['vy'] = msg.twist.twist.linear.y
+            latest['wz'] = msg.twist.twist.angular.z
+
+        sub = self._node.create_subscription(
+            Odometry, '/odom', _odom_cb, odom_qos
+        )
+
+        samples: List[Dict[str, float]] = []
+        t0 = time.perf_counter()
+        end_time = t0 + duration
+
+        try:
+            while time.perf_counter() < end_time:
+                if self._safety_manager and self._safety_manager.check_emergency_stop():
+                    break
+                self.publish_cmd_vel(vx, vy, wz)
+                rclpy.spin_once(self._node, timeout_sec=0.02)
+                t = time.perf_counter() - t0
+                samples.append({
+                    't': round(t, 3),
+                    'vx': round(latest['vx'], 4),
+                    'vy': round(latest['vy'], 4),
+                    'wz': round(latest['wz'], 4),
+                })
+                time.sleep(dt)
+        finally:
+            self._node.destroy_subscription(sub)
+            self.publish_stop()
+
+        # Downsample if too many points (keep at most 200)
+        if len(samples) > 200:
+            step = len(samples) / 200
+            indices = [int(i * step) for i in range(200)]
+            samples = [samples[i] for i in indices]
+
+        def _metrics(vals: List[float], target: float) -> Dict[str, float]:
+            errs = [abs(v - target) for v in vals]
+            mae = sum(errs) / len(errs) if errs else 0.0
+            max_err = max(errs) if errs else 0.0
+            overshoot_pct = 0.0
+            if abs(target) > 1e-9:
+                if target > 0 and vals:
+                    overshoot_pct = max(0.0, (max(vals) - target) / target * 100.0)
+                elif target < 0 and vals:
+                    overshoot_pct = max(0.0, (target - min(vals)) / abs(target) * 100.0)
+            return {'mae': round(mae, 4), 'max_error': round(max_err, 4), 'overshoot_pct': round(overshoot_pct, 1)}
+
+        vx_vals = [s['vx'] for s in samples]
+        vy_vals = [s['vy'] for s in samples]
+        wz_vals = [s['wz'] for s in samples]
+
+        return {
+            'target': {'vx': vx, 'vy': vy, 'wz': wz},
+            'duration_sec': round(duration, 1),
+            'sample_count': len(samples),
+            'metrics': {
+                'vx': _metrics(vx_vals, vx),
+                'vy': _metrics(vy_vals, vy),
+                'wz': _metrics(wz_vals, wz),
+            },
+            'samples': samples,
+        }
 
     def get_lidar_summary(self) -> Optional[Dict[str, Any]]:
         """Get LiDAR scan summary.

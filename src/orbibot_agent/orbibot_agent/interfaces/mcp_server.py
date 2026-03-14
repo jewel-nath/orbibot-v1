@@ -66,7 +66,15 @@ class McpServerNode:
                 )]
 
             try:
-                result = self._agent._tool_registry.execute_tool(name, arguments or {})
+                # Run tool in thread pool so the event loop keeps running and
+                # _spin_ros can process ROS callbacks (e.g. wait_for_message in
+                # get_odometry / get_battery / get_imu would otherwise block and
+                # prevent spin_once from running, causing timeouts).
+                loop = asyncio.get_event_loop()
+                result = await loop.run_in_executor(
+                    None,
+                    lambda: self._agent._tool_registry.execute_tool(name, arguments or {}),
+                )
                 return [TextContent(
                     type="text",
                     text=json.dumps(result, indent=2)

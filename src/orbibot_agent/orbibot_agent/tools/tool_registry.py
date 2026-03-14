@@ -134,6 +134,77 @@ class ToolRegistry:
         )
 
         self.register_tool(
+            name='run_pid_test',
+            description=(
+                'Run a PID response test: send target velocities (vx, vy, wz) for a duration, '
+                'record actual velocities from /odom, return samples and metrics (MAE, max_error, '
+                'overshoot_pct) per axis. Use to tune motor and yaw PID from graph-like data.'
+            ),
+            parameters={
+                'type': 'object',
+                'properties': {
+                    'vx': {
+                        'type': 'number',
+                        'description': 'Target forward/back velocity (m/s), e.g. 0.2'
+                    },
+                    'vy': {
+                        'type': 'number',
+                        'description': 'Target strafe velocity (m/s), e.g. 0'
+                    },
+                    'wz': {
+                        'type': 'number',
+                        'description': 'Target angular velocity (rad/s), e.g. 0'
+                    },
+                    'duration': {
+                        'type': 'number',
+                        'description': 'Test duration in seconds (1–15), default 5'
+                    },
+                    'sample_hz': {
+                        'type': 'number',
+                        'description': 'Odom sampling rate (Hz), default 20'
+                    }
+                },
+                'required': ['vx', 'vy', 'wz']
+            },
+            handler=self._handle_run_pid_test
+        )
+
+        self.register_tool(
+            name='set_motor_pid',
+            description=(
+                'Set motor PID gains (Kp, Ki, Kd) for all wheels. Takes effect immediately. '
+                'Use for PID tuning; typical range 0–10. Use save_motor_pid_to_flash to persist.'
+            ),
+            parameters={
+                'type': 'object',
+                'properties': {
+                    'kp': {'type': 'number', 'description': 'Proportional gain'},
+                    'ki': {'type': 'number', 'description': 'Integral gain'},
+                    'kd': {'type': 'number', 'description': 'Derivative gain'},
+                },
+                'required': ['kp', 'ki', 'kd']
+            },
+            handler=self._handle_set_motor_pid
+        )
+
+        self.register_tool(
+            name='set_yaw_pid',
+            description=(
+                'Set yaw (heading) PID gains. Takes effect immediately. Use to reduce Wz drift when going straight.'
+            ),
+            parameters={
+                'type': 'object',
+                'properties': {
+                    'kp': {'type': 'number', 'description': 'Proportional gain'},
+                    'ki': {'type': 'number', 'description': 'Integral gain'},
+                    'kd': {'type': 'number', 'description': 'Derivative gain'},
+                },
+                'required': ['kp', 'ki', 'kd']
+            },
+            handler=self._handle_set_yaw_pid
+        )
+
+        self.register_tool(
             name='get_lidar_summary',
             description='Get LiDAR scan summary with obstacle detection.',
             parameters={
@@ -415,6 +486,24 @@ class ToolRegistry:
             'y': odom['position']['y'],
             'yaw_deg': odom['yaw_deg']
         }
+
+    def _handle_run_pid_test(self, vx: float, vy: float, wz: float, **kwargs) -> Dict:
+        """Handle run_pid_test tool."""
+        duration = kwargs.get('duration', 5.0)
+        sample_hz = kwargs.get('sample_hz', 20.0)
+        return self._ros_bridge.run_pid_test(
+            vx=vx, vy=vy, wz=wz, duration=duration, sample_hz=sample_hz
+        )
+
+    def _handle_set_motor_pid(self, kp: float, ki: float, kd: float) -> Dict:
+        """Handle set_motor_pid tool."""
+        self._ros_bridge.set_motor_pid(kp, ki, kd)
+        return {'status': 'ok', 'motor_pid': {'kp': kp, 'ki': ki, 'kd': kd}}
+
+    def _handle_set_yaw_pid(self, kp: float, ki: float, kd: float) -> Dict:
+        """Handle set_yaw_pid tool."""
+        self._ros_bridge.set_yaw_pid(kp, ki, kd)
+        return {'status': 'ok', 'yaw_pid': {'kp': kp, 'ki': ki, 'kd': kd}}
 
     def _handle_get_lidar_summary(self) -> Dict:
         """Handle get_lidar_summary tool."""
