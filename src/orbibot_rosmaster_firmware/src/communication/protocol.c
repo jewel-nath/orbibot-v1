@@ -565,7 +565,7 @@ void protocol_send_imu_raw_data(void)
     data[16] = mag[2] & 0xFF;
     data[17] = (mag[2] >> 8) & 0xFF;
 
-    protocol_send_packet(FUNC_REPORT_MPU_RAW, data, sizeof(data));
+    protocol_send_packet(FUNC_REPORT_ICM_RAW, data, sizeof(data));
 }
 
 void protocol_send_imu_attitude_data(void)
