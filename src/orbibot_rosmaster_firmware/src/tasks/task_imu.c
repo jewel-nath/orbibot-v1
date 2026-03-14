@@ -86,6 +86,34 @@ void imu_task_get_raw_data(int16_t gyro[3], int16_t accel[3], int16_t mag[3])
 }
 
 /**
+ * @brief Get IMU data pre-scaled to milli-units for protocol transport (thread-safe)
+ *
+ * Reads from the calibrated g_imu_data cache (already in SI: m/s², rad/s) and
+ * multiplies by 1000 so the ROS 2 driver can apply ×(1/1000) to recover SI units.
+ *
+ * Sensor ranges are sized to prevent int16 overflow:
+ *   Gyro  ±500 dps  → max ±8 727 milli-rad/s  (< 32 767) ✅
+ *   Accel ±2 g      → max ±19 613 milli-m/s²  (< 32 767) ✅
+ *
+ * Mag is NOT included here — it is sent as raw AK09916 ADC counts via
+ * imu_task_get_raw_data(); the ROS 2 driver applies 0.15 µT/count directly.
+ *
+ * @param gyro_mrad_s  [out] Angular velocity in milli-rad/s (×1000 rad/s)
+ * @param accel_mm_s2  [out] Linear acceleration in milli-m/s² (×1000 m/s²)
+ */
+void imu_task_get_milli_data(int16_t gyro_mrad_s[3], int16_t accel_mm_s2[3])
+{
+    taskENTER_CRITICAL();
+    gyro_mrad_s[0]  = (int16_t)(g_imu_data.gyro_x  * 1000.0f);
+    gyro_mrad_s[1]  = (int16_t)(g_imu_data.gyro_y  * 1000.0f);
+    gyro_mrad_s[2]  = (int16_t)(g_imu_data.gyro_z  * 1000.0f);
+    accel_mm_s2[0]  = (int16_t)(g_imu_data.accel_x * 1000.0f);
+    accel_mm_s2[1]  = (int16_t)(g_imu_data.accel_y * 1000.0f);
+    accel_mm_s2[2]  = (int16_t)(g_imu_data.accel_z * 1000.0f);
+    taskEXIT_CRITICAL();
+}
+
+/**
  * @brief IMU Task Entry Point
  *
  * Runs at 50Hz (20ms period):

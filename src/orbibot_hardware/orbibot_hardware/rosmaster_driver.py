@@ -38,10 +38,16 @@ FUNC_RESET_FLASH = 0xA0
 # Car type (OrbiBot uses mecanum only; byte required in MOTION packet format)
 CARTYPE_ORBIBOT = 0x07
 
-# ICM-20948 sensor conversion ratios (pre-scaled by firmware, units in milli)
-ICM20948_GYRO_RATIO = 1 / 1000.0
-ICM20948_ACCEL_RATIO = 1 / 1000.0
-ICM20948_MAG_RATIO = 1 / 1000.0
+# ICM-20948 sensor conversion ratios
+# Gyro/accel: firmware pre-scales calibrated values to milli-units (×1000) before
+# sending; driver divides by 1000 to recover SI units.
+#   Gyro  ±500 dps  → firmware sends milli-rad/s  → ÷1000 → rad/s
+#   Accel ±2 g      → firmware sends milli-m/s²   → ÷1000 → m/s²
+# Mag: firmware sends raw AK09916 ADC counts; AK09916 sensitivity = 0.15 µT/count.
+#   hardware_node.py then converts µT → Tesla via ×1e-6.
+ICM20948_GYRO_RATIO  = 1 / 1000.0   # milli-rad/s → rad/s
+ICM20948_ACCEL_RATIO = 1 / 1000.0   # milli-m/s²  → m/s²
+ICM20948_MAG_RATIO   = 0.15         # AK09916 raw counts → µT
 
 # Radians to degrees
 RAD_TO_DEG = 57.2957795

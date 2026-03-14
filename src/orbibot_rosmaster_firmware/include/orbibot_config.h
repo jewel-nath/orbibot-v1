@@ -202,10 +202,14 @@
 
 /**
  * IMU Sensor Ranges
+ * Chosen so physical values × 1000 fit in int16 for protocol transport:
+ *   ±500  dps  → max ±8727 milli-rad/s  < 32767 ✅
+ *   ±2    g    → max ±19613 milli-m/s²  < 32767 ✅
+ * (±2000 dps or ±16g would overflow int16 when scaled to milli-units.)
  */
-#define IMU_GYRO_RANGE_DPS          2000        // ±2000 °/s
-#define IMU_ACCEL_RANGE_G           16          // ±16g
-#define IMU_MAG_RANGE_UT            4900        // ±4900 μT
+#define IMU_GYRO_RANGE_DPS          500         // ±500 °/s  (4× better sensitivity vs ±2000)
+#define IMU_ACCEL_RANGE_G           2           // ±2g       (8× better sensitivity vs ±16g)
+#define IMU_MAG_RANGE_UT            4900        // ±4900 μT  (AK09916 fixed; raw counts sent)
 
 /**
  * IMU Calibration (set these after calibration)

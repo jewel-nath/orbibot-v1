@@ -295,69 +295,164 @@ static int mag_init(void)
     return 0;
 }
 
+/* Known WHO_AM_I values for chips that may be fitted on the ROSMaster V3.0 */
+#define MPU9250_WHO_AM_I_VALUE      0x71
+#define MPU6500_WHO_AM_I_VALUE      0x70
+
 /**
  * @brief Initialize ICM-20948 IMU
+ *
+ * On failure the function prints the actual WHO_AM_I byte so the correct chip
+ * can be identified. Known alternates on the ROSMaster V3.0 board:
+ *   0xEA  ICM-20948  (expected)
+ *   0x71  MPU-9250   (some board revisions)
+ *   0x70  MPU-6500
+ *   0xFF  SPI not responding (wiring / power issue)
+ *   0x00  MISO stuck low
  */
 robot_err_t imu_driver_init(void)
 {
     uint8_t who_am_i;
 
+    BOOT_PRINTF("\r\n[IMU] imu_driver_init() starting...\r\n");
+    BOOT_PRINTF("[IMU] SPI2: PB12=CS PB13=SCK PB14=MISO PB15=MOSI\r\n");
+    BOOT_PRINTF("[IMU] Step 1: select bank 0\r\n");
+
     imu_select_bank(0);
 
+    BOOT_PRINTF("[IMU] Step 2: software reset (PWR_MGMT_1 = 0x80)\r\n");
     imu_write_register(ICM20948_PWR_MGMT_1, 0x80);
     imu_delay_ms(100);
 
+    /* Verify reset completed — PWR_MGMT_1 should read 0x41 (sleep bit set,
+     * clk_sel = 1 after internal reset sequence on ICM-20948). */
+#if ENABLE_BOOT_MESSAGES
+    {
+        uint8_t pwr_mgmt_1_after_reset = imu_read_register(ICM20948_PWR_MGMT_1);
+        BOOT_PRINTF("[IMU] Step 2b: PWR_MGMT_1 after reset = 0x%02X (expect 0x41)\r\n",
+                    pwr_mgmt_1_after_reset);
+    }
+#endif
+
+    BOOT_PRINTF("[IMU] Step 3: wake + auto-clock (PWR_MGMT_1 = 0x01)\r\n");
     imu_write_register(ICM20948_PWR_MGMT_1, 0x01);
     imu_delay_ms(10);
 
+    BOOT_PRINTF("[IMU] Step 4: I2C_IF_DIS — force SPI-only mode (USER_CTRL = 0x10)\r\n");
     imu_write_register(ICM20948_USER_CTRL, 0x10);
     imu_delay_ms(1);
 
+    BOOT_PRINTF("[IMU] Step 5: reading WHO_AM_I register (0x00)...\r\n");
     who_am_i = imu_read_register(ICM20948_WHO_AM_I);
-    if (who_am_i != ICM20948_WHO_AM_I_VALUE)
+    BOOT_PRINTF("[IMU] WHO_AM_I = 0x%02X", who_am_i);
+
+    if (who_am_i == ICM20948_WHO_AM_I_VALUE)
     {
+        BOOT_PRINTF(" -> ICM-20948 detected OK\r\n");
+    }
+    else if (who_am_i == MPU9250_WHO_AM_I_VALUE)
+    {
+        BOOT_PRINTF(" -> MPU-9250 detected! Firmware expects ICM-20948 (0xEA).\r\n");
+        BOOT_PRINTF("[IMU] ERROR: Wrong IMU chip. Check board revision.\r\n");
+        return ROBOT_ERR_HW;
+    }
+    else if (who_am_i == MPU6500_WHO_AM_I_VALUE)
+    {
+        BOOT_PRINTF(" -> MPU-6500 detected! Firmware expects ICM-20948 (0xEA).\r\n");
+        BOOT_PRINTF("[IMU] ERROR: Wrong IMU chip. Check board revision.\r\n");
+        return ROBOT_ERR_HW;
+    }
+    else if (who_am_i == 0xFF)
+    {
+        BOOT_PRINTF(" -> SPI MISO stuck HIGH (0xFF). Check:\r\n");
+        BOOT_PRINTF("[IMU]   - PB14 (MISO) wiring\r\n");
+        BOOT_PRINTF("[IMU]   - IMU VDD/VDDIO 3.3V power supply\r\n");
+        BOOT_PRINTF("[IMU]   - SPI2 clock/mode (CPOL=0, CPHA=0, 4.5MHz)\r\n");
+        return ROBOT_ERR_HW;
+    }
+    else if (who_am_i == 0x00)
+    {
+        BOOT_PRINTF(" -> SPI MISO stuck LOW (0x00). Check:\r\n");
+        BOOT_PRINTF("[IMU]   - PB14 (MISO) connection to IMU SDO pin\r\n");
+        BOOT_PRINTF("[IMU]   - IMU chip soldering\r\n");
+        return ROBOT_ERR_HW;
+    }
+    else
+    {
+        BOOT_PRINTF(" -> UNKNOWN chip (expected 0xEA for ICM-20948).\r\n");
+        BOOT_PRINTF("[IMU]   Possible causes:\r\n");
+        BOOT_PRINTF("[IMU]   - SPI timing issue (try lower clock prescaler)\r\n");
+        BOOT_PRINTF("[IMU]   - Wrong register bank selected after reset\r\n");
+        BOOT_PRINTF("[IMU]   - CS (PB12) not asserting low properly\r\n");
         return ROBOT_ERR_HW;
     }
 
-    // Enable accelerometer and gyroscope
-    imu_write_register(ICM20948_PWR_MGMT_2, 0x00);  // Enable all axes
+    BOOT_PRINTF("[IMU] Step 6: enable accel + gyro all axes (PWR_MGMT_2 = 0x00)\r\n");
+    imu_write_register(ICM20948_PWR_MGMT_2, 0x00);
     imu_delay_ms(10);
 
-    // Select User Bank 2 for sensor configuration
+    BOOT_PRINTF("[IMU] Step 7: configure gyro/accel in bank 2\r\n");
     imu_select_bank(2);
 
-    // Configure gyroscope: ±2000 dps, DLPF enabled
-    // GYRO_FS_SEL = 3 (±2000 dps)
-    imu_write_register(ICM20948_GYRO_CONFIG_1, 0x06);  // ±2000 dps, DLPF 196Hz
-    gyro_scale = 2000.0f / 32768.0f * (M_PI / 180.0f);  // Convert to rad/s
+    /* Gyroscope: ±500 dps, DLPF 196Hz
+     * GYRO_CONFIG_1 [5:3]=110 (DLPFCFG=6), [2:1]=01 (FS_SEL=±500dps), [0]=1 (FCHOICE on)
+     * = 0b00110011 = 0x33
+     * Range chosen so physical×1000 fits int16: max ±8727 milli-rad/s < 32767. */
+    imu_write_register(ICM20948_GYRO_CONFIG_1, 0x33);
+    gyro_scale = 500.0f / 32768.0f * (M_PI / 180.0f);
+    BOOT_PRINTF("[IMU]   GYRO_CONFIG_1 = 0x33 (+/-500dps, DLPF 196Hz)\r\n");
 
-    // Configure accelerometer: ±16g, DLPF enabled
-    // ACCEL_FS_SEL = 3 (±16g)
-    imu_write_register(ICM20948_ACCEL_CONFIG, 0x06);    // ±16g
-    imu_write_register(ICM20948_ACCEL_CONFIG_2, 0x06);  // DLPF 196Hz
-    accel_scale = 16.0f / 32768.0f * 9.80665f;  // Convert to m/s²
+    /* Accelerometer: ±2g, DLPF 196Hz
+     * ACCEL_CONFIG [5:3]=110 (DLPFCFG=6), [2:1]=00 (FS_SEL=±2g), [0]=1 (FCHOICE on)
+     * = 0b00110001 = 0x31
+     * Range chosen so physical×1000 fits int16: max ±19613 milli-m/s² < 32767. */
+    imu_write_register(ICM20948_ACCEL_CONFIG, 0x31);
+    imu_write_register(ICM20948_ACCEL_CONFIG_2, 0x06);
+    accel_scale = 2.0f / 32768.0f * 9.80665f;
+    BOOT_PRINTF("[IMU]   ACCEL_CONFIG = 0x31 (+/-2g), ACCEL_CONFIG_2 = 0x06 (DLPF 196Hz)\r\n");
 
-    // Return to User Bank 0
     imu_select_bank(0);
 
-    // Store current configuration
-    current_config.accel_range = 3;  // ±16g
-    current_config.gyro_range = 3;   // ±2000 dps
-    current_config.accel_dlpf = 6;   // 196Hz
-    current_config.gyro_dlpf = 6;    // 196Hz
-    current_config.sample_rate = 0;  // 1125Hz / (1 + 0) = 1125Hz
+    /* Sanity-read one accel sample to confirm data is flowing */
+#if ENABLE_BOOT_MESSAGES
+    {
+        uint8_t sane_buf[6];
+        imu_read_registers(ICM20948_ACCEL_XOUT_H, sane_buf, 6);
+        int16_t ax = (int16_t)((sane_buf[0] << 8) | sane_buf[1]);
+        int16_t ay = (int16_t)((sane_buf[2] << 8) | sane_buf[3]);
+        int16_t az = (int16_t)((sane_buf[4] << 8) | sane_buf[5]);
+        BOOT_PRINTF("[IMU] Step 7b: first accel sample: ax=%d ay=%d az=%d (raw ADC)\r\n",
+                    (int)ax, (int)ay, (int)az);
+        BOOT_PRINTF("[IMU]   (1g at +/-2g = ~16384 counts; Z should be ~16384 if flat)\r\n");
+        if (ax == 0 && ay == 0 && az == 0)
+        {
+            BOOT_PRINTF("[IMU]   WARNING: all zeros after config — possible SPI MISO issue\r\n");
+        }
+    }
+#endif
 
-    // Initialize AK09916 magnetometer via I2C master
+    current_config.accel_range = 0;  /* ±2g   (FS_SEL=0) */
+    current_config.gyro_range = 1;   /* ±500dps (FS_SEL=1) */
+    current_config.accel_dlpf = 6;
+    current_config.gyro_dlpf = 6;
+    current_config.sample_rate = 0;
+
+    BOOT_PRINTF("[IMU] Step 8: initializing AK09916 magnetometer...\r\n");
     if (mag_init() != 0)
     {
-        // Magnetometer init failed — continue without mag (gyro/accel still work)
         mag_initialized = 0;
+        BOOT_PRINTF("[IMU]   mag_init() FAILED — continuing without magnetometer\r\n");
+    }
+    else
+    {
+        BOOT_PRINTF("[IMU]   mag_init() OK\r\n");
     }
 
-    // Calibrate gyroscope (collect zero-rate bias samples)
-    // Device must be stationary during this ~1 second calibration
+    BOOT_PRINTF("[IMU] Step 9: gyro calibration (1000 samples, ~1s, keep robot still)...\r\n");
     imu_calibrate();
+    BOOT_PRINTF("[IMU]   gyro calibration done\r\n");
 
+    BOOT_PRINTF("[IMU] imu_driver_init() SUCCESS\r\n\r\n");
     return ROBOT_OK;
 }
 

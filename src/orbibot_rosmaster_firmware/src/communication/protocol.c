@@ -532,38 +532,44 @@ void protocol_send_motion_data(void)
 
 void protocol_send_imu_raw_data(void)
 {
-    // Packet: [Gx_Lo][Gx_Hi][Gy_Lo][Gy_Hi][Gz_Lo][Gz_Hi]
-    //         [Ax_Lo][Ax_Hi][Ay_Lo][Ay_Hi][Az_Lo][Az_Hi]
-    //         [Mx_Lo][Mx_Hi][My_Lo][My_Hi][Mz_Lo][Mz_Hi]
+    // Packet layout (18 bytes, all little-endian int16):
+    //   [0..5]  Gyro  X/Y/Z — milli-rad/s  (ROS2 driver ×1/1000 → rad/s)
+    //   [6..11] Accel X/Y/Z — milli-m/s²   (ROS2 driver ×1/1000 → m/s²)
+    //   [12..17] Mag  X/Y/Z — raw AK09916 counts (ROS2 driver ×0.15 → µT)
     uint8_t data[18];
 
-    // Read from task_imu cache (no SPI access — eliminates BUG-1 race)
-    int16_t gyro[3], accel[3], mag[3];
-    imu_task_get_raw_data(gyro, accel, mag);
+    // Gyro + accel: calibrated physical values ×1000 (no SPI access — BUG-1 safe)
+    int16_t gyro_mrad_s[3], accel_mm_s2[3];
+    imu_task_get_milli_data(gyro_mrad_s, accel_mm_s2);
 
-    // Pack gyroscope (16-bit little-endian)
-    data[0] = gyro[0] & 0xFF;
-    data[1] = (gyro[0] >> 8) & 0xFF;
-    data[2] = gyro[1] & 0xFF;
-    data[3] = (gyro[1] >> 8) & 0xFF;
-    data[4] = gyro[2] & 0xFF;
-    data[5] = (gyro[2] >> 8) & 0xFF;
+    // Mag: raw AK09916 ADC counts (milli-µT would overflow int16 at ±4900µT range)
+    int16_t gyro_raw[3], accel_raw[3], mag_raw[3];
+    imu_task_get_raw_data(gyro_raw, accel_raw, mag_raw);
 
-    // Pack accelerometer
-    data[6] = accel[0] & 0xFF;
-    data[7] = (accel[0] >> 8) & 0xFF;
-    data[8] = accel[1] & 0xFF;
-    data[9] = (accel[1] >> 8) & 0xFF;
-    data[10] = accel[2] & 0xFF;
-    data[11] = (accel[2] >> 8) & 0xFF;
+    // Pack gyroscope (milli-rad/s, little-endian)
+    data[0]  = (uint8_t)(gyro_mrad_s[0] & 0xFF);
+    data[1]  = (uint8_t)((gyro_mrad_s[0] >> 8) & 0xFF);
+    data[2]  = (uint8_t)(gyro_mrad_s[1] & 0xFF);
+    data[3]  = (uint8_t)((gyro_mrad_s[1] >> 8) & 0xFF);
+    data[4]  = (uint8_t)(gyro_mrad_s[2] & 0xFF);
+    data[5]  = (uint8_t)((gyro_mrad_s[2] >> 8) & 0xFF);
 
-    // Pack magnetometer
-    data[12] = mag[0] & 0xFF;
-    data[13] = (mag[0] >> 8) & 0xFF;
-    data[14] = mag[1] & 0xFF;
-    data[15] = (mag[1] >> 8) & 0xFF;
-    data[16] = mag[2] & 0xFF;
-    data[17] = (mag[2] >> 8) & 0xFF;
+    // Pack accelerometer (milli-m/s², little-endian)
+    data[6]  = (uint8_t)(accel_mm_s2[0] & 0xFF);
+    data[7]  = (uint8_t)((accel_mm_s2[0] >> 8) & 0xFF);
+    data[8]  = (uint8_t)(accel_mm_s2[1] & 0xFF);
+    data[9]  = (uint8_t)((accel_mm_s2[1] >> 8) & 0xFF);
+    data[10] = (uint8_t)(accel_mm_s2[2] & 0xFF);
+    data[11] = (uint8_t)((accel_mm_s2[2] >> 8) & 0xFF);
+
+    // Pack magnetometer (raw AK09916 counts, little-endian)
+    data[12] = (uint8_t)(mag_raw[0] & 0xFF);
+    data[13] = (uint8_t)((mag_raw[0] >> 8) & 0xFF);
+    data[14] = (uint8_t)(mag_raw[1] & 0xFF);
+    data[15] = (uint8_t)((mag_raw[1] >> 8) & 0xFF);
+    data[16] = (uint8_t)(mag_raw[2] & 0xFF);
+    data[17] = (uint8_t)((mag_raw[2] >> 8) & 0xFF);
+
 
     protocol_send_packet(FUNC_REPORT_ICM_RAW, data, sizeof(data));
 }
