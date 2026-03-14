@@ -4,11 +4,11 @@
 
 robot_localization_ekf:
   ros__parameters:
-    # Update frequency — 20 Hz for RPi5 to prevent missed deadlines
-    # Was 25 Hz but timing analysis showed 58ms cycles (should be 40ms)
-    # 20 Hz = 50ms cycle time provides headroom for processing
-    frequency: 20.0
-    sensor_timeout: 0.15
+    # Update frequency — 15 Hz for RPi5 with full nav stack
+    # 15 Hz = 66ms cycle time gives headroom when nav2 adds CPU load
+    # (Was 20 Hz but EKF hit 300ms spikes during navigation)
+    frequency: 15.0
+    sensor_timeout: 0.2
     two_d_mode: true
     transform_time_offset: 0.0
     transform_timeout: 0.1
