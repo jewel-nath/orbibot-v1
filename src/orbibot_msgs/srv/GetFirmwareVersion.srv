@@ -1,0 +1,6 @@
+# Request firmware version from the STM32 microcontroller
+---
+bool success
+uint8 major
+uint8 minor
+string version_string

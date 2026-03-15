@@ -179,7 +179,7 @@ The MCP server speaks stdio and exposes OrbiBot tools (move, sensors, ROS servic
 │      Agent Node (ROS 2)                 │
 │  ┌──────────────┐ ┌─────────────────┐  │
 │  │ LLM Provider │ │ Tool Registry   │  │
-│  │ (Multi-LLM)  │ │ (15 robot tools)│  │
+│  │ (Multi-LLM)  │ │ (53 robot tools)│  │
 │  └──────────────┘ └─────────────────┘  │
 └─────────────────────────────────────────┘
            │
@@ -192,59 +192,190 @@ The MCP server speaks stdio and exposes OrbiBot tools (move, sensors, ROS servic
          ROS 2
 ```
 
-## Available Tools
+## Available Tools (53 total)
 
 ### Motion Tools
 | Tool | Description |
 |------|-------------|
-| `move_robot` | Move with velocities for duration |
-| `stop_robot` | Emergency stop (publish zero velocity) |
-| `set_motor_enable` | Enable/disable motors via `/orbibot/set_motor_enable` (use `enable: true` to enable, `enable: false` for motor off) |
+| `move_robot` | Move with velocities (vx, vy, wz) for a duration |
+| `stop_robot` | Immediately publish zero velocity |
+| `set_motor_enable` | Enable/disable motors via `/orbibot/set_motor_enable` |
+| `reset_firmware_state` | Emergency: stop motors, clear odometry, reset agent e-stop |
 
-### Sensor Tools
+### GET — Sensor Tools
 | Tool | Description |
 |------|-------------|
-| `get_battery` | Battery voltage and status |
-| `get_imu` | IMU orientation and velocities |
-| `get_odometry` | Full odometry data |
+| `get_battery` | Battery voltage and level |
+| `get_imu` | Filtered IMU orientation (roll, pitch, yaw) and angular velocities |
+| `get_imu_raw` | Raw ICM-20948 gyro (rad/s) and accel (m/s²) before Madgwick |
+| `get_magnetometer` | ICM-20948 AK09916 compass in µT |
+| `get_encoder_counts` | Raw encoder ticks [FL, BL, FR, BR] |
+| `get_joint_states` | Wheel positions (rad) and velocities (rad/s) |
+| `get_odometry` | Full odometry: position, yaw, velocity |
 | `get_robot_position` | Simplified position (x, y, yaw) |
-| `get_lidar_summary` | LiDAR scan with obstacles |
+| `get_lidar_summary` | LiDAR scan with obstacle detection |
+| `get_safety_status` | E-stop, faults, cmd_timeout, battery warnings |
+| `get_system_enriched` | Battery + CPU%, RAM%, temp°C, disk% |
+| `get_firmware_version` | STM32 firmware version (major.minor) |
+| `get_all_firmware_data` | One-shot snapshot of ALL firmware values |
 
-### System Tools
+### GET — System / ROS Tools
 | Tool | Description |
 |------|-------------|
-| `list_topics` | List ROS topics |
-| `get_system_status` | CPU, RAM, temperature, battery |
+| `list_topics` | List all active ROS topics |
+| `get_system_status` | CPU, RAM, temperature via /proc |
+| `list_services` | List all ROS services |
+| `ros2_list_actions` | List available ROS action servers |
+| `ros2_list_active_goals` | List currently active action goals |
 
-### Service Tools ✅ NEW
+### SET — Firmware Command Tools
 | Tool | Description |
 |------|-------------|
-| `list_services` | List all ROS services with types |
-| `ros2_service_call` | Call any ROS service |
+| `set_motor_pid` | Set motor PID (Kp, Ki, Kd) — temporary, lost on reboot |
+| `save_motor_pid` | Save motor PID to firmware flash — persists after reboot |
+| `set_yaw_pid` | Set yaw PID (Kp, Ki, Kd) — temporary |
+| `save_yaw_pid` | Save yaw PID to firmware flash — persists after reboot |
+| `set_beep` | Control buzzer: 0=off, 1=continuous, ≥10=N ms |
+| `reset_odometry` | Reset firmware odometry to zero (encoder counts unchanged) |
+| `reset_encoders` | Reset encoder counts to zero on MCU |
+| `calibrate_imu` | Trigger magnetometer auto-calibration (zero hard-iron) |
+| `set_mag_calibration` | Set explicit magnetometer offsets in µT |
 
-### Action Tools ✅ NEW
+### Service / Action Tools
 | Tool | Description |
 |------|-------------|
-| `ros2_list_actions` | List available action servers |
-| `ros2_send_action_goal` | Send action goal (e.g., navigate_to_pose) |
-| `ros2_cancel_action_goal` | Cancel an action goal |
+| `ros2_service_call` | Call any ROS service dynamically |
+| `ros2_send_action_goal` | Send a goal to a ROS action server |
+| `ros2_cancel_action_goal` | Cancel an active goal |
 | `ros2_action_request_result` | Get action result |
 | `ros2_action_subscribe_status` | Get action server status |
-| `ros2_list_active_goals` | List all active goals |
 
-## Nav2 Navigation Example
+### PID Tuning Tools
+| Tool | Description |
+|------|-------------|
+| `run_pid_test` | Drive at target velocity, record /odom response — returns MAE and overshoot |
 
-The agent can now control Nav2 navigation through actions:
+### Hardware Testing Tools
+| Tool | Description |
+|------|-------------|
+| `run_motor_test` | Spin motor(s) and compare encoder response vs expected ticks |
+| `run_imu_test` | Sample IMU 20×, check gyro bias and gravity magnitude |
+| `run_encoder_test` | Drive N cm, compare encoder-measured vs commanded distance |
+| `run_mag_test` | Sample magnetometer 15×, check field magnitude and stability |
+| `run_battery_test` | Monitor voltage 10× over 5 s, flag high-swing cells |
+| `run_beep_test` | 3-beep confirmation pattern |
+| `run_full_hardware_test` | Run all subsystem tests in sequence, return pass/fail report |
 
-```bash
-# User: "Navigate to position x=2.0, y=1.0"
-# Agent will use:
-# 1. ros2_list_actions - Find /navigate_to_pose
-# 2. ros2_send_action_goal - Send navigation goal
-# 3. ros2_action_request_result - Check completion
+### SLAM Tools (Phase 2)
+| Tool | Description |
+|------|-------------|
+| `slam_save_map` | Save pose graph + pgm/yaml to disk (e.g. `/home/orbibot/maps/my_map`) |
+| `slam_serialize_map` | Save pose graph only for later localization-mode reload |
+| `slam_get_map_info` | Map width/height, resolution, origin, explored% |
+
+### Navigation Tools — Nav2 (Phase 2)
+| Tool | Description |
+|------|-------------|
+| `set_initial_pose` | Tell AMCL where the robot is: x, y, yaw_deg in map frame |
+| `amcl_reinitialize` | Scatter AMCL particles globally when robot is completely lost |
+| `navigate_to_pose` | Navigate to target x, y, yaw_deg using Nav2 NavigateToPose action |
+| `navigate_through_poses` | Navigate through an ordered list of poses |
+| `follow_waypoints` | Patrol route through ordered waypoints (FollowWaypoints action) |
+| `nav_cancel` | Cancel all active Nav2 navigation goals |
+| `nav_clear_costmaps` | Clear local, global, or both costmaps |
+| `nav_spin` | In-place rotation recovery (Nav2 Spin action) |
+| `nav_backup` | Short reverse recovery (Nav2 BackUp action) |
+| `nav_get_plan` | Read current /plan path: waypoint count, start/end coords |
+
+### Exploration Tools (Phase 2)
+| Tool | Description |
+|------|-------------|
+| `exploration_start` | Start autonomous frontier exploration |
+| `exploration_stop` | Stop exploration |
+| `exploration_pause` | Pause exploration (robot stays in place) |
+| `exploration_resume` | Resume exploration after pause |
+| `get_exploration_status` | Current state: idle/exploring/navigating/complete/stopped |
+| `get_exploration_frontiers` | Frontier count and centroid positions in map frame |
+
+### Generic Interface Tool (Phase 2)
+| Tool | Description |
+|------|-------------|
+| `ros2_topic_publish` | Publish to any ROS topic (one-shot, for interfaces without a dedicated tool) |
+
+---
+
+## Quick-Start Conversation Examples
+
+```
+# Get full robot snapshot
+"Show me everything about the current robot state"
+→ Uses get_all_firmware_data
+
+# PID tuning workflow
+"Set motor PID to Kp=1.0, Ki=0.1, Kd=0.3 then test it"
+→ Uses set_motor_pid + run_pid_test
+
+# Make PID permanent
+"Save the current PID values to flash"
+→ Uses save_motor_pid (with values from tuning session)
+
+# Hardware self-check
+"Run the full hardware test"
+→ Uses run_full_hardware_test
+
+# Buzzer
+"Beep three times"
+→ Uses set_beep with 200ms, 0, 200ms, 0, 200ms
+
+# Encoder reset + distance test
+"Reset encoders and drive 30 cm forward to check accuracy"
+→ Uses reset_encoders + run_encoder_test
+
+# Calibrate magnetometer
+"Calibrate the compass"
+→ Uses calibrate_imu
+
+# Navigate to a target (Phase 2 — replaces manual action goal construction)
+"Navigate to x=2.0, y=1.0 facing north"
+→ Uses navigate_to_pose(x=2.0, y=1.0, yaw_deg=90)
+
+# Set robot position on map
+"The robot is at position 1.5, 0.8 facing east"
+→ Uses set_initial_pose(x=1.5, y=0.8, yaw_deg=0)
+
+# Robot is lost
+"Re-initialise localisation globally"
+→ Uses amcl_reinitialize()
+
+# Save the map after exploring
+"Save the current map as kitchen_map"
+→ Uses slam_save_map("/home/orbibot/maps/kitchen_map")
+
+# Check map coverage
+"How much of the map have we explored?"
+→ Uses slam_get_map_info()
+
+# Start autonomous exploration
+"Start autonomous exploration"
+→ Uses exploration_start()
+
+# Patrol route
+"Patrol: bedroom, kitchen, living room"
+→ Uses follow_waypoints([{x:1.5,y:0},{x:3.2,y:1.1},{x:0.5,y:2.0}])
+
+# Get unstuck
+"The robot is stuck — back up and try again"
+→ Uses nav_backup() + nav_clear_costmaps() + navigate_to_pose(...)
 ```
 
-Example goal for NavigateToPose:
+## Nav2 Navigation Examples
+
+### Simple navigation (use the dedicated tool)
+```
+navigate_to_pose(x=2.0, y=1.0, yaw_deg=0)
+```
+
+### Low-level action goal (if needed)
 ```json
 {
   "action_name": "/navigate_to_pose",
@@ -261,22 +392,10 @@ Example goal for NavigateToPose:
 }
 ```
 
-## Motor Enable Example
-
-For enabling/disabling motors, use the dedicated `set_motor_enable` tool (not `ros2_service_call`):
-
-```bash
-# Enable motors (required for movement)
-set_motor_enable(enable: true)
-
-# Disable motors (emergency stop / motor off)
-set_motor_enable(enable: false)
-```
-
 ## Service Call Examples
 
 ```bash
-# Clear global costmap
+# Clear global costmap (use nav_clear_costmaps tool instead)
 ros2_service_call({
   "service_name": "/global_costmap/clear_entirely_global_costmap",
   "service_type": "nav2_msgs/srv/ClearEntireCostmap",

@@ -540,3 +540,22 @@ class Rosmaster:
         """Get firmware version string (e.g., '2.0' for v2.0.0)."""
         with self._data_lock:
             return self._firmware_version
+
+    def request_firmware_version(self, timeout=0.5):
+        """Send a version request to the firmware and return the version string.
+
+        Sends the 0x51 VERSION command; the receive thread parses the response
+        and updates the cached version. Returns the version after waiting.
+
+        Args:
+            timeout: Seconds to wait for the firmware response.
+
+        Returns:
+            Version string (e.g., '2.0') or 'unknown' if no response.
+        """
+        try:
+            self._send_command(FUNC_VERSION, [])
+            time.sleep(timeout)
+        except (serial.SerialException, OSError) as e:
+            print(f'---request_firmware_version error: {e}---')
+        return self.get_firmware_version()

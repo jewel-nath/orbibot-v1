@@ -1,0 +1,8 @@
+# Set magnetometer hard-iron calibration offsets
+# offset values are in microtesla (µT)
+float32 offset_x
+float32 offset_y
+float32 offset_z
+---
+bool success
+string message
