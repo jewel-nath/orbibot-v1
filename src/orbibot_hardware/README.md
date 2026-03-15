@@ -202,5 +202,9 @@ screen /dev/motordriver 115200              # Direct serial monitor (Ctrl+A K to
 - **Odometry deduplication** — `/odom` publishes only when firmware data changes; skips duplicate frames at 50Hz sensor timer rate. When unchanged, re-publishes at `odometry.heartbeat_interval` (default 0.5 s) so late-joining subscribers (e.g. web dashboard) receive data within one interval
 - **Odometry QoS** — `/odom` uses RELIABLE + TRANSIENT_LOCAL (depth 5) so subscribers that support TRANSIENT_LOCAL receive the last message on connect; heartbeat ensures VOLATILE subscribers (e.g. rosbridge) get a message within `heartbeat_interval`
 - **Yaw wraparound** — angular difference uses modular arithmetic to prevent ±2π spikes in covariance accumulation
-- **Serial reconnect** — receive thread auto-reconnects after disconnect and re-enables auto-report if firmware rebooted
+- **Serial reconnect** — receive thread auto-reconnects after disconnect and re-enables auto-report if firmware rebooted; uses backoff (2s, 3s, …) to give USB/device time to recover
 - **Flash protection** — `set_auto_report_state` uses `forever=False` to avoid writing firmware flash on every startup
+
+### Serial dropout after ~60 s (“device reports readiness to read but returned no data”)
+
+If the hardware node works for a minute then enters a reconnect loop with the above error, the usual cause is USB or STM32: cable/contact, power, or STM32 reset. Check: USB cable and port (try another), power supply, and that no other process uses `/dev/motordriver`. The driver now uses reconnect backoff and a short delay after reopen to reduce log spam and give the device time to re-enumerate.

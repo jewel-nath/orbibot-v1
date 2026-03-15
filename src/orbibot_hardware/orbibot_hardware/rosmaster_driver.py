@@ -143,8 +143,8 @@ class Rosmaster:
     def __del__(self):
         self.close()
 
-    def _reconnect_serial(self, max_retries=10, retry_delay=1.0):
-        """Attempt to reconnect to serial port after disconnect."""
+    def _reconnect_serial(self, max_retries=10, retry_delay=2.0):
+        """Attempt to reconnect to serial port after disconnect. Uses backoff to give USB/device time to recover."""
         for attempt in range(max_retries):
             if not self._running:
                 return False
@@ -155,17 +155,19 @@ class Rosmaster:
                 except Exception:
                     pass
 
-                time.sleep(retry_delay)
+                # Backoff: 2s, 3s, 4.5s, ... (cap ~15s) so device can re-enumerate after reset
+                delay = retry_delay * (1.5 ** min(attempt, 6))
+                time.sleep(delay)
 
                 # Reopen serial port
                 self.ser = serial.Serial(self._com_port, 115200, timeout=0.1)
                 self.ser.reset_input_buffer()
-                print(f"Serial reconnected to {self._com_port} (attempt {attempt + 1})")
+                print(f"Serial reconnected to {self._com_port} (attempt {attempt + 1}/{max_retries})")
                 return True
             except serial.SerialException as e:
                 print(f"Reconnect attempt {attempt + 1}/{max_retries} failed: {e}")
 
-        print(f"Failed to reconnect after {max_retries} attempts")
+        print(f"Failed to reconnect after {max_retries} attempts — check USB cable and /dev/motordriver")
         return False
 
     # Parse data based on frame type (OrbiBot firmware sends ICM-20948 only)
@@ -295,6 +297,7 @@ class Rosmaster:
                 print(f"Serial error in receive thread: {e}")
                 buf.clear()
                 if self._running and self._reconnect_serial():
+                    time.sleep(1.0)  # give device time after reopen before first read
                     if self._auto_report_enabled:
                         self.set_auto_report_state(True)
                     print("Receive thread resuming after reconnect")

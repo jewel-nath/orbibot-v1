@@ -954,15 +954,13 @@ class RosBridge:
 
             # Call service asynchronously
             future = client.call_async(request)
+            done_event = threading.Event()
+            future.add_done_callback(lambda _: done_event.set())
 
-            # Wait for response with timeout
-            start_time = time.time()
-            while time.time() - start_time < timeout:
-                rclpy.spin_once(self._node, timeout_sec=0.1)
-                if future.done():
-                    break
-
-            if not future.done():
+            # Wait for response. Do NOT spin here: when running under MCP the node is
+            # already being spun by _spin_ros in another thread; spinning here causes
+            # "Executor is already spinning" and service call failure.
+            if not done_event.wait(timeout=timeout):
                 return {
                     'success': False,
                     'error': f'Service call timed out after {timeout}s'
