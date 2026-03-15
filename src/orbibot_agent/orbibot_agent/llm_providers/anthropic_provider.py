@@ -142,6 +142,7 @@ class AnthropicProvider(BaseLLMProvider):
                     result['tool_calls'].append({
                         'name': content.name,
                         'arguments': content.input,
+                        'tool_use_id': content.id,
                     })
 
             # Add assistant response to history
@@ -210,6 +211,7 @@ class AnthropicProvider(BaseLLMProvider):
                     result['tool_calls'].append({
                         'name': content.name,
                         'arguments': content.input,
+                        'tool_use_id': content.id,
                     })
 
             self._messages.append({

@@ -20,6 +20,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/CalibrateIMU.srv"
   "srv/ResetOdometry.srv"
   "srv/ResetEncoders.srv"
+  "srv/GetFirmwareVersion.srv"
+  "srv/SetMagCalibration.srv"
   DEPENDENCIES std_msgs geometry_msgs
 )
 

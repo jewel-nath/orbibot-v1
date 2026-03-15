@@ -38,7 +38,10 @@ from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 
 # Custom Messages
 from orbibot_msgs.msg import SystemStatus, SafetyStatus
-from orbibot_msgs.srv import SetMotorEnable, CalibrateIMU, ResetOdometry, ResetEncoders
+from orbibot_msgs.srv import (
+    SetMotorEnable, CalibrateIMU, ResetOdometry, ResetEncoders,
+    GetFirmwareVersion, SetMagCalibration,
+)
 
 # ROSMaster Driver
 try:
@@ -98,6 +101,7 @@ class OrbiBotHardwareNode(Node):
         self._last_pid_update = 0.0
         self._last_yaw_pid_update = 0.0
         self._last_pid_save_update = 0.0
+        self._last_yaw_pid_save_update = 0.0
 
         # Callback group for concurrent timer execution with MultiThreadedExecutor
         self._sensor_cb_group = ReentrantCallbackGroup()
@@ -306,6 +310,9 @@ class OrbiBotHardwareNode(Node):
         self.pid_save_sub = self.create_subscription(
             Float32MultiArray, '/orbibot/pid_save',
             self._pid_save_callback, 10)
+        self.yaw_pid_save_sub = self.create_subscription(
+            Float32MultiArray, '/orbibot/yaw_pid_save',
+            self._yaw_pid_save_callback, 10)
         self.beep_sub = self.create_subscription(
             UInt16, '/orbibot/beep', self._beep_callback, 10)
 
@@ -319,6 +326,12 @@ class OrbiBotHardwareNode(Node):
             ResetOdometry, '/orbibot/reset_odometry', self._reset_odometry_callback)
         self.reset_encoders_srv = self.create_service(
             ResetEncoders, '/orbibot/reset_encoders', self._reset_encoders_callback)
+        self.firmware_version_srv = self.create_service(
+            GetFirmwareVersion, '/orbibot/get_firmware_version',
+            self._get_firmware_version_callback)
+        self.set_mag_cal_srv = self.create_service(
+            SetMagCalibration, '/orbibot/set_mag_calibration',
+            self._set_mag_calibration_callback)
 
     def _create_timers(self):
         """Create periodic timers"""
@@ -471,6 +484,78 @@ class OrbiBotHardwareNode(Node):
                 self.get_logger().warn("Invalid PID save data length - expected [kp, ki, kd]")
         except Exception as e:
             self.get_logger().error(f"PID flash save failed: {e}")
+
+    def _yaw_pid_save_callback(self, msg: Float32MultiArray):
+        """Save yaw PID gains to firmware flash via /orbibot/yaw_pid_save topic."""
+        if not self.hardware_connected:
+            return
+        if not self._check_pid_rate_limit('_last_yaw_pid_update'):
+            return
+
+        if len(msg.data) != 3:
+            self.get_logger().warn(
+                f"Yaw PID save requires [kp, ki, kd], got {len(msg.data)} values")
+            return
+
+        kp, ki, kd = msg.data[0], msg.data[1], msg.data[2]
+        try:
+            self.bot.set_yaw_pid_param(kp, ki, kd, forever=True)
+            self.get_logger().info(
+                f"Yaw PID gains saved to flash: Kp={kp:.3f} Ki={ki:.3f} Kd={kd:.3f}")
+        except Exception as e:
+            self.get_logger().error(f"Yaw PID flash save failed: {e}")
+
+    def _get_firmware_version_callback(self, request, response):
+        """Return firmware version by requesting it from the STM32."""
+        if not self.hardware_connected:
+            response.success = False
+            response.major = 0
+            response.minor = 0
+            response.version_string = 'unknown'
+            return response
+
+        try:
+            version_str = self.bot.request_firmware_version(timeout=0.5)
+            parts = version_str.split('.') if '.' in version_str else []
+            response.major = int(parts[0]) if len(parts) >= 1 and parts[0].isdigit() else 0
+            response.minor = int(parts[1]) if len(parts) >= 2 and parts[1].isdigit() else 0
+            response.version_string = version_str
+            response.success = version_str != 'unknown'
+            self.get_logger().info(f"Firmware version: {version_str}")
+        except Exception as e:
+            self.get_logger().error(f"Get firmware version failed: {e}")
+            response.success = False
+            response.major = 0
+            response.minor = 0
+            response.version_string = 'unknown'
+
+        return response
+
+    def _set_mag_calibration_callback(self, request, response):
+        """Set magnetometer hard-iron offsets (µT) via /orbibot/set_mag_calibration service."""
+        if not self.hardware_connected:
+            response.success = False
+            response.message = "Hardware not connected"
+            return response
+
+        try:
+            self.bot.set_mag_calibration(
+                float(request.offset_x),
+                float(request.offset_y),
+                float(request.offset_z),
+            )
+            response.success = True
+            response.message = (
+                f"Mag calibration set: ox={request.offset_x:.3f} "
+                f"oy={request.offset_y:.3f} oz={request.offset_z:.3f} µT"
+            )
+            self.get_logger().info(response.message)
+        except Exception as e:
+            self.get_logger().error(f"Set mag calibration failed: {e}")
+            response.success = False
+            response.message = f"Failed: {e}"
+
+        return response
 
     def _sensor_callback(self):
         """Publish sensor data @ 50Hz. R1/Q4: single fetch per cycle. S1/S2: data freshness."""

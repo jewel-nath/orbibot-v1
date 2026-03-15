@@ -15,10 +15,10 @@ Publishes sensor data and accepts velocity/PID commands.
 | Topic | Type | QoS | Description |
 |-------|------|-----|-------------|
 | `/cmd_vel` | `geometry_msgs/Twist` | Reliable | Velocity commands forwarded to firmware |
-| `/orbibot/pid_params` | `std_msgs/Float32MultiArray` | Default | Motor PID gains `[kp, ki, kd]` — all motors |
-| `/orbibot/yaw_pid_params` | `std_msgs/Float32MultiArray` | Default | Yaw PID gains `[kp, ki, kd]` |
-| `/orbibot/pid_multilevel` | `std_msgs/Float32MultiArray` | Default | Multi-level PID: `[t0,t1,t2, kp0,ki0,kd0, kp1,ki1,kd1, kp2,ki2,kd2]` |
-| `/orbibot/pid_save` | `std_msgs/Float32MultiArray` | Default | Save PID to flash — same 12-value format as `pid_multilevel` |
+| `/orbibot/pid_params` | `std_msgs/Float32MultiArray` | Default | Motor PID gains `[kp, ki, kd]` — temporary, all motors |
+| `/orbibot/yaw_pid_params` | `std_msgs/Float32MultiArray` | Default | Yaw PID gains `[kp, ki, kd]` — temporary |
+| `/orbibot/pid_save` | `std_msgs/Float32MultiArray` | Default | Save motor PID to flash `[kp, ki, kd]` — persists across reboot |
+| `/orbibot/yaw_pid_save` | `std_msgs/Float32MultiArray` | Default | Save yaw PID to flash `[kp, ki, kd]` — persists across reboot |
 | `/orbibot/beep` | `std_msgs/UInt16` | Default | Buzzer: `0`=off, `1`=continuous, `≥10`=on for N ms then auto-off |
 
 #### Publications
@@ -40,9 +40,11 @@ Publishes sensor data and accepts velocity/PID commands.
 | Service | Type | Description |
 |---------|------|-------------|
 | `/orbibot/set_motor_enable` | `orbibot_msgs/SetMotorEnable` | Enable/disable motors |
-| `/orbibot/calibrate_imu` | `orbibot_msgs/CalibrateIMU` | IMU calibration (ICM-20948 auto-calibrates on startup — returns not supported) |
+| `/orbibot/calibrate_imu` | `orbibot_msgs/CalibrateIMU` | Apply zero magnetometer hard-iron offset (ICM-20948 auto-calibrates on startup) |
 | `/orbibot/reset_odometry` | `orbibot_msgs/ResetOdometry` | Reset firmware odometry (pose) to zero; encoder counts unchanged |
 | `/orbibot/reset_encoders` | `orbibot_msgs/ResetEncoders` | Reset encoder counts to zero (MCU + node state); odometry unchanged |
+| `/orbibot/get_firmware_version` | `orbibot_msgs/GetFirmwareVersion` | Request firmware version from STM32; returns `major`, `minor`, `version_string` |
+| `/orbibot/set_mag_calibration` | `orbibot_msgs/SetMagCalibration` | Set magnetometer hard-iron offsets explicitly in µT (`offset_x`, `offset_y`, `offset_z`) |
 
 ---
 
@@ -113,18 +115,35 @@ See [config/hardware_params.yaml](config/hardware_params.yaml) for all parameter
 ## PID Tuning via Topics
 
 ```bash
-# Set motor PID gains (temporary, single-level)
+# Set motor PID gains (temporary — lost on reboot)
 ros2 topic pub --once /orbibot/pid_params std_msgs/msg/Float32MultiArray \
   "data: [0.8, 0.06, 0.5]"
 
-# Set multi-level PID (thresholds mm/s, gains float [0,10])
-# Format: [t0, t1, t2, kp0, ki0, kd0, kp1, ki1, kd1, kp2, ki2, kd2]
-ros2 topic pub --once /orbibot/pid_multilevel std_msgs/msg/Float32MultiArray \
-  "data: [100.0, 300.0, 600.0, 0.8, 0.06, 0.5, 0.8, 0.06, 0.5, 0.8, 0.06, 0.5]"
+# Set yaw PID gains (temporary)
+ros2 topic pub --once /orbibot/yaw_pid_params std_msgs/msg/Float32MultiArray \
+  "data: [0.4, 0.0, 0.1]"
 
-# Save current multi-level PID to flash
+# Save motor PID to flash (persists across reboot)
 ros2 topic pub --once /orbibot/pid_save std_msgs/msg/Float32MultiArray \
-  "data: [100.0, 300.0, 600.0, 0.8, 0.06, 0.5, 0.8, 0.06, 0.5, 0.8, 0.06, 0.5]"
+  "data: [0.8, 0.06, 0.5]"
+
+# Save yaw PID to flash (persists across reboot)
+ros2 topic pub --once /orbibot/yaw_pid_save std_msgs/msg/Float32MultiArray \
+  "data: [0.4, 0.0, 0.1]"
+```
+
+## Firmware Version and Magnetometer Calibration
+
+```bash
+# Request firmware version from STM32
+ros2 service call /orbibot/get_firmware_version orbibot_msgs/srv/GetFirmwareVersion '{}'
+
+# Set explicit magnetometer hard-iron offsets (µT)
+ros2 service call /orbibot/set_mag_calibration orbibot_msgs/srv/SetMagCalibration \
+  '{offset_x: 5.2, offset_y: -3.1, offset_z: 1.0}'
+
+# Trigger zero-offset auto-calibration (use current reading as bias)
+ros2 service call /orbibot/calibrate_imu orbibot_msgs/srv/CalibrateIMU '{calibration_time: 5}'
 ```
 
 ## Buzzer Examples
