@@ -192,7 +192,7 @@ The MCP server speaks stdio and exposes OrbiBot tools (move, sensors, ROS servic
          ROS 2
 ```
 
-## Available Tools (53 total)
+## Available Tools (65 total)
 
 ### Motion Tools
 | Tool | Description |

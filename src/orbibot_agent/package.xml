@@ -20,7 +20,7 @@
 
   <exec_depend>python3-aiohttp</exec_depend>
   <exec_depend>python3-aiohttp-cors</exec_depend>
-  <exec_depend>python3-google-generativeai</exec_depend>
+  <!-- Gemini uses google-genai (pip install google-genai); no system package for it -->
   <exec_depend>python3-anthropic</exec_depend>
   <exec_depend>python3-openai</exec_depend>
   <exec_depend>python3-mcp</exec_depend>
