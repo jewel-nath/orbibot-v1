@@ -1,7 +1,7 @@
 """Google Gemini LLM provider for OrbiBot Agent (google-genai SDK)."""
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Generator, List, Optional
 
 try:
     from google import genai
@@ -202,3 +202,108 @@ class GeminiProvider(BaseLLMProvider):
         except Exception as e:
             logger.error(f'Gemini send_tool_results failed: {e}')
             return {'text': f'Error: {e}', 'tool_calls': [], 'error': str(e)}
+
+    def send_message_stream(
+        self,
+        message: str,
+    ) -> Generator[Dict[str, Any], None, None]:
+        """Stream Gemini response as event chunks.
+
+        Yields dicts with 'type': 'text' | 'tool_calls'.
+
+        Args:
+            message: User message
+
+        Yields:
+            Event dicts
+        """
+        if not self._chat:
+            self.start_chat()
+
+        try:
+            # Gemini streaming: iterate over response chunks
+            response_stream = self._chat.send_message_stream(message)
+            tool_calls_batch = []
+
+            for chunk in response_stream:
+                # Collect text chunks
+                try:
+                    for part in (chunk.parts or []):
+                        if getattr(part, 'text', None):
+                            yield {'type': 'text', 'content': part.text}
+                except Exception:
+                    pass
+
+                # Collect function calls
+                try:
+                    if chunk.function_calls:
+                        for fc in chunk.function_calls:
+                            tool_calls_batch.append({
+                                'name': fc.name,
+                                'arguments': dict(fc.args),
+                            })
+                except Exception:
+                    pass
+
+            # Yield all tool calls as a batch after streaming completes
+            if tool_calls_batch:
+                yield {'type': 'tool_calls', 'tool_calls': tool_calls_batch}
+
+        except Exception as e:
+            logger.error(f'Gemini send_message_stream failed: {e}')
+            yield {'type': 'text', 'content': f'Error: {e}'}
+
+    def send_tool_results_stream(
+        self,
+        tool_results: List[Dict[str, Any]],
+    ) -> Generator[Dict[str, Any], None, None]:
+        """Stream Gemini response after tool results.
+
+        Args:
+            tool_results: List of {'name': str, 'result': dict}
+
+        Yields:
+            Event dicts
+        """
+        if not self._chat:
+            yield {'type': 'text', 'content': 'Error: No active chat session'}
+            return
+
+        try:
+            parts = []
+            for tr in tool_results:
+                result = tr['result']
+                if not isinstance(result, dict):
+                    result = {'result': result}
+                parts.append(types.Part.from_function_response(
+                    name=tr['name'],
+                    response=result,
+                ))
+
+            response_stream = self._chat.send_message_stream(parts)
+            tool_calls_batch = []
+
+            for chunk in response_stream:
+                try:
+                    for part in (chunk.parts or []):
+                        if getattr(part, 'text', None):
+                            yield {'type': 'text', 'content': part.text}
+                except Exception:
+                    pass
+
+                try:
+                    if chunk.function_calls:
+                        for fc in chunk.function_calls:
+                            tool_calls_batch.append({
+                                'name': fc.name,
+                                'arguments': dict(fc.args),
+                            })
+                except Exception:
+                    pass
+
+            if tool_calls_batch:
+                yield {'type': 'tool_calls', 'tool_calls': tool_calls_batch}
+
+        except Exception as e:
+            logger.error(f'Gemini send_tool_results_stream failed: {e}')
+            yield {'type': 'text', 'content': f'Error: {e}'}

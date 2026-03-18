@@ -5,7 +5,7 @@ Ties together LLM providers, tools, and ROS integration.
 
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Generator, List, Optional
 
 import rclpy
 from rclpy.node import Node
@@ -22,6 +22,38 @@ from .llm_providers.moonshot_provider import MoonshotProvider
 from .llm_providers.ollama_provider import OllamaProvider
 
 logger = logging.getLogger(__name__)
+
+# Built-in RobotTester system prompt (used when no prompt_file is configured)
+_ROBOT_TESTER_PROMPT = """You are OrbiBot RobotTester — a systematic hardware and software test engineer for the OrbiBot Mecanum-wheeled mobile robot.
+
+BEHAVIOUR RULES:
+1. Always state your test plan BEFORE calling any tools.
+   Format: "Test plan: (1) <step>, (2) <step>, ..."
+
+2. After EACH tool call, immediately report:
+   - What was measured or what happened
+   - PASS or FAIL with the specific reason
+   - Expected vs actual values where applicable
+
+3. For MOTOR/ENCODER tests: get_encoder_counts (baseline) → move_robot → get_encoder_counts (after) → compare delta.
+
+4. For PID TUNING: get_firmware_state → run_pid_test → interpret MAE/overshoot → suggest new PID → set_motor_pid → run_pid_test again → compare.
+
+5. For IMU/MAGNETOMETER: get_imu_data → check for NaN/extreme values. get_magnetometer_data → check heading consistency.
+
+6. For BATTERY: get_battery_status → PASS if voltage > 10.5 V, FAIL otherwise.
+
+7. For SLAM/NAV: slam_get_map_info → set_initial_pose → navigate_to_pose → report final pose vs target.
+
+8. For FULL HARDWARE TEST: run_full_hardware_test → interpret each sub-result → list failures → suggest fixes.
+
+9. END every test session with a SUMMARY TABLE:
+   | Test | Result | Expected | Actual | Notes |
+   |------|--------|----------|--------|-------|
+
+STYLE: Be concise. Use bullet points. Never skip PASS/FAIL. Suggest fixes for failures.
+SAFETY: Max linear 0.2 m/s for tests. Max duration 5 s per move. Call stop_robot on unexpected behaviour.
+"""
 
 
 class AgentNode(Node):
@@ -56,6 +88,7 @@ class AgentNode(Node):
         self._init_providers()
 
         self._current_provider = None
+        self._current_provider_name: Optional[str] = None
         self._system_prompt = self._load_system_prompt()
 
         self.get_logger().info('OrbiBot Agent node initialized')
@@ -94,14 +127,26 @@ class AgentNode(Node):
                     'base_url': 'http://localhost:11434/v1',
                 },
             },
+            'robot_tester': {
+                'provider': 'anthropic',
+                'model': 'claude-3-5-sonnet-20241022',
+                'prompt_file': '',
+            },
+            'chat_server': {
+                'max_workers': 2,
+            },
         }
 
         if config_file and os.path.exists(config_file):
             try:
                 with open(config_file, 'r') as f:
                     user_config = yaml.safe_load(f)
-                # Merge with defaults
-                default_config.update(user_config)
+                # Deep merge with defaults
+                for key, value in user_config.items():
+                    if isinstance(value, dict) and key in default_config and isinstance(default_config[key], dict):
+                        default_config[key].update(value)
+                    else:
+                        default_config[key] = value
                 self.get_logger().info(f'Loaded config from {config_file}')
             except Exception as e:
                 self.get_logger().error(f'Failed to load config: {e}')
@@ -131,7 +176,7 @@ class AgentNode(Node):
         self.get_logger().info(f'Initialized {len(self._providers)} LLM providers')
 
     def _load_system_prompt(self) -> str:
-        """Load system prompt for the agent.
+        """Load default system prompt for the agent.
 
         Returns:
             System prompt string
@@ -196,6 +241,44 @@ SAFETY CONSTRAINTS
 Always explain what you are doing before calling tools. If a command is unsafe or unclear, ask for clarification before acting.
 """
 
+    def _get_system_prompt(self, mode: str = 'chat') -> str:
+        """Get system prompt for the given mode.
+
+        Args:
+            mode: 'chat' (default) or 'robot_tester'
+
+        Returns:
+            System prompt string
+        """
+        if mode == 'robot_tester':
+            # Try to load from file first
+            prompt_file = self._config.get('robot_tester', {}).get('prompt_file', '')
+            if prompt_file and os.path.exists(prompt_file):
+                try:
+                    with open(prompt_file, 'r') as f:
+                        return f.read()
+                except Exception as e:
+                    logger.warning(f'Failed to load robot_tester prompt file: {e}')
+            # Fall back to built-in prompt
+            return _ROBOT_TESTER_PROMPT
+        return self._system_prompt
+
+    def _get_provider_name_for_mode(self, mode: str) -> str:
+        """Get the provider name to use for the given mode.
+
+        Args:
+            mode: 'chat' or 'robot_tester'
+
+        Returns:
+            Provider name string
+        """
+        if mode == 'robot_tester':
+            tester_cfg = self._config.get('robot_tester', {})
+            provider = tester_cfg.get('provider', '')
+            if provider and provider in self._providers:
+                return provider
+        return self._config.get('default_provider', 'gemini')
+
     def get_available_providers(self) -> List[str]:
         """Get list of available providers.
 
@@ -204,11 +287,12 @@ Always explain what you are doing before calling tools. If a command is unsafe o
         """
         return [name for name, provider in self._providers.items() if provider.is_available()]
 
-    def set_provider(self, provider_name: str) -> bool:
+    def set_provider(self, provider_name: str, system_prompt: Optional[str] = None) -> bool:
         """Set the active LLM provider.
 
         Args:
             provider_name: Name of the provider
+            system_prompt: Optional system prompt override
 
         Returns:
             True if successful
@@ -223,28 +307,39 @@ Always explain what you are doing before calling tools. If a command is unsafe o
             return False
 
         self._current_provider = provider
-        self._current_provider.start_chat(self._system_prompt)
+        self._current_provider_name = provider_name
+        prompt = system_prompt if system_prompt is not None else self._system_prompt
+        self._current_provider.start_chat(prompt)
         self._current_provider.set_tools(self._tool_registry.get_tool_schemas())
 
         self.get_logger().info(f'Switched to provider: {provider_name}')
         return True
 
-    def process_message(self, message: str) -> Dict[str, Any]:
+    def process_message(self, message: str, mode: str = 'chat') -> Dict[str, Any]:
         """Process a user message.
 
         Args:
             message: User message
+            mode: 'chat' (default) or 'robot_tester'
 
         Returns:
             Response dictionary with 'text' and 'tool_calls'
         """
-        if not self._current_provider:
-            default_provider = self.get_parameter('default_provider').value
-            if not self.set_provider(default_provider):
+        provider_name = self._get_provider_name_for_mode(mode)
+        system_prompt = self._get_system_prompt(mode)
+
+        # Switch provider or re-init if mode changed
+        if not self._current_provider or self._current_provider_name != provider_name:
+            if not self.set_provider(provider_name, system_prompt):
                 return {
-                    'text': f'Error: No LLM provider available. Tried {default_provider}',
+                    'text': f'Error: No LLM provider available. Tried {provider_name}',
                     'tool_calls': []
                 }
+        else:
+            # Same provider but may need different system prompt for mode
+            # Re-start chat with new prompt if mode differs from last call
+            self._current_provider.start_chat(system_prompt)
+            self._current_provider.set_tools(self._tool_registry.get_tool_schemas())
 
         # Send message to LLM
         response = self._current_provider.send_message(message)
@@ -276,6 +371,94 @@ Always explain what you are doing before calling tools. If a command is unsafe o
             response = self._current_provider.send_tool_results(tool_results)
 
         return response
+
+    def process_message_stream(
+        self,
+        message: str,
+        mode: str = 'chat',
+    ) -> Generator[Dict[str, Any], None, None]:
+        """Process a user message and yield SSE event dicts as the agent works.
+
+        This is the streaming version of process_message(). It yields events
+        that the chat server can forward to the client as Server-Sent Events.
+
+        Event types yielded:
+          {'event': 'text_chunk', 'content': '...'}
+          {'event': 'tool_start', 'name': '...', 'args': {...}}
+          {'event': 'tool_result', 'name': '...', 'result': {...}}
+          {'event': 'done', 'tool_calls': [...]}
+          {'event': 'error', 'message': '...'}
+
+        Args:
+            message: User message
+            mode: 'chat' or 'robot_tester'
+
+        Yields:
+            SSE event dicts
+        """
+        provider_name = self._get_provider_name_for_mode(mode)
+        system_prompt = self._get_system_prompt(mode)
+
+        # Switch provider or re-init if needed
+        if not self._current_provider or self._current_provider_name != provider_name:
+            if not self.set_provider(provider_name, system_prompt):
+                yield {'event': 'error', 'message': f'No LLM provider available. Tried {provider_name}'}
+                return
+        else:
+            self._current_provider.start_chat(system_prompt)
+            self._current_provider.set_tools(self._tool_registry.get_tool_schemas())
+
+        all_tool_calls = []
+        max_iterations = 10
+        iteration = 0
+
+        try:
+            # First streaming call
+            pending_tool_calls = []
+            for chunk in self._current_provider.send_message_stream(message):
+                if chunk.get('type') == 'text':
+                    yield {'event': 'text_chunk', 'content': chunk['content']}
+                elif chunk.get('type') == 'tool_calls':
+                    pending_tool_calls = chunk['tool_calls']
+
+            # Tool call loop
+            while pending_tool_calls and iteration < max_iterations:
+                iteration += 1
+                tool_results = []
+
+                for tc in pending_tool_calls:
+                    tool_name = tc['name']
+                    tool_args = tc.get('arguments', {})
+                    tool_use_id = tc.get('tool_use_id', tc.get('tool_call_id', 'unknown'))
+
+                    yield {'event': 'tool_start', 'name': tool_name, 'args': tool_args}
+
+                    self.get_logger().info(f'Executing tool (stream): {tool_name}')
+                    result = self._tool_registry.execute_tool(tool_name, tool_args)
+
+                    yield {'event': 'tool_result', 'name': tool_name, 'result': result}
+
+                    tool_results.append({
+                        'name': tool_name,
+                        'result': result,
+                        'tool_use_id': tool_use_id,
+                        'tool_call_id': tool_use_id,
+                    })
+                    all_tool_calls.append({'tool': tool_name, 'args': tool_args, 'result': result})
+
+                # Stream next LLM response after tool results
+                pending_tool_calls = []
+                for chunk in self._current_provider.send_tool_results_stream(tool_results):
+                    if chunk.get('type') == 'text':
+                        yield {'event': 'text_chunk', 'content': chunk['content']}
+                    elif chunk.get('type') == 'tool_calls':
+                        pending_tool_calls = chunk['tool_calls']
+
+            yield {'event': 'done', 'tool_calls': all_tool_calls}
+
+        except Exception as e:
+            logger.error(f'process_message_stream failed: {e}')
+            yield {'event': 'error', 'message': str(e)}
 
     def get_safety_manager(self) -> SafetyManager:
         """Get safety manager.

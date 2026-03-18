@@ -2,7 +2,7 @@
 
 import os
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, Generator, List, Optional
 
 
 class BaseLLMProvider(ABC):
@@ -78,6 +78,63 @@ class BaseLLMProvider(ABC):
 
         Args:
             system_prompt: Optional system prompt for the session
+        """
+        pass
+
+    def send_message_stream(
+        self,
+        message: str,
+    ) -> Generator[Dict[str, Any], None, None]:
+        """Stream LLM response as event chunks.
+
+        Yields dicts with 'type' key:
+          - {'type': 'text', 'content': '...'} — text token chunk
+          - {'type': 'tool_calls', 'tool_calls': [...]} — tool call batch
+
+        Default implementation falls back to non-streaming send_message().
+        Override in subclasses for true streaming.
+
+        Args:
+            message: User message
+
+        Yields:
+            Event dicts
+        """
+        response = self.send_message(message)
+        if response.get('tool_calls'):
+            yield {'type': 'tool_calls', 'tool_calls': response['tool_calls']}
+        if response.get('text'):
+            yield {'type': 'text', 'content': response['text']}
+
+    def send_tool_results_stream(
+        self,
+        tool_results: List[Dict[str, Any]],
+    ) -> Generator[Dict[str, Any], None, None]:
+        """Stream LLM response after tool results.
+
+        Default implementation falls back to non-streaming send_tool_results().
+        Override in subclasses for true streaming.
+
+        Args:
+            tool_results: List of tool result dictionaries
+
+        Yields:
+            Event dicts (same format as send_message_stream)
+        """
+        response = self.send_tool_results(tool_results)
+        if response.get('tool_calls'):
+            yield {'type': 'tool_calls', 'tool_calls': response['tool_calls']}
+        if response.get('text'):
+            yield {'type': 'text', 'content': response['text']}
+
+    def inject_history(self, messages: List[Dict[str, str]]) -> None:
+        """Inject conversation history into the current session.
+
+        Called when the client sends previous messages for context recovery.
+        Default implementation is a no-op; override in stateful providers.
+
+        Args:
+            messages: List of {'role': 'user'|'assistant', 'content': str}
         """
         pass
 

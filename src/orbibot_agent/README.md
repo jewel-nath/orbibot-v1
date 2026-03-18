@@ -7,11 +7,14 @@ Unified AI agent for OrbiBot with multi-LLM support (Gemini, Claude, Kimi, Ollam
 - **Multi-LLM Support**: Switch between Gemini, Claude, Kimi, and local Ollama models
 - **Native ROS 2**: Direct rclpy integration (no rosbridge overhead)
 - **Three Interfaces**:
-  - HTTP API for web GUI (`chat_server`)
+  - HTTP API for web GUI (`chat_server`) with SSE streaming
   - Terminal CLI with rich interface (`chat_cli`)
   - MCP server for Claude Desktop/Cline (`mcp_server`)
+- **Real-time Streaming**: SSE streaming shows text chunks and tool progress live
+- **Multi-Mode**: Chat mode and RobotTester mode for systematic hardware testing
 - **Safety First**: Built-in velocity limits, duration caps, emergency stop
 - **Unified Tools**: Same tools work across all interfaces
+- **Test Suite**: LLM-free hardware test runner with pass/fail reporting
 
 ## Installation
 
@@ -88,7 +91,131 @@ To use a custom config file when launching:
 ros2 launch orbibot_agent chat_server.launch.py config:=/path/to/your_agent_params.yaml
 ```
 
-### 3. Choosing provider when using the HTTP API
+### 3. RobotTester Mode
+
+RobotTester is a specialized mode for systematic hardware and navigation testing. It uses a dedicated system prompt that enforces:
+
+- **Test plans** stated before any tool calls
+- **PASS/FAIL verdicts** after each measurement
+- **Summary tables** at the end of test sessions
+- **Specific fixes** suggested for any failures
+
+**Configuration** (`config/agent_params.yaml`):
+```yaml
+robot_tester:
+  provider: "anthropic"                  # Use Claude for testing
+  model: "claude-3-5-sonnet-20241022"    # Stronger model for reasoning
+  prompt_file: ""                        # Leave empty for built-in prompt
+```
+
+**Using via HTTP API**:
+```bash
+# Test mode request
+curl -X POST http://localhost:8082/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Run motor test", "mode": "robot_tester"}'
+```
+
+**In the web GUI**: Toggle the "Tester" button in the chat panel to switch modes. Navigation action buttons (Forward, Back, Left, Right, Spin, Stop) appear for quick testing.
+
+### 4. SSE Streaming Endpoint
+
+The streaming endpoint provides real-time feedback as the AI thinks and executes tools:
+
+```bash
+POST /api/chat/stream
+```
+
+**Request body** (same as `/api/chat`):
+```json
+{
+  "message": "What's the battery level?",
+  "provider": "anthropic",
+  "mode": "chat"
+}
+```
+
+**Response**: Server-Sent Events (SSE) stream with event types:
+
+| Event | Payload | When |
+|-------|---------|------|
+| `text_chunk` | `{"event":"text_chunk","content":"..."}` | LLM emits text |
+| `tool_start` | `{"event":"tool_start","name":"get_battery","args":{}}` | Before tool executes |
+| `tool_result` | `{"event":"tool_result","name":"get_battery","result":{...}}` | After tool returns |
+| `done` | `{"event":"done","tool_calls":[...]}` | All rounds complete |
+| `error` | `{"event":"error","message":"..."}` | Any exception |
+
+**JavaScript example**:
+```javascript
+const resp = await fetch('http://localhost:8082/api/chat/stream', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ message: 'Hello', mode: 'chat' })
+});
+
+const reader = resp.body.getReader();
+const decoder = new TextDecoder();
+
+while (true) {
+  const { done, value } = await reader.read();
+  if (done) break;
+  
+  const lines = decoder.decode(value).split('\n');
+  for (const line of lines) {
+    if (line.startsWith('data: ')) {
+      const event = JSON.parse(line.slice(6));
+      console.log(event.event, event);
+    }
+  }
+}
+```
+
+### 5. Test Suite Endpoint
+
+Run structured hardware tests without LLM involvement:
+
+```bash
+POST /api/run_test_suite
+```
+
+**Request body** (optional):
+```json
+{
+  "tests": ["battery_test", "imu_test"]   // Run selected tests only
+}
+```
+
+Omit `tests` to run all tests.
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "report": {
+    "battery_test": {
+      "pass": true,
+      "voltage": 12.1,
+      "verdict": "PASS"
+    },
+    "imu_test": {
+      "pass": true,
+      "details": {...}
+    },
+    "_summary": {
+      "total": 5,
+      "passed": 5,
+      "failed": 0,
+      "all_pass": true
+    }
+  }
+}
+```
+
+**Available tests**: `battery_test`, `imu_test`, `encoder_test`, `motor_test`, `magnetometer_test`
+
+**In the web GUI**: Click "Run Tests" in Tester mode to see pass/fail results with a "Review with AI" option.
+
+### 6. Choosing provider when using the HTTP API
 
 - **Default**: The server uses `default_provider` from the config (or `gemini` if not set).
 - **Per request**: Send `provider` in the JSON body to use a specific provider for that request:
