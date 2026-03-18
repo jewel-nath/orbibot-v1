@@ -4,11 +4,11 @@
 
 robot_localization_ekf:
   ros__parameters:
-    # Update frequency — 20 Hz for RPi5 to prevent missed deadlines
-    # Was 25 Hz but timing analysis showed 58ms cycles (should be 40ms)
-    # 20 Hz = 50ms cycle time provides headroom for processing
-    frequency: 20.0
-    sensor_timeout: 0.15
+    # Update frequency — 15 Hz for RPi5 with full nav stack
+    # 15 Hz = 66ms cycle time gives headroom when nav2 adds CPU load
+    # (Was 20 Hz but EKF hit 300ms spikes during navigation)
+    frequency: 15.0
+    sensor_timeout: 0.2
     two_d_mode: true
     transform_time_offset: 0.0
     transform_timeout: 0.1
@@ -46,18 +46,18 @@ robot_localization_ekf:
     odom0_twist_rejection_threshold: 1.0
 
     # IMU input (from Madgwick filter — magnetometer-corrected orientation)
-    # Madgwick fuses raw accel/gyro + magnetometer → absolute orientation quaternion
-    # EKF now fuses absolute yaw (drift-free) + yaw rate
+    # Hard-iron calibration applied 2026-03-15 via 3×360° rotation sweep.
+    # Absolute yaw re-enabled: provides stable compass heading to EKF.
     imu0: /imu/data_filtered
     imu0_config: [false, false, false,   # x, y, z
-                  false, false, true,    # roll, pitch, yaw — FUSE absolute yaw (Madgwick output)
+                  false, false, true,    # roll, pitch, yaw — FUSE absolute yaw (calibrated mag)
                   false, false, false,   # vx, vy, vz
                   false, false, true,    # vroll, vpitch, vyaw — fuse yaw rate
                   false, false, false]   # ax, ay, az — DISABLED (mecanum vibration causes noise)
     imu0_queue_size: 10
     imu0_nodelay: false
-    imu0_differential: false  # Use ABSOLUTE orientation from Madgwick (not differential)
-    imu0_relative: true       # Relative to first measurement (avoids startup offset)
+    imu0_differential: false
+    imu0_relative: true
     imu0_remove_gravitational_acceleration: true
     # Sensor covariance - IMU uncertainty
     # Raised rejection thresholds to reduce noise rejection on mecanum platform

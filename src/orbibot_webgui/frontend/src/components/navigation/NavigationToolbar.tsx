@@ -74,10 +74,14 @@ interface NavigationToolbarProps {
 
 export function NavigationToolbar({ className }: NavigationToolbarProps) {
   const { connectionState } = useRosContext();
-  const { mode, setMode, isNavigating, goalStatus, navigationAvailable } = useNavigationContext();
+  const { mode, setMode, isNavigating, goalStatus, navigationAvailable, localizationAvailable } = useNavigationContext();
   const { cancelGoal } = useNavGoal();
 
   const isConnected = connectionState === 'connected';
+
+  // Separate availability for each feature
+  const canInitPose = isConnected && localizationAvailable;
+  const canNavigate = isConnected && navigationAvailable;
 
   // Toggle mode handler
   const toggleMode = useCallback(
@@ -147,7 +151,7 @@ export function NavigationToolbar({ className }: NavigationToolbarProps) {
         label="Init Pose"
         shortcut="I"
         active={mode === 'init_pose'}
-        disabled={!isConnected || !navigationAvailable}
+        disabled={!canInitPose}
         onClick={() => toggleMode('init_pose')}
       />
 
@@ -156,7 +160,7 @@ export function NavigationToolbar({ className }: NavigationToolbarProps) {
         label="Nav Goal"
         shortcut="G"
         active={mode === 'nav_goal'}
-        disabled={!isConnected || !navigationAvailable}
+        disabled={!canNavigate}
         onClick={() => toggleMode('nav_goal')}
       />
 
@@ -165,7 +169,7 @@ export function NavigationToolbar({ className }: NavigationToolbarProps) {
         label="Waypoint"
         shortcut="⇧W"
         active={mode === 'waypoint'}
-        disabled={!isConnected || !navigationAvailable}
+        disabled={!canNavigate}
         onClick={() => toggleMode('waypoint')}
       />
 
@@ -178,14 +182,26 @@ export function NavigationToolbar({ className }: NavigationToolbarProps) {
         label="Cancel"
         shortcut="Esc"
         active={false}
-        disabled={!isConnected || !navigationAvailable || (!isNavigating && mode === 'none')}
+        disabled={!canNavigate || (!isNavigating && mode === 'none')}
         variant="destructive"
         onClick={handleCancel}
       />
 
+      {/* Availability status dots */}
+      <div className="flex items-center gap-1.5 ml-2 px-2 py-1 rounded-lg bg-muted/30">
+        <span
+          title={canInitPose ? 'AMCL: active' : 'AMCL: not running'}
+          className={cn('w-2 h-2 rounded-full', canInitPose ? 'bg-green-500' : 'bg-muted-foreground/40')}
+        />
+        <span
+          title={canNavigate ? 'Nav2: active' : 'Nav2: not running'}
+          className={cn('w-2 h-2 rounded-full', canNavigate ? 'bg-blue-500' : 'bg-muted-foreground/40')}
+        />
+      </div>
+
       {/* Navigation status indicator */}
       {isNavigating && (
-        <div className="flex items-center gap-2 ml-2 px-2 py-1 bg-blue-500/20 rounded-lg">
+        <div className="flex items-center gap-2 ml-1 px-2 py-1 bg-blue-500/20 rounded-lg">
           <Navigation className="w-4 h-4 text-blue-500 animate-pulse" />
           <span className="text-xs text-blue-500 font-medium">Navigating</span>
         </div>
