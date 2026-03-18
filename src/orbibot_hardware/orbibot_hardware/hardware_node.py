@@ -680,8 +680,12 @@ class OrbiBotHardwareNode(Node):
             msg.magnetic_field.y = float(mag_data[1]) * 1e-6
             msg.magnetic_field.z = float(mag_data[2]) * 1e-6
 
-            # Unknown covariance
-            msg.magnetic_field_covariance = [0.0] * 9
+            # AK09916 noise density ~0.15 µT → variance ≈ (0.15e-6)² ≈ 2.25e-14 T²
+            # Conservative estimate used: 1e-10 T² (diagonal, no cross-axis correlation)
+            mag_cov = 1e-10
+            msg.magnetic_field_covariance = [mag_cov, 0.0, 0.0,
+                                             0.0, mag_cov, 0.0,
+                                             0.0, 0.0, mag_cov]
 
             self.mag_pub.publish(msg)
 

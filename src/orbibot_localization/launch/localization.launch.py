@@ -53,7 +53,8 @@ def generate_launch_description():
             'world_frame': 'enu',
             'fixed_frame': 'odom',
             'gain': 0.1,
-            'zeta': 0.0,
+            'zeta': 0.001,              # Gyro bias drift correction (mag-assisted, slow)
+            'orientation_stddev': 0.05, # ~3° std dev — EKF needs non-zero to weight IMU correctly
             'mag_bias_x': -0.00005452,  # Hard-iron calibrated 2026-03-15 (3 × 360°)
             'mag_bias_y': -0.00000832,
             'mag_bias_z': 0.00007170,

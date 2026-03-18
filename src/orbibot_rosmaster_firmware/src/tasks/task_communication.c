@@ -24,9 +24,10 @@
  * @param params Task parameters (unused)
  *
  * Auto-report timing configuration:
- * - 50ms cycle = 20Hz per data type
+ * - 20ms cycle = 50Hz per data type
  * - 5 data types: Speed, IMU Raw, IMU Attitude, Encoders, Odometry
- * - Reports spread 10ms apart within cycle
+ * - Reports spread 4ms apart within cycle
+ * - IMU Raw at 50Hz aligns with task_imu capture rate (50Hz)
  */
 void task_communication(void *params)
 {
@@ -35,10 +36,11 @@ void task_communication(void *params)
     uint16_t report_count = 0;
 
     // Cycle configuration for auto-report:
-    // - 50 counts × 1ms = 50ms cycle = 20Hz per data type
-    // - Reports at counts 1, 11, 21, 31, 41 (spread 10ms apart)
-    // - 5 data types = 100 packets/sec total
-    static const uint16_t AUTO_SEND_CYCLE = 50;
+    // - 20 counts × 1ms = 20ms cycle = 50Hz per data type
+    // - Reports at counts 1, 5, 9, 13, 17 (spread 4ms apart)
+    // - 5 data types = 250 packets/sec total (~22KB/s at 115200 baud, within budget)
+    // - 50Hz IMU matches task_imu capture rate → Madgwick filter always gets fresh data
+    static const uint16_t AUTO_SEND_CYCLE = 20;
 
     // Initial delay
     vTaskDelay(pdMS_TO_TICKS(AUTO_SEND_CYCLE));
@@ -51,32 +53,32 @@ void task_communication(void *params)
             protocol_parse_command();
         }
 
-        // 2. Auto-report data if enabled (20Hz per type = 50ms cycle)
+        // 2. Auto-report data if enabled (50Hz per type = 20ms cycle)
         // Timing slots for interleaved reporting:
         // - count 1:  Motion/Speed (Vx, Vy, Vz, Battery)
-        // - count 11: IMU Raw (gyro, accel, mag)
-        // - count 21: IMU Attitude (roll, pitch, yaw)
-        // - count 31: Encoders (4 motor counts)
-        // - count 41: Firmware Odometry (x, y, theta, vx, vy, omega)
+        // - count 5:  IMU Raw (gyro, accel, mag) — 50Hz for Madgwick filter quality
+        // - count 9:  IMU Attitude (roll, pitch, yaw)
+        // - count 13: Encoders (4 motor counts)
+        // - count 17: Firmware Odometry (x, y, theta, vx, vy, omega)
         if (protocol_is_auto_report_enabled())
         {
             if (report_count == 1)
             {
                 protocol_send_motion_data();
             }
-            else if (report_count == 11)
+            else if (report_count == 5)
             {
                 protocol_send_imu_raw_data();
             }
-            else if (report_count == 21)
+            else if (report_count == 9)
             {
                 protocol_send_imu_attitude_data();
             }
-            else if (report_count == 31)
+            else if (report_count == 13)
             {
                 protocol_send_encoder_data();
             }
-            else if (report_count == 41)
+            else if (report_count == 17)
             {
                 protocol_send_odometry_data();
             }

@@ -394,22 +394,24 @@ robot_err_t imu_driver_init(void)
     BOOT_PRINTF("[IMU] Step 7: configure gyro/accel in bank 2\r\n");
     imu_select_bank(2);
 
-    /* Gyroscope: ±500 dps, DLPF 196Hz
+    /* Gyroscope: ±500 dps, DLPF 5.7Hz
      * GYRO_CONFIG_1 [5:3]=110 (DLPFCFG=6), [2:1]=01 (FS_SEL=±500dps), [0]=1 (FCHOICE on)
      * = 0b00110011 = 0x33
+     * DLPF=6 → 5.7Hz bandwidth: attenuates motor vibration (333 RPM = 5.55Hz fundamental).
      * Range chosen so physical×1000 fits int16: max ±8727 milli-rad/s < 32767. */
     imu_write_register(ICM20948_GYRO_CONFIG_1, 0x33);
     gyro_scale = 500.0f / 32768.0f * (M_PI / 180.0f);
-    BOOT_PRINTF("[IMU]   GYRO_CONFIG_1 = 0x33 (+/-500dps, DLPF 196Hz)\r\n");
+    BOOT_PRINTF("[IMU]   GYRO_CONFIG_1 = 0x33 (+/-500dps, DLPF 5.7Hz — motor vibration filter)\r\n");
 
-    /* Accelerometer: ±2g, DLPF 196Hz
+    /* Accelerometer: ±2g, DLPF 5.7Hz
      * ACCEL_CONFIG [5:3]=110 (DLPFCFG=6), [2:1]=00 (FS_SEL=±2g), [0]=1 (FCHOICE on)
      * = 0b00110001 = 0x31
+     * ACCEL_CONFIG_2: DLPFCFG=6 → 5.7Hz bandwidth (matches gyro filter).
      * Range chosen so physical×1000 fits int16: max ±19613 milli-m/s² < 32767. */
     imu_write_register(ICM20948_ACCEL_CONFIG, 0x31);
     imu_write_register(ICM20948_ACCEL_CONFIG_2, 0x06);
     accel_scale = 2.0f / 32768.0f * 9.80665f;
-    BOOT_PRINTF("[IMU]   ACCEL_CONFIG = 0x31 (+/-2g), ACCEL_CONFIG_2 = 0x06 (DLPF 196Hz)\r\n");
+    BOOT_PRINTF("[IMU]   ACCEL_CONFIG = 0x31 (+/-2g), ACCEL_CONFIG_2 = 0x06 (DLPF 5.7Hz)\r\n");
 
     imu_select_bank(0);
 
@@ -787,13 +789,13 @@ int imu_self_test(void)
         return -1;
     }
 
-    // Basic sanity check: accelerometer Z-axis should read ~1g (gravity)
-    // In ±16g range: 1g ≈ 2048 counts
-    if (raw_data.accel_z < 1000 || raw_data.accel_z > 3000)
+    // Sanity check: accelerometer Z-axis should read ~1g (gravity) on flat surface.
+    // ±2g range: 1g = 32768/2 = 16384 counts. Valid flat range: 12000–20000 (±25%).
+    if (raw_data.accel_z < 12000 || raw_data.accel_z > 20000)
     {
-        // Warning: Z-axis not reading expected gravity value
-        // This may indicate orientation or calibration issue
-        // But not a fatal error
+        BOOT_PRINTF("[IMU] WARNING: Z-axis gravity check FAILED (got %d, expected ~16384). "
+                    "Check IMU orientation or mounting.\r\n", (int)raw_data.accel_z);
+        return -1;
     }
 
     return 0;
