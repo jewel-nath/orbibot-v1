@@ -30,14 +30,9 @@ int encoder_driver_init(void)
 /**
  * @brief Read encoder delta with direction correction
  *
- * Applies direction correction for ROSMaster V3.0 motor wiring:
- * - M1 (encoder 0): Normal   (forward = positive)
- * - M2 (encoder 1): Inverted (left side, motor mounted opposite)
- * - M3 (encoder 2): Inverted (right side, encoder phase swapped)
- * - M4 (encoder 3): Normal   (right side)
- *
- * Verified by manual wheel rotation test: forward rotation increases count.
- * See HARDWARE_DOC.md for motor/encoder wiring details.
+ * Direction correction is defined in encoder_direction[] above:
+ * - M1 (FL): inverted (-1), M2 (BL): normal (+1)
+ * - M3 (FR): normal (+1),   M4 (BR): inverted (-1)
  */
 int16_t encoder_read_delta(uint8_t encoder)
 {

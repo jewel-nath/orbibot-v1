@@ -88,7 +88,7 @@ uint8_t control_get_battery_lockout(void)
 void control_set_velocity(float vx, float vy, float omega)
 {
     // Refuse non-zero velocity when battery is critically low
-    if (g_battery_lockout && (vx != 0.0f || vy != 0.0f || omega != 0.0f))
+    if (g_battery_lockout && (fabsf(vx) > 1e-6f || fabsf(vy) > 1e-6f || fabsf(omega) > 1e-6f))
     {
         return;
     }
@@ -119,7 +119,9 @@ void control_update_command_time(void)
 
 void control_set_motor_pid(float kp, float ki, float kd)
 {
-    // Validate range (driver also validates, but double-check in firmware)
+    // Reject NaN/Inf before range check (NaN fails all comparisons silently)
+    if (!isfinite(kp) || !isfinite(ki) || !isfinite(kd)) return;
+    // Validate range
     if (kp < 0.0f || kp > 10.0f) return;
     if (ki < 0.0f || ki > 10.0f) return;
     if (kd < 0.0f || kd > 10.0f) return;
@@ -178,6 +180,7 @@ void control_reset_odometry(void)
 
 void control_set_yaw_pid(float kp, float ki, float kd)
 {
+    if (!isfinite(kp) || !isfinite(ki) || !isfinite(kd)) return;
     if (kp < 0.0f || kp > 10.0f) return;
     if (ki < 0.0f || ki > 10.0f) return;
     if (kd < 0.0f || kd > 10.0f) return;
@@ -290,29 +293,34 @@ void task_control(void *params)
 
         // =====================================================
         // ASYMMETRIC VELOCITY RAMP
-        // Accel: accept target immediately (responsive)
-        // Decel: ramp down gradually (smooth)
-        // Stop:  immediate zero + PID reset (safe)
+        // Accel (same direction):  accept target immediately (responsive)
+        // Decel or sign-change:    ramp toward target gradually (smooth, no shock)
+        // Stop:                    immediate zero + PID reset (safe)
         // =====================================================
         for (int i = 0; i < 4; i++)
         {
             float target = target_wheel_speeds[i];
+            float desire = desire_wheel_speed_mm[i];
+
+            // Detect sign change: treat as deceleration to prevent instant reversal
+            uint8_t sign_change = ((target > 0.0f && desire < 0.0f) ||
+                                   (target < 0.0f && desire > 0.0f));
 
             if (is_stopped)
             {
                 // Immediate stop — desire resets to zero
                 desire_wheel_speed_mm[i] = 0.0f;
             }
-            else if (fabsf(target) >= fabsf(desire_wheel_speed_mm[i]))
+            else if (!sign_change && fabsf(target) >= fabsf(desire))
             {
-                // Accelerating or same speed — accept immediately
+                // Accelerating in same direction — accept immediately
                 desire_wheel_speed_mm[i] = target;
             }
             else
             {
-                // Decelerating — ramp toward target gradually
-                // Move desire toward target by RAMP per tick, preserving sign
-                if (desire_wheel_speed_mm[i] > target)
+                // Decelerating or direction reversal — ramp toward target gradually
+                // Move desire toward target by RAMP per tick (passes through zero on reversal)
+                if (desire > target)
                 {
                     desire_wheel_speed_mm[i] -= MOTOR_SPEED_RAMP_MMS;
                     if (desire_wheel_speed_mm[i] < target)

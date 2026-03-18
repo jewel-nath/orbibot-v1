@@ -52,7 +52,8 @@ void odometry_update(odometry_t *odom, const wheel_velocity_t *wheels, float dt)
     odom->y += delta_y;
     odom->theta += delta_theta;
     
-    // Normalize theta to -PI ~ PI
-    while (odom->theta > PI_F) odom->theta -= 2.0f * PI_F;
-    while (odom->theta < -PI_F) odom->theta += 2.0f * PI_F;
+    // Normalize theta to [-PI, PI] using fmod for O(1) behavior
+    odom->theta = fmodf(odom->theta, 2.0f * PI_F);
+    if (odom->theta > PI_F)  odom->theta -= 2.0f * PI_F;
+    if (odom->theta < -PI_F) odom->theta += 2.0f * PI_F;
 }

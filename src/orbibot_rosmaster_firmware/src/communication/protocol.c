@@ -42,14 +42,22 @@ volatile uint32_t g_unknown_cmd_count = 0;  // Unhandled function codes received
 // Auto-report state
 volatile uint8_t g_auto_report_enabled = 0;
 
-// Buzzer state
+// Buzzer state (single timed beep)
 static volatile uint16_t g_buzzer_on_time = 0;  // 0=off, 1=on, >=10 timed (ms)
 static volatile uint32_t g_buzzer_start_tick = 0;  // Start time for timed beep
 
-// Current robot velocities (updated by task_control)
-static int16_t g_current_vx = 0;  // mm/s
-static int16_t g_current_vy = 0;  // mm/s
-static int16_t g_current_vz = 0;  // deg/s or rad/s × 1000
+// Double-beep state machine (non-blocking battery warning)
+typedef enum {
+    DOUBLE_BEEP_IDLE   = 0,
+    DOUBLE_BEEP_ON1    = 1,
+    DOUBLE_BEEP_OFF1   = 2,
+    DOUBLE_BEEP_ON2    = 3,
+    DOUBLE_BEEP_OFF2   = 4,
+} double_beep_state_t;
+static volatile double_beep_state_t g_double_beep_state = DOUBLE_BEEP_IDLE;
+static volatile uint32_t g_double_beep_phase_tick = 0;
+#define DOUBLE_BEEP_PHASE_MS 200U
+
 
 /* ========================================================================
  * PROTOCOL INITIALIZATION
@@ -145,7 +153,8 @@ void protocol_receive_byte(uint8_t byte)
                     {
                         g_rx_active_buffer = 2;
                         g_cmd_length_drop = packet_length;
-                        g_rx_drop_count++;
+                        // Saturate at UINT32_MAX to prevent silent wrap-around
+                        if (g_rx_drop_count < UINT32_MAX) g_rx_drop_count++;
                     }
 
                     g_rx_index = 3;
@@ -450,9 +459,11 @@ void protocol_handle_motion(const uint8_t *data)
     float vx_m = (float)vx_mm / 1000.0f;
     float vy_m = (float)vy_mm / 1000.0f;
 
-    // CRITICAL: Invert Vy to match ROSMaster protocol convention
-    // Protocol uses negative Y for lateral velocity
-    // This ensures strafing direction matches ROS2 expectations
+    // CRITICAL: Invert Vy to match ROSMaster protocol convention.
+    // This negation is paired with a second negation in mecanum_kinematics.c (float vy = -robot->vy).
+    // Both are intentional: protocol corrects the ROSMaster convention, kinematics corrects
+    // physical motor wiring. Removing either inversion alone will reverse strafe direction.
+    // See mecanum_kinematics.c and firmware-issue.md M-1 for full context.
     vy_m = -vy_m;
 
     // Convert angular velocity (mrad/s to rad/s)
@@ -468,10 +479,6 @@ void protocol_handle_motion(const uint8_t *data)
         control_set_velocity(vx_m, vy_m, vz_rad);
     }
 
-    // Store for internal tracking (not used for auto-report anymore)
-    g_current_vx = vx_mm;
-    g_current_vy = vy_mm;
-    g_current_vz = vz_raw;
 }
 
 void protocol_handle_reset_state(void)
@@ -492,8 +499,12 @@ void protocol_handle_reset_odom(void)
 
 void protocol_handle_reset_encoders(void)
 {
-    // Reset encoder counts to zero (odometry unchanged)
+    // Critical section: encoder_reset_all writes CNT register and encoder_prev_cnt[].
+    // hal_timer_read_encoder_delta() reads both in task_control at 100Hz without protection.
+    // The critical section prevents a race that would cause a 32768-tick velocity spike.
+    taskENTER_CRITICAL();
     encoder_reset_all();
+    taskEXIT_CRITICAL();
 
     DEBUG_INFO("Encoder counts reset to zero\n");
 }
@@ -733,7 +744,7 @@ void protocol_send_odometry_data(void)
 
 void protocol_update_buzzer(void)
 {
-    // Handle timed buzzer (on_time >= 10)
+    // Handle timed buzzer (on_time >= 10ms, from host BEEP command)
     if (g_buzzer_on_time >= 10)
     {
         uint32_t current_tick = xTaskGetTickCount();
@@ -741,9 +752,50 @@ void protocol_update_buzzer(void)
 
         if (elapsed_ms >= g_buzzer_on_time)
         {
-            // Time expired, turn off buzzer
             BUZZER_OFF();
             g_buzzer_on_time = 0;
         }
     }
+
+    // Handle double-beep pattern (non-blocking, for battery low warning)
+    // Called at ~1ms cadence from task_communication — 200ms phase timing is accurate.
+    if (g_double_beep_state != DOUBLE_BEEP_IDLE)
+    {
+        uint32_t current_tick = xTaskGetTickCount();
+        uint32_t elapsed_ms = (current_tick - g_double_beep_phase_tick) * portTICK_PERIOD_MS;
+
+        if (elapsed_ms >= DOUBLE_BEEP_PHASE_MS)
+        {
+            g_double_beep_phase_tick = current_tick;
+            switch (g_double_beep_state)
+            {
+                case DOUBLE_BEEP_ON1:
+                    BUZZER_OFF();
+                    g_double_beep_state = DOUBLE_BEEP_OFF1;
+                    break;
+                case DOUBLE_BEEP_OFF1:
+                    BUZZER_ON();
+                    g_double_beep_state = DOUBLE_BEEP_ON2;
+                    break;
+                case DOUBLE_BEEP_ON2:
+                    BUZZER_OFF();
+                    g_double_beep_state = DOUBLE_BEEP_OFF2;
+                    break;
+                case DOUBLE_BEEP_OFF2:
+                    g_double_beep_state = DOUBLE_BEEP_IDLE;
+                    break;
+                default:
+                    g_double_beep_state = DOUBLE_BEEP_IDLE;
+                    BUZZER_OFF();
+                    break;
+            }
+        }
+    }
+}
+
+void protocol_start_double_beep(void)
+{
+    g_double_beep_state = DOUBLE_BEEP_ON1;
+    g_double_beep_phase_tick = xTaskGetTickCount();
+    BUZZER_ON();
 }

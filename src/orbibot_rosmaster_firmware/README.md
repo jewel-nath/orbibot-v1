@@ -326,11 +326,10 @@ V_RR = Vx - Vy + (a + b) * omega
 | `0x13` | H->F | `SET_MOTOR_PID` | `[kp][ki][kd]` as int16 x 1000 + `[save]` flag |
 | `0x14` | H->F | `SET_YAW_PID` | `[kp][ki][kd]` as int16 x 1000 + `[save]` flag |
 | `0x16` | H->F | `SET_MAG_CAL` | `[ox][oy][oz]` as int16 offset x 100 |
-| `0x18` | H->F | `SET_PID_MULTILEVEL` | 3 thresholds + 9 gains + save flag |
-| `0x51` | H->F | `VERSION` | _(no data)_ — request firmware version |
+| `0x50`+`0x51` | H->F | `VERSION` | Send `FUNC_REQUEST_DATA (0x50)` with sub-byte `0x51` — firmware replies with `[major][minor]` |
 | `0x0A` | F->H | `REPORT_SPEED` | `[vx][vy][vz]` int16 mm/s x1000 + `[bat]` uint8 x0.1V |
-| `0x0B` | F->H | `REPORT_IMU_RAW` | `[gx][gy][gz][ax][ay][az][mx][my][mz]` raw int16 |
-| `0x0C` | F->H | `REPORT_IMU_ATT` | `[roll][pitch][yaw]` int16 x 1000 rad |
+| `0x0E` | F->H | `REPORT_ICM_RAW` | `[gx][gy][gz][ax][ay][az][mx][my][mz]` raw int16 (ICM-20948) |
+| `0x0C` | F->H | `REPORT_IMU_ATT` | `[roll][pitch][yaw]` int16 x 10000 rad |
 | `0x0D` | F->H | `REPORT_ENCODER` | `[m1][m2][m3][m4]` as int32 LE ticks |
 | `0x15` | F->H | `REPORT_ODOM` | `[x][y][theta]` int32 + `[vx][vy][omega]` int16 |
 
@@ -339,7 +338,7 @@ V_RR = Vx - Vy + (a + b) * omega
 | Cycle | Report | Code |
 |-------|--------|------|
 | 1 | Speed + Battery | `0x0A` |
-| 11 | IMU Raw | `0x0B` |
+| 11 | IMU Raw (ICM-20948) | `0x0E` |
 | 21 | IMU Attitude | `0x0C` |
 | 31 | Encoder counts | `0x0D` |
 | 41 | Firmware Odometry | `0x15` |

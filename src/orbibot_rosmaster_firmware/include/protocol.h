@@ -54,7 +54,6 @@
  * Data Reporting Functions (0x0A-0x0E)
  */
 #define FUNC_REPORT_SPEED       0x0A    // Report motion speed (Vx, Vy, Vz, Battery)
-#define FUNC_REPORT_MPU_RAW     0x0B    // Report raw MPU9250 data
 #define FUNC_REPORT_IMU_ATT     0x0C    // Report IMU attitude (roll, pitch, yaw)
 #define FUNC_REPORT_ENCODER     0x0D    // Report encoder counts (4 motors)
 #define FUNC_REPORT_ICM_RAW     0x0E    // Report ICM-20948 raw data (outgoing only)
@@ -69,7 +68,6 @@
 #define FUNC_SET_YAW_PID        0x14    // Set yaw PID parameters
 #define FUNC_REPORT_ODOM        0x15    // Report firmware odometry (x, y, theta, vx, vy, omega)
 #define FUNC_SET_MAG_CAL        0x16    // Set magnetometer calibration data
-#define FUNC_SET_MOTOR_PID_MULTILEVEL 0x18  // Set multi-level PID (3 levels + thresholds)
 
 /**
  * Request Functions (0x50-0x5F)
@@ -254,18 +252,6 @@ void protocol_handle_set_motor_pid(const uint8_t *data);
 void protocol_handle_set_yaw_pid(const uint8_t *data);
 
 /**
- * @brief Handle FUNC_SET_MOTOR_PID_MULTILEVEL command
- * @param data Pointer to command data: [t0_lo][t0_hi][t1_lo][t1_hi][t2_lo][t2_hi]
- *             [kp0_lo][kp0_hi][ki0_lo][ki0_hi][kd0_lo][kd0_hi]
- *             [kp1_lo][kp1_hi][ki1_lo][ki1_hi][kd1_lo][kd1_hi]
- *             [kp2_lo][kp2_hi][ki2_lo][ki2_hi][kd2_lo][kd2_hi][state]
- *
- * Format: 3 thresholds (int16, mm/s) + 9 gains (3 levels × 3 params, int16, ×1000) + state byte
- * Total: 6 + 18 + 1 = 25 bytes
- */
-void protocol_handle_set_motor_pid_multilevel(const uint8_t *data);
-
-/**
  * @brief Handle FUNC_SET_MAG_CAL command
  * @param data Pointer to command data [offset_x_lo][offset_x_hi]... (3× int16, scaled ×100)
  */
@@ -277,9 +263,16 @@ void protocol_handle_set_mag_cal(const uint8_t *data);
 void protocol_send_odometry_data(void);
 
 /**
- * @brief Update buzzer state for timed beeps (call periodically from monitoring task)
+ * @brief Update buzzer state for timed beeps and patterns.
+ * Call from task_communication at ~1ms cadence for accurate timing.
  */
 void protocol_update_buzzer(void);
+
+/**
+ * @brief Trigger a non-blocking double-beep (200ms on/off/on/off) for battery warning.
+ * State machine is advanced by protocol_update_buzzer().
+ */
+void protocol_start_double_beep(void);
 
 /* ========================================================================
  * INLINE HELPER FUNCTIONS

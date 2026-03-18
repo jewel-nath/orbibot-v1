@@ -1,355 +1,50 @@
-# OrbiBot Firmware — Comprehensive Analysis & Improvement Plan
+# OrbiBot Firmware — Issue Tracker & Code Review
 
-**Last updated**: 2026-03-10  
-**Firmware Version**: v2.0.1  
-**Analysis Status**: Deep audit completed vs ROSMaster X3, LGDXRobot2, AuBot references
-
-> This document contains findings from a comprehensive firmware analysis comparing OrbiBot firmware against three working-grade reference implementations.
+**Last reviewed**: 2026-03-18
+**All issues resolved**: 2026-03-18
+**Firmware version**: v2.0.0
 
 ---
 
-## Executive Summary
+## Status: All issues closed
 
-OrbiBot firmware v2.0.1 is **production-ready** with industry-grade architecture. The codebase demonstrates:
-- ✅ Clean modular architecture (HAL → Driver → Control → Task)
-- ✅ Robust safety features (battery lockout, watchdog, fault handlers)
-- ✅ Advanced control (multi-level PID, RK2 odometry, yaw compensation)
-- ✅ Thread-safe design (critical sections on shared data)
-- ✅ Professional build system (PlatformIO, -Werror, git versioning)
-- ✅ **Correct firmware version reporting** (fixed in v2.0.1)
+All 15 issues identified in the 2026-03-18 code review have been fixed.
 
-**vs Reference Firmwares:**
-| Aspect | OrbiBot | Yahboom X3 | LGDXRobot2 | AuBot |
-|--------|---------|------------|------------|-------|
-| Architecture | Layered HAL/Driver/Control | Monolithic | HAL-based | HAL-based |
-| PID | Multi-level with interpolation | Single-level | Single-level | Single-level |
-| Odometry | RK2 (Midpoint) integration | Not in firmware | Euler | Not in firmware |
-| Safety | Per-task watchdog + battery lockout | Basic watchdog | E-stop + dual battery | Basic |
-| Protocol | Double-buffered RX | Single buffer | Binary over USB | JSON over USB |
-| IMU Yaw | Gyro + Mag complementary filter | Gyro only | Not implemented | Not implemented |
-| **Version Reporting** | ✅ Correct (v2.0.1) | ❌ | ❌ | ❌ |
-
----
-
-## Critical Findings (Require Attention)
-
-### 🔴 ~~CRIT-1: Float-Heavy PID on FPU-less MCU~~ (Known Limitation)
-
-**Severity**: HIGH  
-**Files**: `control/pid_controller.c`, `tasks/task_control.c`  
-**Reference Comparison**: LGDXRobot2 uses integer math; Yahboom uses float (same MCU class)
-
-**Issue**: All PID calculations use `float`. On Cortex-M3 (no FPU), each float operation is 20-50 cycles of software library calls. At 100Hz × 4 motors × ~20 float ops = 8,000 float ops/sec.
-
-**Impact**: ~15-20% CPU usage just for PID math. Could cause jitter in control loop timing.
-
-**Status**: ⚠️ **Known limitation** — Consider fixed-point conversion for v2.1.0
-
-**Recommended Approach**:
-- Convert PID core to Q16.16 fixed-point (`int32_t`)
-- `fixed_mul(a, b) = ((int64_t)a * b) >> 16`
-- Keep float API for configuration (convert at set time)
-- **Estimated improvement**: ~50% CPU reduction in control loop
+| ID | Severity | Title | Fix |
+|----|----------|-------|-----|
+| H-3 | High | Encoder direction docstring contradiction | Removed incorrect docstring; file-level comment is authoritative |
+| H-4 | High | Velocity ramp allows instant direction reversal | Added sign-change detection before magnitude comparison |
+| M-1 | Medium | Vy double-inversion: fragile cross-layer coupling | Added cross-reference comments in both files; double-inversion is intentional and documented |
+| M-2 | Medium | `FUNC_SET_MOTOR_PID_MULTILEVEL (0x18)` stub not cleaned up | Removed constant and declaration from `protocol.h`; removed from README |
+| M-3 | Medium | VERSION command protocol documentation mismatch | README updated to show correct `0x50+0x51` packet format |
+| M-4 | Medium | Monitoring task blocks 600ms during low-battery buzzer | Replaced with non-blocking `protocol_start_double_beep()`; state machine runs in `task_communication` at 1ms |
+| M-5 | Medium | `encoder_prev_cnt` race condition during encoder reset | Wrapped `encoder_reset_all()` in `taskENTER_CRITICAL()` / `taskEXIT_CRITICAL()` |
+| M-6 | Medium | `g_rx_drop_count` will silently overflow | Added saturation at `UINT32_MAX` |
+| M-7 | Medium | [DOC] IMU attitude scale: README says ×1000, code uses ×10000 | README corrected to `int16 × 10000 rad` |
+| M-8 | Medium | [DOC] Raw IMU function code: README says 0x0B, code uses 0x0E | README updated to `0x0E REPORT_ICM_RAW`; `FUNC_REPORT_MPU_RAW (0x0B)` removed from `protocol.h` |
+| L-1 | Low | Dead code: `g_current_vx/vy/vz` written but never read | Removed all three variables from `protocol.c` |
+| L-2 | Low | `task_communication.c` header says "4 data types" but sends 5 | Fixed comment to "5 data types at 20Hz each" |
+| L-3 | Low | PID gain validation does not reject NaN or Inf | Added `isfinite()` check in both `control_set_motor_pid` and `control_set_yaw_pid` |
+| L-4 | Low | Odometry theta normalization uses while loops instead of fmod | Replaced with `fmodf()` + two `if` statements |
+| L-5 | Low | Battery lockout float equality vs zero | Replaced `!= 0.0f` with `fabsf() > 1e-6f` epsilon comparison |
 
 ---
 
-### 🔴 ~~CRIT-2: Protocol Version Response Hardcoded~~ ✅ FIXED v2.0.1
+## Files changed
 
-**Severity**: MEDIUM  
-**File**: `communication/protocol.c:248-251`
-
-**Status**: ✅ **FIXED** — Version response now uses `FIRMWARE_VERSION_MAJOR` and `FIRMWARE_VERSION_MINOR` from `firmware_version.h`
-
-**Fix Details**:
-- Added `#include "firmware_version.h"` to `protocol.c`
-- Changed hardcoded `{0x01, 0x00}` to `{FIRMWARE_VERSION_MAJOR, FIRMWARE_VERSION_MINOR}`
-
----
-
-### 🔴 ~~CRIT-3: Missing Command Acceleration Limiting~~ (Known Limitation)
-
-**Severity**: MEDIUM  
-**File**: `tasks/task_control.c`  
-**Reference**: AuBot implements `ACCELERATION_LIMIT` with velocity ramping
-
-**Issue**: Velocity commands change instantaneously. Large step changes can cause:
-- Motor current spikes
-- Wheel slip on high-friction surfaces
-- Mechanical stress on gearbox
-
-**Status**: ⚠️ **Known limitation** — Current asymmetric ramp (instant accel, gradual decel) is acceptable for typical use
-
-**Note**: OrbiBot has asymmetric ramp (instant accel, gradual decel) but no absolute acceleration limit.
+| File | Issues fixed |
+|------|-------------|
+| `src/drivers/encoder_driver.c` | H-3 |
+| `src/tasks/task_control.c` | H-4, L-3, L-5 |
+| `src/control/mecanum_kinematics.c` | M-1 (documentation) |
+| `src/communication/protocol.c` | M-1 (documentation), M-4, M-5, M-6, L-1 |
+| `include/protocol.h` | M-2, M-8 |
+| `src/tasks/task_monitoring.c` | M-4 |
+| `src/tasks/task_communication.c` | M-4, L-2 |
+| `src/control/odometry.c` | L-4 |
+| `README.md` | M-2, M-3, M-7, M-8 |
 
 ---
 
-## High Priority Improvements
-
-### 🟠 HIGH-1: DMA for UART RX (Performance)
-
-**File**: `hal/hal_usart.c`  
-**Current**: Per-byte RXNE interrupts (~11,520 ISRs/sec at 115200 baud)  
-**Target**: DMA1 Channel5 circular buffer
-
-**Benefit**: Reduce ISR overhead, more deterministic latency
-
----
-
-### 🟠 HIGH-2: Encoder Velocity EMA Filtering
-
-**File**: `tasks/task_control.c`  
-**Reference**: AuBot uses `FILTER_ALPHA 0.8f`
-
-**Issue**: Raw encoder delta used directly. Single-tick noise spikes pass to PID.
-
-**Evidence from AuBot**:
-```c
-#define FILTER_ALPHA 0.8f
-filtered_actual = (FILTER_ALPHA * filtered_actual) + ((1.0f - FILTER_ALPHA) * actual);
-```
-
-**OrbiBot Current** (no filtering):
-```c
-// task_control.c:187-191
-for (int i = 0; i < 4; i++)
-{
-    wheel_speed_mm_s[i] = (float)delta[i] * pulse_to_mm * CONTROL_LOOP_RATE_HZ;
-    wheel_speeds[i] = wheel_speed_mm_s[i] / 1000.0f;
-}
-```
-
-**Recommended**: Add optional EMA filter on wheel speeds before PID input.
-
----
-
-### 🟠 HIGH-3: Flash Persistence Incomplete
-
-**File**: `drivers/flash_storage.c`
-
-**Issue**: PID speed thresholds are NOT saved/loaded from flash. Only gains are persisted.
-
-**Evidence**:
-```c
-// flash_storage.c:56-67 - Loads PID gains but NOT thresholds
-for (int level = 0; level < PID_MAX_LEVELS; level++)
-{
-    control_set_motor_pid_level(...);  // Sets gains
-}
-// Missing: control_set_pid_speed_thresholds()
-```
-
-**Impact**: After power cycle, multi-level PID reverts to default thresholds (50/200/500 mm/s) even if gains were customized.
-
----
-
-### 🟠 HIGH-4: Yaw PID Applied During All Motions
-
-**File**: `tasks/task_control.c:300-340`
-
-**Issue**: Yaw correction logic is complex. The `yaw_correction` variable is calculated but may not be properly disabled during turning maneuvers.
-
-**Current Logic**:
-```c
-uint8_t should_yaw_control = (fabsf(target_local.omega) < 0.01f) &&
-                              (speed_magnitude > YAW_ENABLE_THRESHOLD);
-```
-
-**Concern**: Threshold of 0.01 rad/s is very tight. Small commanded rotations may still trigger yaw correction when they shouldn't.
-
----
-
-## Medium Priority Improvements
-
-### 🟡 MED-1: Gyro Calibration Timing
-
-**File**: `drivers/imu_driver.c:397-420`
-
-**Issue**: `imu_calibrate()` runs 1000 samples × 1ms = ~1 second busy-wait BEFORE FreeRTOS scheduler starts. This delays system boot.
-
-**Evidence**:
-```c
-// imu_driver.c:410-417
-for (uint16_t i = 0; i < CALIBRATION_SAMPLES; i++)  // 1000 samples
-{
-    if (imu_read_raw(&raw_data) == 0) { ... }
-    imu_delay_ms(1);  // 1ms busy-wait
-}
-```
-
-**Recommendation**: Reduce to 200 samples or move to RTOS task with `vTaskDelay()`.
-
----
-
-### 🟡 MED-2: Missing Motor Current Sensing
-
-**Reference**: Not in any reference, but industry standard for production robots
-
-**Issue**: No way to detect:
-- Motor stall/overload
-- Wheel slip (current drop)
-- Mechanical issues (current spike)
-
-**Hardware Note**: ROSMaster V3.0 board does NOT have current sense resistors. Would require hardware modification.
-
----
-
-### 🟡 MED-3: Protocol Function Code Collision Risk
-
-**File**: `include/protocol.h`
-
-**Issue**: Function codes 0x0E and 0x0B are close. 0x0E is defined as `FUNC_REPORT_ICM_RAW` but also historically used for other purposes.
-
-**Current Assignment**:
-```c
-#define FUNC_REPORT_MPU_RAW     0x0B    // Raw MPU9250 data
-#define FUNC_REPORT_ICM_RAW     0x0E    // ICM-20948 raw data (outgoing only)
-```
-
-**Note**: Both serve similar purpose. Consider consolidating or documenting clearly.
-
----
-
-### 🟡 MED-4: USART Error Handling Could Be More Robust
-
-**File**: `hal/hal_usart.c:285-320`
-
-**Current**: Errors are counted but not acted upon. Framing errors may indicate baud rate mismatch or electrical issues.
-
-**Recommendation**: Add error threshold - if errors exceed rate, trigger diagnostic report or safe mode.
-
----
-
-## Low Priority / Nice to Have
-
-### 🟢 LOW-1: Code Size Optimizations
-
-**Current Flash**: ~38KB / 256KB (~15% used)  
-**Opportunities**:
-- Remove unused protocol function handlers (already commented)
-- Make debug printf strings compile-time conditional
-- Use `__attribute__((section(".rodata")))` for const data
-
----
-
-### 🟢 LOW-2: Stack Usage Monitoring
-
-**Current**: Static stack sizes defined, no runtime monitoring  
-**Enhancement**: Add stack high-water mark checking in monitoring task using `uxTaskGetStackHighWaterMark()`.
-
----
-
-### 🟢 LOW-3: Self-Test Mode
-
-**Enhancement**: Add comprehensive self-test at boot:
-- Motor PWM continuity test (already in boot messages)
-- Encoder direction verification
-- IMU sanity check (already basic check)
-- Loopback serial test
-
----
-
-## Testing Gaps & Recommendations
-
-### TEST-1: Host-Side Unit Tests (HIGH PRIORITY)
-
-**Scope**: Pure functions testable on x86 without hardware
-
-| Function | Test Cases |
-|----------|------------|
-| `pid_calculate_incremental()` | Step response, steady-state error, anti-windup |
-| `pid_get_gains_for_speed()` | Interpolation at boundaries, out-of-range inputs |
-| `mecanum_inverse_kinematics()` | Known inputs → expected wheel speeds |
-| `mecanum_forward_kinematics()` | Round-trip test (inverse→forward = original) |
-| `odometry_update()` | Straight line, pure rotation, combined motion |
-| `protocol_receive_byte()` | State machine transitions, error injection |
-
----
-
-### TEST-2: Hardware-In-Loop Tests (MEDIUM PRIORITY)
-
-| Test | Setup | Expected Result |
-|------|-------|-----------------|
-| Encoder direction | Spin wheel by hand, check delta sign | Matches motor direction table |
-| Motor PWM linearity | Sweep PWM 0→3600, measure RPM | Linear relationship |
-| IMU calibration | Static vs moving | Zero bias when stationary |
-| Protocol stress | Flood serial at 115200 baud | No packet loss, drop count = 0 |
-
----
-
-### TEST-3: Long-Duration Tests (MEDIUM PRIORITY)
-
-| Test | Duration | Checks |
-|------|----------|--------|
-| Thermal stability | 4 hours continuous | No drift, no watchdog resets |
-| Flash endurance | 10,000 write cycles | No corruption, valid checksums |
-| Battery hysteresis | Multiple low→high transitions | Lockout clears correctly |
-
----
-
-## Code Quality Observations
-
-### Strengths (Industry-Grade)
-
-1. **Consistent error handling**: `robot_err_t` enum used throughout
-2. **Thread safety**: Critical sections on all shared data
-3. **Bounds checking**: All array indices validated (e.g., `if (motor >= 4) return;`)
-4. **Documentation**: Doxygen-style headers on all functions
-5. **Magic number elimination**: Configuration centralized in `orbibot_config.h`
-6. **Hardware abstraction**: Clean HAL layer, easy to port
-
-### Areas for Improvement
-
-1. **Some functions are long**: `protocol_parse_command()` is 150+ lines
-2. **Nested conditionals**: `task_control.c` yaw logic is complex
-3. ~~**Magic numbers in protocol**: Hardcoded version response~~ ✅ Fixed v2.0.1
-
----
-
-## Reference Firmware Comparison Matrix
-
-| Feature | OrbiBot | Yahboom X3 | LGDXRobot2 | AuBot |
-|---------|---------|------------|------------|-------|
-| **MCU** | STM32F103RCT6 | STM32F103RCT6 | STM32F411CEU | STM32F411CEUX |
-| **RTOS** | FreeRTOS | FreeRTOS | Bare-metal HAL | HAL |
-| **IMU** | ICM-20948 (SPI) | ICM-20948 + MPU-9250 | SPI (unspecified) | Not implemented |
-| **Magnetometer** | AK09916 via I2C master | Same | N/A | N/A |
-| **Yaw Estimation** | Gyro + Mag complementary | Gyro only | N/A | N/A |
-| **PID Type** | Incremental, multi-level | Incremental, single | Incremental | Incremental |
-| **Odometry** | Firmware-side RK2 | ROS-side only | Firmware Euler | Not implemented |
-| **Protocol** | Binary, double-buffered | Binary, single buffer | Binary over USB CDC | JSON over USB CDC |
-| **Safety** | Battery lockout, watchdog | Basic watchdog | E-stop, dual battery | Basic |
-| **Flash Persistence** | PID + Mag cal | PID only | Not implemented | Not implemented |
-| **Version Reporting** | ✅ Correct (v2.0.1) | ❌ Hardcoded | ❌ | ❌ |
-
----
-
-## Recommended Implementation Priority
-
-### Immediate (Completed ✅)
-1. ✅ ~~Fix protocol version response (CRIT-2)~~ — Fixed in v2.0.1
-
-### Short Term (Next Month)
-2. Add flash persistence for PID thresholds (HIGH-3) — 30 minutes
-3. Add encoder velocity EMA filtering (HIGH-2) — 1 hour
-4. Refine yaw control thresholds (HIGH-4) — 2 hours
-
-### Long Term (Future Releases)
-5. Implement fixed-point PID (CRIT-1) — 2 days
-6. Add command acceleration limiting (CRIT-3) — 4 hours
-7. DMA UART RX (HIGH-1) — 1 day
-8. Host-side unit test framework (TEST-1) — 2 days
-9. Stack monitoring (LOW-2) — 2 hours
-
----
-
-## Notes for Maintainers
-
-- All findings verified against actual source code as of commit `b55e6cd`
-- Reference firmwares analyzed: Yahboom V3.5.1, LGDXRobot2 latest, AuBot latest
-- OrbiBot firmware is significantly more advanced than references in most areas
-- Main gaps are in performance optimization (float→fixed) and testing infrastructure
-- **CRIT-2 fixed in v2.0.1** — version now correctly reported from `firmware_version.h`
-
----
-
-*This analysis document should be reviewed quarterly and updated as firmware evolves.*
+*This file is maintained alongside active firmware development.*
+*Prefix issues with component: `[HAL]`, `[DRV]`, `[CTRL]`, `[PROTO]`, `[TASK]`*

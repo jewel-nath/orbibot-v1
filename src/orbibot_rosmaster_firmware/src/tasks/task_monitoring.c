@@ -75,8 +75,8 @@ void task_monitoring(void *params)
         if (all_alive)
             hal_watchdog_feed();
 
-        // Update buzzer state for timed beeps
-        protocol_update_buzzer();
+        // Note: protocol_update_buzzer() is now called from task_communication at 1ms
+        // cadence for accurate buzzer timing. No need to call it here.
 
         // Read battery voltage
         float voltage = battery_get_voltage();
@@ -112,13 +112,9 @@ void task_monitoring(void *params)
             {
                 battery_state = BATTERY_STATE_LOW;
 
-                BUZZER_ON();
-                vTaskDelay(pdMS_TO_TICKS(200));
-                BUZZER_OFF();
-                vTaskDelay(pdMS_TO_TICKS(200));
-                BUZZER_ON();
-                vTaskDelay(pdMS_TO_TICKS(200));
-                BUZZER_OFF();
+                // Non-blocking double-beep: state machine runs in task_communication
+                // at 1ms cadence via protocol_update_buzzer(). This task is not blocked.
+                protocol_start_double_beep();
 
 #if ENABLE_OLED_DISPLAY
                 oled_show_low_voltage();

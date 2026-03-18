@@ -29,7 +29,14 @@ void mecanum_inverse_kinematics(const robot_velocity_t *robot, wheel_velocity_t 
     // - APB: (wheelbase + trackwidth) / 2
 
     float vx = robot->vx;
-    float vy = -robot->vy;  // Physical wheel layout has vy inverted vs ROS standard (positive=left)
+    // NOTE: Vy is negated here to correct for OrbiBot's physical motor wiring.
+    // The protocol layer ALSO negates Vy (protocol.c, protocol_handle_motion) to match
+    // the ROSMaster convention. Both negations are intentional and interdependent:
+    //   ROS Vy (+left) → protocol negates → (-Vy) → kinematics negates → (+Vy) in formula
+    // Removing either inversion alone will cause the robot to strafe backwards.
+    // Canonical convention: robot->vy is always in ROS frame (positive = left) everywhere
+    // except inside this function. See M-1 in firmware-issue.md for full context.
+    float vy = -robot->vy;
     float v_rot = robot->omega * ROBOT_APB;
 
     wheels->fl = vx - vy - v_rot;
