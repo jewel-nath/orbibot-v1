@@ -1,1 +1,0 @@
-var maxWidth = 800
