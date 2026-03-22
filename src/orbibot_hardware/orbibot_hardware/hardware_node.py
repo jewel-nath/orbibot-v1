@@ -154,6 +154,16 @@ class OrbiBotHardwareNode(Node):
         self.declare_parameter('imu.angular_velocity_covariance', 0.0025)
         self.declare_parameter('imu.orientation_covariance', 0.0025)
 
+        # Magnetometer calibration (applied before publishing /imu/mag)
+        # Hard-iron: constant offset from motors/battery permanent magnets (Tesla)
+        # Soft-iron: axis scale factors from ferromagnetic material distortion (dimensionless)
+        self.declare_parameter('imu.mag_hard_iron_x', 0.0)
+        self.declare_parameter('imu.mag_hard_iron_y', 0.0)
+        self.declare_parameter('imu.mag_hard_iron_z', 0.0)
+        self.declare_parameter('imu.mag_soft_iron_scale_x', 1.0)
+        self.declare_parameter('imu.mag_soft_iron_scale_y', 1.0)
+        self.declare_parameter('imu.mag_soft_iron_scale_z', 1.0)
+
         # Load values
         self.serial_port = self.get_parameter('hardware.serial_port').value
         self._data_timeout = self.get_parameter('hardware.data_timeout').value
@@ -183,6 +193,14 @@ class OrbiBotHardwareNode(Node):
         self._imu_accel_cov = self.get_parameter('imu.linear_acceleration_covariance').value
         self._imu_gyro_cov = self.get_parameter('imu.angular_velocity_covariance').value
         self._imu_orient_cov = self.get_parameter('imu.orientation_covariance').value
+
+        # Magnetometer calibration
+        self._mag_hard_iron_x = self.get_parameter('imu.mag_hard_iron_x').value
+        self._mag_hard_iron_y = self.get_parameter('imu.mag_hard_iron_y').value
+        self._mag_hard_iron_z = self.get_parameter('imu.mag_hard_iron_z').value
+        self._mag_soft_iron_scale_x = self.get_parameter('imu.mag_soft_iron_scale_x').value
+        self._mag_soft_iron_scale_y = self.get_parameter('imu.mag_soft_iron_scale_y').value
+        self._mag_soft_iron_scale_z = self.get_parameter('imu.mag_soft_iron_scale_z').value
 
         # Validate parameters
         self._validate_parameters()
@@ -675,10 +693,16 @@ class OrbiBotHardwareNode(Node):
             msg.header.stamp = self.get_clock().now().to_msg()
             msg.header.frame_id = 'imu_link'
 
-            # rosmaster_driver returns µT, MagneticField expects Tesla
-            msg.magnetic_field.x = float(mag_data[0]) * 1e-6
-            msg.magnetic_field.y = float(mag_data[1]) * 1e-6
-            msg.magnetic_field.z = float(mag_data[2]) * 1e-6
+            # Convert µT → Tesla, then apply hard-iron + soft-iron correction.
+            # Hard-iron: subtract constant offset from nearby permanent magnets.
+            # Soft-iron: scale each axis to restore circular (undistorted) response.
+            # Run calibrate_magnetometer to compute and update hardware_params.yaml.
+            raw_x = float(mag_data[0]) * 1e-6
+            raw_y = float(mag_data[1]) * 1e-6
+            raw_z = float(mag_data[2]) * 1e-6
+            msg.magnetic_field.x = (raw_x - self._mag_hard_iron_x) * self._mag_soft_iron_scale_x
+            msg.magnetic_field.y = (raw_y - self._mag_hard_iron_y) * self._mag_soft_iron_scale_y
+            msg.magnetic_field.z = (raw_z - self._mag_hard_iron_z) * self._mag_soft_iron_scale_z
 
             # AK09916 noise density ~0.15 µT → variance ≈ (0.15e-6)² ≈ 2.25e-14 T²
             # Conservative estimate used: 1e-10 T² (diagonal, no cross-axis correlation)

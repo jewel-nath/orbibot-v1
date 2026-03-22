@@ -201,14 +201,30 @@ map (world frame, from SLAM)
 
 ## Tuning Guide
 
+### Magnetometer Calibration
+
+Mag correction runs in `hardware_node` before publishing `/imu/mag` (Madgwick receives pre-corrected data).
+
+```bash
+# Run calibration tool — rotate robot 2-3 full 360° turns, then Ctrl+C
+ros2 run orbibot_localization calibrate_magnetometer
+
+# Copy output values to hardware_params.yaml (imu section):
+#   mag_hard_iron_x/y/z  — constant offset from motors/battery
+#   mag_soft_iron_scale_x/y  — axis scale to restore circular response
+#
+# Verify localization.launch.py has mag_bias_x/y/z = 0.0 (bias moved to hardware_node)
+```
+
 ### Madgwick Filter (`localization.launch.py`)
 
 | Parameter | Default | Effect |
 |-----------|---------|--------|
 | `gain` | 0.1 | Higher = faster convergence, more noise sensitivity |
-| `zeta` | 0.0 | Gyro drift compensation (0.0 = use magnetometer) |
+| `zeta` | 0.001 | Gyro drift compensation via magnetometer (slow) |
 | `use_mag` | true | Enable magnetometer for absolute yaw |
 | `frequency` | 50.0 | Must match IMU publish rate |
+| `mag_bias_x/y/z` | 0.0 | Kept 0.0 — hard-iron correction applied in hardware_node |
 
 ### When to Tune EKF
 

@@ -101,6 +101,8 @@ See [config/hardware_params.yaml](config/hardware_params.yaml) for all parameter
 | `imu` | `linear_acceleration_covariance` | `0.01` | IMU accel covariance (diagonal) |
 | `imu` | `angular_velocity_covariance` | `0.0025` | IMU gyro covariance (diagonal) |
 | `imu` | `orientation_covariance` | `0.0025` | IMU orientation covariance (diagonal) |
+| `imu` | `mag_hard_iron_x/y/z` | `0.0` T | Hard-iron bias (permanent magnet offset). Run `calibrate_magnetometer` to compute. |
+| `imu` | `mag_soft_iron_scale_x/y/z` | `1.0` | Soft-iron axis scale (ferromagnetic distortion). Run `calibrate_magnetometer` to compute. |
 | `odometry` | `pose_base` | `0.001` | Base position variance (m²) |
 | `odometry` | `pose_drift` | `0.02` | Position variance drift per meter traveled |
 | `odometry` | `yaw_base` | `0.01` | Base yaw variance (rad²) |
