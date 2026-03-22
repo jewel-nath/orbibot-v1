@@ -11,9 +11,13 @@
 // Accumulated encoder counts for odometry
 static int32_t encoder_accumulated[4] = {0, 0, 0, 0};
 
-// Direction correction table for ROSMaster V3.0 motor wiring
-// M1 (FL): inverted, M2 (BL): normal, M3 (FR): normal, M4 (BR): inverted
-static const int8_t encoder_direction[4] = { -1, 1, 1, -1 };
+// Direction correction table for ROSMaster V3.0 motor wiring.
+// Each entry is +1 or -1 to make positive encoder counts mean forward wheel rotation.
+// MUST match the PWM forward direction defined in hal_timer.c motor_map[]:
+//   M1 (FL): -1  |  M2 (BL): -1  |  M3 (FR): +1  |  M4 (BR): +1
+// If hardware wiring changes, update both this table AND hal_timer.c:motor_map[].
+// Verify with: python3 tests/test_encoder.py (spin each wheel forward, check sign)
+static const int8_t encoder_direction[4] = { -1, -1, 1, 1 };
 
 int encoder_driver_init(void)
 {

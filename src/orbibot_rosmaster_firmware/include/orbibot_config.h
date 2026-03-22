@@ -96,11 +96,17 @@
 #define MAX_ANGULAR_ACCEL_RPS2      4.0f        // 4.0 rad/s² angular accel
 
 /**
- * Velocity Ramp (asymmetric: instant accel, gradual decel)
+ * Velocity Ramp (asymmetric: instant acceleration, gradual deceleration)
  * Applied per-wheel in the control loop at 100Hz.
- * Ramp rate = MOTOR_SPEED_RAMP_MMS * 100Hz = 1000 mm/s² deceleration.
+ *
+ * MOTOR_DECEL_RAMP_MMS: ramp step applied when decelerating or reversing direction.
+ *   Effective deceleration = MOTOR_DECEL_RAMP_MMS × CONTROL_LOOP_RATE_HZ = 1000 mm/s²
+ *   At 1 m/s full speed, stop takes ~1 second. Increase for quicker stops.
+ *
+ * Acceleration: always instant (desire jumps to target immediately when speeding up
+ *   in the same direction). Add acceleration ramping in task_control.c if needed.
  */
-#define MOTOR_SPEED_RAMP_MMS        10.0f       // mm/s per 100Hz tick
+#define MOTOR_DECEL_RAMP_MMS        10.0f       // mm/s per 100Hz tick (deceleration / reversal)
 
 /* ========================================================================
  * BATTERY CONFIGURATION
@@ -154,7 +160,11 @@
 #define YAW_PID_KI                  0.0f        // Integral gain
 #define YAW_PID_KD                  0.1f        // Derivative gain
 #define YAW_PID_MAX_OUTPUT          500.0f      // Max correction offset
-#define YAW_ENABLE_THRESHOLD        0.05f       // Min speed (m/s) to enable yaw correction
+#define YAW_ENABLE_THRESHOLD        0.05f       // Min chassis speed (m/s) below which yaw
+                                                 // correction is disabled. Prevents IMU drift
+                                                 // from fighting static friction at near-zero
+                                                 // speed. Tuned empirically: 0.05 m/s avoids
+                                                 // servo chatter without degrading heading hold.
 #define MOTOR_MAX_PULSE             3600        // Max PWM pulse
 #define MOTOR_IGNORE_PULSE          1600        // Deadzone pulse for AM2857 drivers
 

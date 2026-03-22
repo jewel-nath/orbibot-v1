@@ -222,8 +222,10 @@ uint8_t protocol_calculate_checksum(const uint8_t *data, uint8_t length)
 {
     uint16_t sum = 0;
 
-    // Sum bytes from index 2 to length-1
-    for (uint8_t i = 2; i < length - 1; i++)
+    // Sum bytes from Device_ID (index 1) through last data byte (index length-2).
+    // Packet layout: [0xFF][Device_ID][Length][Func][Data...][Checksum]
+    // Checksum covers: Device_ID, Length, Func, and all Data bytes.
+    for (uint8_t i = 1; i < length - 1; i++)
     {
         sum += data[i];
     }
@@ -459,12 +461,8 @@ void protocol_handle_motion(const uint8_t *data)
     float vx_m = (float)vx_mm / 1000.0f;
     float vy_m = (float)vy_mm / 1000.0f;
 
-    // CRITICAL: Invert Vy to match ROSMaster protocol convention.
-    // This negation is paired with a second negation in mecanum_kinematics.c (float vy = -robot->vy).
-    // Both are intentional: protocol corrects the ROSMaster convention, kinematics corrects
-    // physical motor wiring. Removing either inversion alone will reverse strafe direction.
-    // See mecanum_kinematics.c and firmware-issue.md M-1 for full context.
-    vy_m = -vy_m;
+    // Vy convention: ROS frame uses positive Y = left. The firmware control layer and
+    // kinematics formula both use this same convention directly. No inversion needed here.
 
     // Convert angular velocity (mrad/s to rad/s)
     float vz_rad = (float)vz_raw / 1000.0f;
@@ -533,10 +531,12 @@ void protocol_send_motion_data(void)
     data[5] = (meas_vz >> 8) & 0xFF;
 
     // Battery voltage (0-255, multiply by 0.1 for volts on ROS 2 side)
+    // Saturate before cast to avoid float rounding producing 256 on uint8 truncation.
     float voltage = battery_get_voltage();
     if (voltage < 0.0f) voltage = 0.0f;
-    if (voltage > 25.5f) voltage = 25.5f;
-    data[6] = (uint8_t)(voltage * 10.0f);
+    uint16_t voltage_scaled = (uint16_t)(voltage * 10.0f);
+    if (voltage_scaled > 255U) voltage_scaled = 255U;
+    data[6] = (uint8_t)voltage_scaled;
 
     protocol_send_packet(FUNC_REPORT_SPEED, data, sizeof(data));
 }

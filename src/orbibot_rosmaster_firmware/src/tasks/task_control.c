@@ -104,10 +104,9 @@ void control_get_measured_velocity(int16_t *vx, int16_t *vy, int16_t *vz)
 {
     // Return measured velocity in protocol format:
     // vx, vy in mm/s, vz in mrad/s (milliradians per second)
-    *vx = (int16_t)(measured_vel.vx * 1000.0f);  // m/s to mm/s
-    // CRITICAL: Invert Vy to match protocol convention (mirrors protocol_handle_motion)
-    *vy = (int16_t)(-measured_vel.vy * 1000.0f);  // m/s to mm/s, inverted
-    *vz = (int16_t)(measured_vel.omega * 1000.0f);  // rad/s to mrad/s
+    *vx = (int16_t)(measured_vel.vx * 1000.0f);   // m/s → mm/s
+    *vy = (int16_t)(measured_vel.vy * 1000.0f);   // m/s → mm/s; ROS frame (positive = left)
+    *vz = (int16_t)(measured_vel.omega * 1000.0f); // rad/s → mrad/s
 }
 
 void control_update_command_time(void)
@@ -322,13 +321,13 @@ void task_control(void *params)
                 // Move desire toward target by RAMP per tick (passes through zero on reversal)
                 if (desire > target)
                 {
-                    desire_wheel_speed_mm[i] -= MOTOR_SPEED_RAMP_MMS;
+                    desire_wheel_speed_mm[i] -= MOTOR_DECEL_RAMP_MMS;
                     if (desire_wheel_speed_mm[i] < target)
                         desire_wheel_speed_mm[i] = target;
                 }
                 else
                 {
-                    desire_wheel_speed_mm[i] += MOTOR_SPEED_RAMP_MMS;
+                    desire_wheel_speed_mm[i] += MOTOR_DECEL_RAMP_MMS;
                     if (desire_wheel_speed_mm[i] > target)
                         desire_wheel_speed_mm[i] = target;
                 }

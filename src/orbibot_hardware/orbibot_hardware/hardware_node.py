@@ -96,8 +96,8 @@ class OrbiBotHardwareNode(Node):
         self._last_firmware_odom = None  # G3: Track last firmware data to skip duplicates
         self._last_odom_publish_time = 0.0  # Node clock (s); updated only after successful publish
 
-        # Rate limiting for PID topics (HW-005)
-        self._pid_rate_limit = 0.1  # Max 10Hz (100ms between updates)
+        # Rate limiting for PID topics — limit set from control.pid_rate_limit parameter
+        self._pid_rate_limit = 0.1  # default; overwritten from parameter in _declare_parameters()
         self._last_pid_update = 0.0
         self._last_yaw_pid_update = 0.0
         self._last_pid_save_update = 0.0
@@ -130,6 +130,7 @@ class OrbiBotHardwareNode(Node):
         self.declare_parameter('control.cmd_timeout', 2.0)
         self.declare_parameter('control.max_velocity', 1.0)
         self.declare_parameter('control.max_angular_velocity', 2.0)
+        self.declare_parameter('control.pid_rate_limit', 0.1)
 
         # Rates
         self.declare_parameter('rates.sensor_rate', 50.0)
@@ -170,6 +171,7 @@ class OrbiBotHardwareNode(Node):
         self.cmd_timeout = self.get_parameter('control.cmd_timeout').value
         self.max_velocity = self.get_parameter('control.max_velocity').value
         self.max_angular_velocity = self.get_parameter('control.max_angular_velocity').value
+        self._pid_rate_limit = self.get_parameter('control.pid_rate_limit').value
         self.sensor_rate = self.get_parameter('rates.sensor_rate').value
         self.status_rate = self.get_parameter('rates.status_rate').value
         self.battery_low_threshold = self.get_parameter('safety.battery_low_threshold').value
@@ -507,7 +509,7 @@ class OrbiBotHardwareNode(Node):
         """Save yaw PID gains to firmware flash via /orbibot/yaw_pid_save topic."""
         if not self.hardware_connected:
             return
-        if not self._check_pid_rate_limit('_last_yaw_pid_update'):
+        if not self._check_pid_rate_limit('_last_yaw_pid_save_update'):
             return
 
         if len(msg.data) != 3:
@@ -592,13 +594,14 @@ class OrbiBotHardwareNode(Node):
         except (AttributeError, TypeError):
             pass
 
-        # Command timeout safety — G1: send stop once, G4: thread-safe state reads
-        with self._cmd_time_lock:
-            cmd_age = time.time() - self._last_cmd_time
-        with self._state_lock:
-            motors_active = self.motors_enabled
+        # Command timeout safety — G1: send stop once, G4: thread-safe state reads.
+        # Both cmd_age check and _timeout_stop_sent update are guarded by _cmd_time_lock
+        # to prevent duplicate stop commands from concurrent sensor callback invocations.
         send_stop = False
         with self._cmd_time_lock:
+            cmd_age = time.time() - self._last_cmd_time
+            with self._state_lock:
+                motors_active = self.motors_enabled
             if cmd_age > self.cmd_timeout and motors_active and not self._timeout_stop_sent:
                 self._timeout_stop_sent = True
                 send_stop = True
@@ -968,7 +971,16 @@ class OrbiBotHardwareNode(Node):
         return response
 
     def _calibrate_imu_callback(self, request, response):
-        """Trigger magnetometer calibration via set_mag_calibration()."""
+        """Trigger zero-offset magnetometer calibration via set_mag_calibration(0,0,0).
+
+        Limitation: This sends hard-iron offsets of (0, 0, 0) to the firmware, which
+        causes the ICM-20948 to use the current magnetometer reading as its internal
+        reference offset. The actual bias values computed by the firmware are NOT
+        read back — bias_values always returns [0.0, 0.0, 0.0].
+
+        For precise calibration with known bias values, use /orbibot/set_mag_calibration
+        directly after computing offsets externally (e.g. with a calibration tool).
+        """
         if not self.hardware_connected:
             response.success = False
             response.message = "Hardware not connected"
@@ -976,26 +988,21 @@ class OrbiBotHardwareNode(Node):
             return response
 
         try:
-            # The CalibrateIMU service doesn't have offset fields in its definition,
-            # so we trigger auto-calibration by setting offsets to 0, 0, 0
-            # In practice, the firmware uses the current magnetometer reading as the
-            # hard iron offset (since the robot is stationary during calibration)
-            # Note: The calibration time parameter is used to wait for stabilization
             calibration_time = request.calibration_time if request.calibration_time > 0 else 10
+            self.get_logger().info(
+                f"Triggering zero-offset mag calibration (wait {calibration_time}s "
+                "before sending — keep robot stationary)...")
 
-            self.get_logger().info(f"Starting magnetometer calibration (wait {calibration_time}s)...")
-
-            # Wait for the specified calibration time to allow sensor stabilization
-            # This gives the user time to rotate the robot if needed
-            # In a real implementation, the firmware would handle this
-            # For now, we apply zero offsets (which the firmware treats as "use current reading")
             self.bot.set_mag_calibration(0.0, 0.0, 0.0)
 
             response.success = True
-            response.message = f"Magnetometer calibration applied (waited {calibration_time}s for stabilization)"
-            response.bias_values = [0.0, 0.0, 0.0]  # Firmware stores internally, not returned here
-
-            self.get_logger().info("Magnetometer calibration complete")
+            response.message = (
+                f"Zero-offset calibration sent. Firmware uses current reading as reference. "
+                f"bias_values not available — use /orbibot/set_mag_calibration for explicit offsets."
+            )
+            # Firmware stores bias internally; no read-back command exists in the protocol.
+            response.bias_values = [0.0, 0.0, 0.0]
+            self.get_logger().info("Magnetometer zero-offset calibration applied")
 
         except Exception as e:
             response.success = False

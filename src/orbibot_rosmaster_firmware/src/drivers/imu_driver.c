@@ -140,7 +140,13 @@ static void imu_write_register(uint8_t reg, uint8_t value)
 /**
  * @brief Read a single register
  * @param reg Register address
- * @return Register value
+ * @return Register value, or 0xFF on SPI bus timeout.
+ *
+ * Note: hal_spi_read_byte() returns 0xFF on timeout. Callers that perform
+ * identity checks (e.g. WHO_AM_I == 0xEA) naturally reject 0xFF. For bulk
+ * sensor reads where 0xFF is a plausible data value, a persistent SPI fault
+ * would be detected at the next IMU init (watchdog reset) or via imu_driver_init()
+ * re-check. No additional per-call validation is added to avoid overhead at 50Hz.
  */
 static uint8_t imu_read_register(uint8_t reg)
 {

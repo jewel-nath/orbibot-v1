@@ -16,6 +16,7 @@ orbibot_hardware_node:
       cmd_timeout: 2.0           # seconds - stop if no command received
       max_velocity: 1.0          # m/s - maximum linear velocity
       max_angular_velocity: 2.0  # rad/s - maximum angular velocity
+      pid_rate_limit: 0.1        # seconds - minimum interval between PID topic updates (max 10Hz)
 
     # Update Rates (Hz)
     rates:

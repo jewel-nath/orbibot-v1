@@ -252,7 +252,16 @@ static void driverInit(void)
     }
     else
     {
-        BOOT_PRINTF("[ERROR] IMU initialization failed!\n");
+        // FATAL: IMU is mandatory for OrbiBot odometry and heading control.
+        // Continuing without IMU causes task_imu to read garbage SPI data that
+        // looks like valid sensor output, silently corrupting odometry.
+        // Halt here so the fault is visible (boot messages stop; no auto-report).
+        BOOT_PRINTF("[FATAL] IMU initialization failed — check SPI2 wiring (PB12-PB15) "
+                    "and ICM-20948 WHO_AM_I (expected 0xEA). Halting.\n");
+        while (1)
+        {
+            // Hold here. Watchdog will eventually reset the MCU for a retry.
+        }
     }
 
     BOOT_PRINTF("[INIT] Battery monitor...\n");

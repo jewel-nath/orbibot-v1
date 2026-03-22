@@ -345,10 +345,9 @@ class Rosmaster:
 
     # Buzzer: on_time=0 off, 1=always on, >=10 beep for N ms then auto off.
     def set_beep(self, on_time):
+        if on_time < 0:
+            raise ValueError(f"set_beep: on_time must be >= 0, got {on_time}")
         try:
-            if on_time < 0:
-                print("beep input error!")
-                return
             value = bytearray(struct.pack('h', int(on_time)))
             self._send_command(FUNC_BEEP, [value[0], value[1]])
             if self._debug:
@@ -385,20 +384,18 @@ class Rosmaster:
             state = 0
             if forever:
                 state = 0x5F
-            cmd = [SERIAL_HEAD, SERIAL_DEVICE_ID, 0x0A, FUNC_SET_MOTOR_PID]
             if kp > 10 or ki > 10 or kd > 10 or kp < 0 or ki < 0 or kd < 0:
                 print("PID value must be:[0, 10.00]")
                 return
             kp_params = bytearray(struct.pack('h', int(kp * 1000)))
             ki_params = bytearray(struct.pack('h', int(ki * 1000)))
             kd_params = bytearray(struct.pack('h', int(kd * 1000)))
-            cmd.append(kp_params[0])  # low
-            cmd.append(kp_params[1])  # high
-            cmd.append(ki_params[0])  # low
-            cmd.append(ki_params[1])  # high
-            cmd.append(kd_params[0])  # low
-            cmd.append(kd_params[1])  # high
-            cmd.append(state)
+            cmd = [SERIAL_HEAD, SERIAL_DEVICE_ID, 0x00, FUNC_SET_MOTOR_PID,
+                   kp_params[0], kp_params[1],
+                   ki_params[0], ki_params[1],
+                   kd_params[0], kd_params[1],
+                   state]
+            cmd[2] = len(cmd) - 1  # set length byte dynamically
             checksum = sum(cmd, SERIAL_COMPLEMENT) & 0xff
             cmd.append(checksum)
             with self._write_lock:
@@ -417,20 +414,18 @@ class Rosmaster:
             state = 0
             if forever:
                 state = 0x5F
-            cmd = [SERIAL_HEAD, SERIAL_DEVICE_ID, 0x0A, FUNC_SET_YAW_PID]
             if kp > 10 or ki > 10 or kd > 10 or kp < 0 or ki < 0 or kd < 0:
                 print("YAW PID value must be:[0, 10.00]")
                 return
             kp_params = bytearray(struct.pack('h', int(kp * 1000)))
             ki_params = bytearray(struct.pack('h', int(ki * 1000)))
             kd_params = bytearray(struct.pack('h', int(kd * 1000)))
-            cmd.append(kp_params[0])  # low
-            cmd.append(kp_params[1])  # high
-            cmd.append(ki_params[0])  # low
-            cmd.append(ki_params[1])  # high
-            cmd.append(kd_params[0])  # low
-            cmd.append(kd_params[1])  # high
-            cmd.append(state)
+            cmd = [SERIAL_HEAD, SERIAL_DEVICE_ID, 0x00, FUNC_SET_YAW_PID,
+                   kp_params[0], kp_params[1],
+                   ki_params[0], ki_params[1],
+                   kd_params[0], kd_params[1],
+                   state]
+            cmd[2] = len(cmd) - 1  # set length byte dynamically
             checksum = sum(cmd, SERIAL_COMPLEMENT) & 0xff
             cmd.append(checksum)
             with self._write_lock:
@@ -452,8 +447,22 @@ class Rosmaster:
             # Use Level 1 gains (middle level) as the single PID setting
             self.set_pid_param(gains[3], gains[4], gains[5], forever)
 
+    # Maximum magnetometer offset in µT that fits in int16 with ×100 scaling.
+    _MAG_OFFSET_MAX_UT = 327.67
+
     def set_mag_calibration(self, offset_x, offset_y, offset_z):
-        """Set magnetometer hard iron calibration offsets (in µT)."""
+        """Set magnetometer hard iron calibration offsets (in µT).
+
+        Args:
+            offset_x/y/z: Hard-iron bias in µT. Must be in [-327.67, +327.67].
+        Raises:
+            ValueError: if any offset is outside the int16 representable range.
+        """
+        for name, val in (('offset_x', offset_x), ('offset_y', offset_y), ('offset_z', offset_z)):
+            if abs(val) > self._MAG_OFFSET_MAX_UT:
+                raise ValueError(
+                    f"set_mag_calibration: {name}={val} µT out of range "
+                    f"[-{self._MAG_OFFSET_MAX_UT}, +{self._MAG_OFFSET_MAX_UT}]")
         try:
             ox = bytearray(struct.pack('h', int(offset_x * 100)))
             oy = bytearray(struct.pack('h', int(offset_y * 100)))

@@ -27,9 +27,9 @@ Publishes sensor data and accepts velocity/PID commands.
 |-------|------|-----|------|-------------|
 | `/odom` | `nav_msgs/Odometry` | Reliable, TRANSIENT_LOCAL (depth 5) | ~20Hz (heartbeat when idle) | Firmware wheel odometry; deduplicated; re-published at `odometry.heartbeat_interval` when unchanged so late joiners (e.g. web GUI) get data |
 | `/imu/data` | `sensor_msgs/Imu` | Best Effort (depth 5) | 50Hz | Filtered attitude (orientation) + accel + gyro |
-| `/imu/data_raw` | `sensor_msgs/Imu` | Best Effort (depth 5) | 50Hz | Raw accel + gyro, no orientation (for imu_filter_madgwick) |
-| `/imu/mag` | `sensor_msgs/MagneticField` | Best Effort (depth 5) | 50Hz | Magnetometer in Tesla (skipped if all-zero) |
-| `/orbibot/encoders` | `std_msgs/Int32MultiArray` | Best Effort (depth 5) | 50Hz | Raw encoder counts `[FL, BL, FR, BR]` in ticks |
+| `/imu/data_raw` | `sensor_msgs/Imu` | Best Effort (depth 5) | ~20Hz (firmware) / 50Hz timer | Raw accel + gyro, no orientation (for imu_filter_madgwick). Firmware sends at 20Hz; node re-publishes at 50Hz timer rate (most recent frame). |
+| `/imu/mag` | `sensor_msgs/MagneticField` | Best Effort (depth 5) | ~20Hz (firmware) / 50Hz timer | Magnetometer in Tesla (skipped if all-zero). Same rate note as above. |
+| `/orbibot/encoders` | `std_msgs/Int32MultiArray` | Best Effort (depth 5) | ~20Hz (firmware) / 50Hz timer | Raw encoder counts `[FL, BL, FR, BR]` in ticks. Same rate note as above. |
 | `/joint_states` | `sensor_msgs/JointState` | Reliable (depth 10) | 50Hz | Wheel positions (rad) for RViz visualization |
 | `/orbibot/system_status` | `orbibot_msgs/SystemStatus` | Reliable (depth 10) | 10Hz | Battery voltage, motor state, hardware health |
 | `/orbibot/safety_status` | `orbibot_msgs/SafetyStatus` | Reliable (depth 10) | 10Hz | Emergency stop, timeouts, faults |
@@ -40,8 +40,8 @@ Publishes sensor data and accepts velocity/PID commands.
 | Service | Type | Description |
 |---------|------|-------------|
 | `/orbibot/set_motor_enable` | `orbibot_msgs/SetMotorEnable` | Enable/disable motors |
-| `/orbibot/calibrate_imu` | `orbibot_msgs/CalibrateIMU` | Apply zero magnetometer hard-iron offset (ICM-20948 auto-calibrates on startup) |
-| `/orbibot/reset_odometry` | `orbibot_msgs/ResetOdometry` | Reset firmware odometry (pose) to zero; encoder counts unchanged |
+| `/orbibot/calibrate_imu` | `orbibot_msgs/CalibrateIMU` | Send hard-iron offset (0,0,0) to firmware — firmware uses current reading as reference. `bias_values` always returns `[0,0,0]` (no read-back). Use `/orbibot/set_mag_calibration` for explicit offsets. |
+| `/orbibot/reset_odometry` | `orbibot_msgs/ResetOdometry` | Reset firmware odometry to `(0,0,0)`; encoder counts unchanged. `reset_pose` field is not supported — firmware always resets to zero. |
 | `/orbibot/reset_encoders` | `orbibot_msgs/ResetEncoders` | Reset encoder counts to zero (MCU + node state); odometry unchanged |
 | `/orbibot/get_firmware_version` | `orbibot_msgs/GetFirmwareVersion` | Request firmware version from STM32; returns `major`, `minor`, `version_string` |
 | `/orbibot/set_mag_calibration` | `orbibot_msgs/SetMagCalibration` | Set magnetometer hard-iron offsets explicitly in µT (`offset_x`, `offset_y`, `offset_z`) |
@@ -94,6 +94,7 @@ See [config/hardware_params.yaml](config/hardware_params.yaml) for all parameter
 | `control` | `cmd_timeout` | `2.0` s | Stop if no `/cmd_vel` received in this window |
 | `control` | `max_velocity` | `1.0` m/s | Linear velocity clamp |
 | `control` | `max_angular_velocity` | `2.0` rad/s | Angular velocity clamp |
+| `control` | `pid_rate_limit` | `0.1` s | Min interval between PID topic updates (max 10 Hz) |
 | `rates` | `sensor_rate` | `50.0` Hz | IMU, encoder, joint state publish rate |
 | `rates` | `status_rate` | `10.0` Hz | System/safety status publish rate |
 | `safety` | `battery_low_threshold` | `11.0` V | Low battery warning level |
