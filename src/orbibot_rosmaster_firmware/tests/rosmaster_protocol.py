@@ -29,14 +29,17 @@ class FuncCode(IntEnum):
     BEEP = 0x02
     SET_RGB = 0x03
     SET_PWM_SERVO = 0x04
+    RESET_ENCODERS = 0x08
     SET_MOTOR = 0x09
     REPORT_SPEED = 0x0A
-    REPORT_IMU_RAW = 0x0B
     REPORT_IMU_ATTITUDE = 0x0C
     REPORT_ENCODER = 0x0D
-    REPORT_ODOM = 0x0F
+    REPORT_IMU_RAW = 0x0E     # ICM-20948 raw: gyro+accel+mag (18 bytes)
     MOTION = 0x12
-    SET_PID = 0x14
+    SET_MOTOR_PID = 0x13
+    SET_YAW_PID = 0x14
+    REPORT_ODOM = 0x15        # Firmware odometry: x,y,theta,vx,vy,omega
+    SET_MAG_CAL = 0x16
     OLED_SET = 0x41
     REQUEST_DATA = 0x50
     VERSION = 0x51
@@ -60,9 +63,9 @@ class SpeedData:
 
 @dataclass
 class IMURawData:
-    """Parsed raw IMU data.
+    """Parsed raw IMU data (ICM-20948).
 
-    Firmware sends: [Gyro X,Y,Z][Accel X,Y,Z][Mag X,Y,Z]
+    Firmware sends 18 bytes: [Gyro X,Y,Z][Accel X,Y,Z][Mag X,Y,Z], each as int16 LE.
     """
     gyro_x: int
     gyro_y: int
@@ -70,6 +73,9 @@ class IMURawData:
     accel_x: int
     accel_y: int
     accel_z: int
+    mag_x: int
+    mag_y: int
+    mag_z: int
 
 
 @dataclass
@@ -255,10 +261,10 @@ class ROSMasterProtocol:
         return SpeedData(vx, vy, vz, batt)
 
     def parse_imu_raw(self, payload: bytes) -> Optional[IMURawData]:
-        """Parse REPORT_IMU_RAW payload."""
-        if len(payload) < 12:
+        """Parse REPORT_IMU_RAW payload (18 bytes: gyro+accel+mag, each int16 LE)."""
+        if len(payload) < 18:
             return None
-        values = struct.unpack('<6h', payload[:12])
+        values = struct.unpack('<9h', payload[:18])
         return IMURawData(*values)
 
     def parse_imu_attitude(self, payload: bytes) -> Optional[IMUAttitudeData]:

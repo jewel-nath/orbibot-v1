@@ -4,11 +4,11 @@ Battery Voltage Test Script for OrbiBot Firmware
 
 Monitors battery voltage and checks against thresholds.
 
-Voltage thresholds (3S LiPo):
-- Full: ~12.6V
-- Normal: 11.0-12.6V
-- Warning: 10.5-11.0V
-- Critical: <10.5V
+Voltage thresholds (4S LiFePO4):
+- Full: ~14.6V
+- Normal: 12.8-14.6V
+- Warning: 11.0-12.8V
+- Critical: <11.0V  → firmware emergency stop at 10.5V
 """
 
 import sys
@@ -20,11 +20,11 @@ from rosmaster_protocol import (
 )
 
 
-# Voltage thresholds
-VOLTAGE_FULL = 12.6
-VOLTAGE_NORMAL = 11.0
-VOLTAGE_WARNING = 10.5
-VOLTAGE_CRITICAL = 10.0
+# Voltage thresholds — 4S LiFePO4 (matches hardware_params.yaml)
+VOLTAGE_FULL = 14.6       # Full charge
+VOLTAGE_NORMAL = 12.8     # Nominal operating voltage
+VOLTAGE_WARNING = 11.0    # Low warning (hardware_params: battery_low_threshold)
+VOLTAGE_CRITICAL = 10.5   # Emergency stop (hardware_params: battery_critical_voltage)
 
 
 def get_voltage_status(voltage: float) -> tuple:
@@ -52,11 +52,11 @@ def main():
     print_info(f"Port: {args.port}")
     print_info(f"Duration: {args.duration}s")
     print()
-    print("Voltage thresholds (3S LiPo):")
+    print("Voltage thresholds (4S LiFePO4):")
     print(f"  {Color.GREEN}Full:     >= {VOLTAGE_FULL}V{Color.RESET}")
     print(f"  {Color.GREEN}Normal:   {VOLTAGE_NORMAL}V - {VOLTAGE_FULL}V{Color.RESET}")
     print(f"  {Color.YELLOW}Warning:  {VOLTAGE_WARNING}V - {VOLTAGE_NORMAL}V{Color.RESET}")
-    print(f"  {Color.RED}Critical: < {VOLTAGE_WARNING}V{Color.RESET}")
+    print(f"  {Color.RED}Critical: < {VOLTAGE_WARNING}V (emergency stop at {VOLTAGE_CRITICAL}V){Color.RESET}")
     print()
 
     proto = ROSMasterProtocol(args.port)
@@ -93,8 +93,8 @@ def main():
                         if elapsed - last_print >= args.interval:
                             color, status = get_voltage_status(voltage)
 
-                            # Create bar graph (10-13V range)
-                            bar_len = int((voltage - 10.0) / 3.0 * 20)
+                            # Create bar graph (10-15V range for 4S LiFePO4)
+                            bar_len = int((voltage - 10.0) / 5.0 * 20)
                             bar_len = max(0, min(20, bar_len))
                             bar = '#' * bar_len + '.' * (20 - bar_len)
 

@@ -17,8 +17,8 @@ from rosmaster_protocol import (
     print_header, print_info, print_success, print_error, print_warning, Color
 )
 
-# Expected command timeout in firmware (ms)
-COMMAND_TIMEOUT_MS = 500
+# Expected command timeout in firmware (matches COMMAND_TIMEOUT_MS in orbibot_config.h)
+COMMAND_TIMEOUT_MS = 2000
 
 
 def main():
@@ -38,26 +38,30 @@ def main():
         print_error(f"Failed to connect to {args.port}")
         return 1
 
+    timeout_ok = False
+    stopped = False
+
     try:
         proto.enable_auto_report(True)
         time.sleep(0.2)
 
-        # Test 1: Command timeout
+        # Test 1: Command timeout (firmware stops motors after COMMAND_TIMEOUT_MS with no new command)
         print(f"\n{Color.CYAN}Test 1: Command Timeout{Color.RESET}")
         print(f"  Expected timeout: {COMMAND_TIMEOUT_MS}ms")
-        print("  Sending motion command, then waiting for auto-stop...")
+        print("  Sending one motion command, then waiting for auto-stop...")
         print()
 
-        # Send forward motion
+        # Send forward motion (single command — do not repeat)
         proto.send_motion(0.2, 0, 0)  # 0.2 m/s forward
         print("  [0.0s] Motion command sent (0.2 m/s forward)")
         print("  Motors should be spinning now...")
 
-        # Wait and monitor
+        # Monitor for COMMAND_TIMEOUT_MS + 1s margin
+        monitor_duration = (COMMAND_TIMEOUT_MS / 1000.0) + 1.0
         start = time.time()
         last_speed = None
 
-        while time.time() - start < 3.0:
+        while time.time() - start < monitor_duration:
             packets = proto.read_packets(timeout=0.1)
             for func_code, payload in packets:
                 if func_code == FuncCode.REPORT_SPEED:

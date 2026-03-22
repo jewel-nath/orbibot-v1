@@ -7,8 +7,8 @@ Measures firmware communication performance:
 - Packets per second
 - Packet types and frequencies
 
-Expected rates (25Hz auto-report):
-- ~25 packets/s per type (speed, encoder, IMU raw, IMU attitude)
+Expected rates (20Hz auto-report, 5 interleaved types):
+- ~20 packets/s per type (speed, IMU attitude, encoder, IMU raw, odom)
 - ~100 total packets/s
 - ~1000-2000 bytes/s
 """
@@ -99,12 +99,13 @@ def main():
 
     print()
 
-    # Validate expected rates
-    expected_rate = 25.0  # Expected 25Hz per packet type
+    # Validate expected rates — firmware sends 5 types at 20Hz each
+    expected_rate = 20.0
     issues = []
 
     for func_code in [FuncCode.REPORT_SPEED, FuncCode.REPORT_ENCODER,
-                      FuncCode.REPORT_IMU_RAW, FuncCode.REPORT_IMU_ATTITUDE]:
+                      FuncCode.REPORT_IMU_RAW, FuncCode.REPORT_IMU_ATTITUDE,
+                      FuncCode.REPORT_ODOM]:
         count = monitor.packet_counts.get(func_code, 0)
         rate = count / monitor.elapsed if monitor.elapsed > 0 else 0
         name = FUNC_NAMES.get(func_code, f'0x{func_code:02X}')

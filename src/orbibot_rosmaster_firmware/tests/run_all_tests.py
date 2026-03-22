@@ -13,8 +13,9 @@ from rosmaster_protocol import (
     print_header, print_info, print_success, print_error, print_warning, Color
 )
 
-# Minimum packets expected in 2 seconds at 25Hz auto-report
-MIN_EXPECTED_PACKETS = 10
+# Minimum packets expected in 2 seconds — firmware sends 5 types at 20Hz = 200 total.
+# Use 40 as a lenient floor (20%) to allow for startup latency.
+MIN_EXPECTED_PACKETS = 40
 
 
 def test_connection(proto: ROSMasterProtocol) -> bool:
@@ -139,9 +140,9 @@ def test_battery(proto: ROSMasterProtocol) -> bool:
     proto.enable_auto_report(False)
 
     if voltage and voltage > 5.0:
-        if voltage >= 11.0:
+        if voltage >= 12.8:  # 4S LiFePO4 nominal
             print_success(f"Battery voltage: {voltage:.1f}V (Good)")
-        elif voltage >= 10.5:
+        elif voltage >= 11.0:  # low warning threshold
             print_warning(f"Battery voltage: {voltage:.1f}V (Low)")
         else:
             print_error(f"Battery voltage: {voltage:.1f}V (Critical)")

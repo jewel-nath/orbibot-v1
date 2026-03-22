@@ -17,10 +17,10 @@ from rosmaster_protocol import (
     print_header, print_info, print_success, print_error, print_warning, Color
 )
 
-# Robot parameters (adjust for your robot)
-WHEEL_DIAMETER_M = 0.065  # 65mm mecanum wheels
-ENCODER_CPR = 330         # Counts per revolution
-WHEEL_BASE_M = 0.15       # Distance between left/right wheels
+# Robot parameters — OrbiBot hardware spec
+WHEEL_DIAMETER_M = 0.1    # 100mm mecanum wheels
+ENCODER_CPR = 1320        # 11 PPR × 30 gear × 4 quadrature
+WHEEL_BASE_M = 0.26       # Wheelbase (front-rear wheel separation, 260mm)
 
 
 def encoder_to_distance(counts: int) -> float:
@@ -42,7 +42,7 @@ def main():
     print_info(f"Duration: {args.duration}s")
     print()
     print("Robot parameters:")
-    print(f"  Wheel diameter: {WHEEL_DIAMETER_M*1000:.0f}mm")
+    print(f"  Wheel diameter: {WHEEL_DIAMETER_M*1000:.0f}mm (mecanum)")
     print(f"  Encoder CPR: {ENCODER_CPR}")
     print(f"  Wheel base: {WHEEL_BASE_M*1000:.0f}mm")
     print()
