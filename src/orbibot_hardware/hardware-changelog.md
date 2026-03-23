@@ -1,6 +1,17 @@
 # Hardware Node Changelog
 
-## [Unreleased] — 2026-03-22
+## [Unreleased] — 2026-03-23
+
+### Documentation
+
+- **IMU topic architecture documented** (`README.md`)
+  Added "IMU Topic Architecture" section clarifying all 4 IMU topics:
+  `/imu/data` (debugging only), `/imu/data_raw` (Madgwick input),
+  `/imu/mag` (Madgwick input), `/imu/data_filtered` (EKF input).
+  Documents that Python-side mag correction is the active path and
+  firmware 3x3 soft-iron matrix is not activated in normal operation.
+
+## [Previous] — 2026-03-22
 
 ### Bug Fixes
 

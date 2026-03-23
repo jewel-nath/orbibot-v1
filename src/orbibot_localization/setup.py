@@ -25,6 +25,7 @@ setup(
     entry_points={
         'console_scripts': [
             'calibrate_magnetometer = orbibot_localization.calibrate_magnetometer:main',
+            'measure_imu_noise = orbibot_localization.measure_imu_noise:main',
         ],
     },
 )

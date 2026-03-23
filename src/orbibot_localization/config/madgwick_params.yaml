@@ -1,0 +1,33 @@
+# OrbiBot Madgwick IMU Filter Parameters
+# Fuses /imu/data_raw (accel+gyro) + /imu/mag (magnetometer) → /imu/data_filtered
+#
+# Key tuning notes:
+#   gain (beta): Higher = faster convergence, more vibration-sensitive
+#                Lower  = smoother but slower convergence
+#                0.033 = Madgwick paper default, 0.1 = common for robots
+#   zeta: Gyro bias drift correction rate using magnetometer
+#         0.0 = disabled (lgdxrobot2 uses this — not recommended)
+#         0.001 = slow correction — correct for long SLAM sessions
+#   orientation_stddev: Reported orientation uncertainty for EKF weighting
+#         0.0 = "perfect" (lgdxrobot2 uses this — wrong, makes EKF blindly trust IMU)
+#         0.05 = ~3° std dev — realistic for ICM-20948 + Madgwick
+
+imu_filter_madgwick:
+  ros__parameters:
+    use_mag: true
+    publish_tf: false
+    world_frame: enu
+    fixed_frame: odom
+    gain: 0.1
+    zeta: 0.001
+    orientation_stddev: 0.05
+    frequency: 50.0
+    stateless: false
+    remove_gravity_vector: false
+    constant_dt: 0.0
+    yaw_offset: 0.0
+    # Hard-iron correction is applied in hardware_node (imu.mag_hard_iron_x/y/z)
+    # These MUST remain 0.0 to avoid double-correction
+    mag_bias_x: 0.0
+    mag_bias_y: 0.0
+    mag_bias_z: 0.0

@@ -4,10 +4,11 @@
 
 robot_localization_ekf:
   ros__parameters:
-    # Update frequency — 15 Hz for RPi5 with full nav stack
-    # 15 Hz = 66ms cycle time gives headroom when nav2 adds CPU load
-    # (Was 20 Hz but EKF hit 300ms spikes during navigation)
-    frequency: 15.0
+    # Update frequency — 25 Hz for RPi5 with full nav stack
+    # 25 Hz = 40ms cycle time; sufficient for mecanum at 0.5 m/s (2cm/cycle)
+    # lgdxrobot2 runs 50Hz; 25Hz balances accuracy vs RPi5 CPU headroom with nav2
+    # (Was 15 Hz — too coarse at 66ms/3.3cm per cycle for navigation)
+    frequency: 25.0
     sensor_timeout: 0.2
     two_d_mode: true
     transform_time_offset: 0.0
@@ -45,22 +46,24 @@ robot_localization_ekf:
     odom0_pose_rejection_threshold: 5.0
     odom0_twist_rejection_threshold: 1.0
 
-    # IMU input (from Madgwick filter — magnetometer-corrected orientation)
-    # Hard-iron calibration applied 2026-03-15 via 3×360° rotation sweep.
-    # Absolute yaw re-enabled: provides stable compass heading to EKF.
+    # IMU input (from Madgwick filter — fused accel/gyro/mag orientation)
+    # Madgwick provides mag-corrected yaw; EKF uses it in RELATIVE mode
+    # (imu0_relative: true) — first reading becomes zero reference.
+    # This avoids startup jumps from imperfect mag calibration and is
+    # correct for indoor SLAM where absolute compass north isn't needed.
+    # SLAM provides map→odom TF for global consistency.
     imu0: /imu/data_filtered
     imu0_config: [false, false, false,   # x, y, z
-                  false, false, true,    # roll, pitch, yaw — FUSE absolute yaw (calibrated mag)
+                  false, false, true,    # roll, pitch, yaw — fuse relative yaw changes
                   false, false, false,   # vx, vy, vz
                   false, false, true,    # vroll, vpitch, vyaw — fuse yaw rate
-                  false, false, false]   # ax, ay, az — DISABLED (mecanum vibration causes noise)
+                  false, false, false]   # ax, ay, az — DISABLED (mecanum vibration noise)
     imu0_queue_size: 10
     imu0_nodelay: false
     imu0_differential: false
-    imu0_relative: true
+    imu0_relative: true   # Relative mode — see comment above
     imu0_remove_gravitational_acceleration: true
-    # Sensor covariance - IMU uncertainty
-    # Raised rejection thresholds to reduce noise rejection on mecanum platform
+    # Rejection thresholds — raised for mecanum platform vibration
     imu0_pose_rejection_threshold: 15.0
     imu0_twist_rejection_threshold: 2.5
     imu0_linear_acceleration_rejection_threshold: 10.0

@@ -20,11 +20,18 @@ from launch_ros.actions import Node
 def generate_launch_description():
     pkg_dir = get_package_share_directory('orbibot_localization')
     ekf_config_file = os.path.join(pkg_dir, 'config', 'ekf_params.yaml')
+    madgwick_config_file = os.path.join(pkg_dir, 'config', 'madgwick_params.yaml')
 
     ekf_config_arg = DeclareLaunchArgument(
         'ekf_config',
         default_value=ekf_config_file,
         description='Path to EKF configuration file'
+    )
+
+    madgwick_config_arg = DeclareLaunchArgument(
+        'madgwick_config',
+        default_value=madgwick_config_file,
+        description='Path to Madgwick IMU filter configuration file'
     )
 
     log_level_arg = DeclareLaunchArgument(
@@ -34,35 +41,21 @@ def generate_launch_description():
     )
 
     ekf_config = LaunchConfiguration('ekf_config')
+    madgwick_config = LaunchConfiguration('madgwick_config')
     log_level = LaunchConfiguration('log_level')
 
     log_startup = LogInfo(
-        msg=['[Localization] Madgwick + EKF — /imu/data_raw + /imu/mag → absolute yaw → /odometry/filtered']
+        msg=['[Localization] Madgwick + EKF — /imu/data_raw + /imu/mag → relative yaw → /odometry/filtered']
     )
 
     # Madgwick IMU filter: fuses raw accel/gyro + magnetometer → orientation quaternion
-    # Output feeds EKF as /imu/data_filtered with absolute yaw from magnetometer
+    # Config in config/madgwick_params.yaml — override via madgwick_config launch arg
     imu_filter_madgwick = Node(
         package='imu_filter_madgwick',
         executable='imu_filter_madgwick_node',
         name='imu_filter_madgwick',
         output='screen',
-        parameters=[{
-            'use_mag': True,
-            'publish_tf': False,
-            'world_frame': 'enu',
-            'fixed_frame': 'odom',
-            'gain': 0.1,
-            'zeta': 0.001,              # Gyro bias drift correction (mag-assisted, slow)
-            'orientation_stddev': 0.05, # ~3° std dev — EKF needs non-zero to weight IMU correctly
-            'mag_bias_x': 0.0,  # Hard-iron correction moved to hardware_node (imu.mag_hard_iron_x/y/z)
-            'mag_bias_y': 0.0,
-            'mag_bias_z': 0.0,
-            'frequency': 50.0,
-            'constant_dt': 0.0,
-            'stateless': False,
-            'remove_gravity_vector': False,
-        }],
+        parameters=[madgwick_config],
         remappings=[
             ('imu/data_raw', '/imu/data_raw'),
             ('imu/mag', '/imu/mag'),
@@ -85,6 +78,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         ekf_config_arg,
+        madgwick_config_arg,
         log_level_arg,
         log_startup,
         imu_filter_madgwick,

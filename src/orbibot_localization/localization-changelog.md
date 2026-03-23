@@ -1,3 +1,35 @@
+# orbibot_localization — Changelog
+
+## [Unreleased] — 2026-03-23
+
+Reference: `lgdxrobot2` open-source project (same ICM-20948, mecanum wheels)
+
+### Improvements
+
+- **EKF frequency 15Hz → 25Hz** (`config/ekf_params.yaml`)
+  Increased from 15Hz (66ms cycle, 3.3cm/cycle at 0.5 m/s) to 25Hz (40ms cycle, 2cm/cycle).
+  lgdxrobot2 runs at 50Hz; 25Hz balances accuracy with RPi5 CPU headroom during Nav2.
+  Previous 15Hz was a workaround for 300ms spikes that need separate root-cause investigation.
+
+- **Fix misleading `imu0_relative` comments** (`config/ekf_params.yaml`)
+  Comments said "FUSE absolute yaw" and "Absolute yaw re-enabled" but `imu0_relative: true`
+  actually uses relative mode (first reading = zero reference). Updated comments to accurately
+  describe the behavior: relative yaw changes from initial pose, correct for indoor SLAM.
+
+- **Madgwick params extracted to yaml** (`config/madgwick_params.yaml`, `launch/localization.launch.py`)
+  12 Madgwick parameters moved from hardcoded launch file to `config/madgwick_params.yaml`.
+  Enables runtime tuning via `ros2 param set`, launch argument override (`madgwick_config:=`),
+  and cleaner config management. Key values preserved: `gain: 0.1`, `zeta: 0.001`,
+  `orientation_stddev: 0.05` (all validated as better than lgdxrobot2's settings).
+
+- **IMU noise measurement tool** (`orbibot_localization/measure_imu_noise.py`)
+  New `ros2 run orbibot_localization measure_imu_noise` script. Subscribes to `/imu/data_raw`
+  for 30 seconds, computes per-axis variance using Welford's online algorithm, and prints
+  values ready to paste into `hardware_params.yaml`. Replaces static guesswork with measured
+  sensor noise for correct EKF weighting.
+
+---
+
 # orbibot_localization — Audit Findings
 
 **Date:** 2026-02-23

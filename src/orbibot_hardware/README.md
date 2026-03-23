@@ -159,6 +159,35 @@ ros2 topic pub --once /orbibot/beep std_msgs/msg/UInt16 "data: 0"    # Off
 
 ---
 
+## IMU Topic Architecture
+
+hardware_node publishes **three** IMU-related topics. Understanding which topic to use where is critical:
+
+```
+hardware_node publishes:
+  /imu/data          Firmware complementary filter attitude (orientation + accel + gyro)
+                     orientation_covariance = per-axis from yaml config
+                     PURPOSE: Debugging/monitoring ONLY
+                     ⚠️ NOT consumed by EKF — do NOT add to ekf_params.yaml
+
+  /imu/data_raw      Accel + gyro only (orientation_covariance[0] = -1, meaning "unknown")
+                     PURPOSE: Input to imu_filter_madgwick
+                     ✅ Madgwick subscribes to this
+
+  /imu/mag           Magnetometer in Tesla (hard+soft iron corrected in Python from yaml)
+                     Skipped when all-zero (DRDY not set)
+                     PURPOSE: Input to imu_filter_madgwick
+                     ✅ Madgwick subscribes to this
+
+imu_filter_madgwick publishes:
+  /imu/data_filtered  Fused orientation quaternion (accel + gyro + mag)
+                      ✅ EKF subscribes to this (yaw + yaw_rate in relative mode)
+```
+
+**Magnetometer correction** is applied in Python (`_publish_mag`) using hard-iron offsets and soft-iron scale factors from `hardware_params.yaml`. The firmware has a 3x3 soft-iron matrix capability (`imu_set_mag_calibration`) but it is not activated during normal operation — Python-side correction is the active path.
+
+---
+
 ## Debug Commands
 
 ```bash
