@@ -89,10 +89,18 @@ static float accel_scale = 1.0f;    // Will be set based on range
 static float gyro_scale = 1.0f;     // Will be set based on range
 static float mag_scale = 0.15f;     // Fixed for AK09916: 0.15 µT/LSB
 
-// Calibration offsets
+// Calibration offsets (computed at startup from 1000 stationary samples)
 static float gyro_offset_x = 0.0f;
 static float gyro_offset_y = 0.0f;
 static float gyro_offset_z = 0.0f;
+static float accel_offset_x = 0.0f;  // X bias (should be ~0 when level)
+static float accel_offset_y = 0.0f;  // Y bias (should be ~0 when level)
+// Note: Z is NOT offset-corrected — Madgwick needs gravity vector intact
+
+// Sensor noise variance (computed once at startup from stationary samples)
+// Units: accel in (m/s²)², gyro in (rad/s)² — ready for ROS2 Imu covariance
+static float accel_variance[3] = {0.01f, 0.01f, 0.01f};   // X, Y, Z
+static float gyro_variance[3] = {0.0025f, 0.0025f, 0.0025f}; // X, Y, Z
 
 // Magnetometer calibration (hard/soft iron correction)
 static mag_calibration_t mag_cal = {
@@ -456,9 +464,9 @@ robot_err_t imu_driver_init(void)
         BOOT_PRINTF("[IMU]   mag_init() OK\r\n");
     }
 
-    BOOT_PRINTF("[IMU] Step 9: gyro calibration (1000 samples, ~1s, keep robot still)...\r\n");
+    BOOT_PRINTF("[IMU] Step 9: gyro+accel calibration (1000 samples, ~1s, keep robot still & level)...\r\n");
     imu_calibrate();
-    BOOT_PRINTF("[IMU]   gyro calibration done\r\n");
+    BOOT_PRINTF("[IMU]   gyro+accel calibration done\r\n");
 
     BOOT_PRINTF("[IMU] imu_driver_init() SUCCESS\r\n\r\n");
     return ROBOT_OK;
@@ -552,9 +560,10 @@ robot_err_t imu_read_calibrated(imu_data_t *data)
         return ROBOT_ERR_HW;
     }
 
-    // Convert accelerometer to m/s²
-    data->accel_x = raw_data.accel_x * accel_scale;
-    data->accel_y = raw_data.accel_y * accel_scale;
+    // Convert accelerometer to m/s² and apply X/Y bias correction
+    // Z is NOT corrected — Madgwick requires gravity vector (~9.81 m/s²)
+    data->accel_x = (raw_data.accel_x * accel_scale) - accel_offset_x;
+    data->accel_y = (raw_data.accel_y * accel_scale) - accel_offset_y;
     data->accel_z = raw_data.accel_z * accel_scale;
 
     // Convert gyroscope to rad/s and apply calibration offsets
@@ -611,8 +620,8 @@ robot_err_t imu_read_both(imu_raw_data_t *raw, imu_data_t *cal)
 
     if (cal)
     {
-        cal->accel_x = raw_data.accel_x * accel_scale;
-        cal->accel_y = raw_data.accel_y * accel_scale;
+        cal->accel_x = (raw_data.accel_x * accel_scale) - accel_offset_x;
+        cal->accel_y = (raw_data.accel_y * accel_scale) - accel_offset_y;
         cal->accel_z = raw_data.accel_z * accel_scale;
         cal->gyro_x = (raw_data.gyro_x * gyro_scale) - gyro_offset_x;
         cal->gyro_y = (raw_data.gyro_y * gyro_scale) - gyro_offset_y;
@@ -714,30 +723,60 @@ float imu_read_temperature(void)
 }
 
 /**
- * @brief Calibrate IMU (gyroscope zero-rate offset)
+ * @brief Calibrate IMU (gyroscope + accelerometer zero-rate offsets)
  *
- * Device must be stationary during calibration.
+ * Device must be stationary on a level surface during calibration.
+ * Computes gyro X/Y/Z offsets and accel X/Y offsets from 1000 samples.
+ * Accel Z is NOT offset-corrected — Madgwick needs the gravity vector.
+ *
+ * Inspired by lgdxrobot2 firmware which calibrates both gyro and accel
+ * at startup (imu.c:228-271), including gravity removal on Z axis.
+ * We skip Z removal since Madgwick's remove_gravity_vector is false.
  */
 int imu_calibrate(void)
 {
     imu_raw_data_t raw_data;
-    int32_t sum_x = 0, sum_y = 0, sum_z = 0;
     uint16_t valid_samples = 0;
 
-    // Reset offsets
+    // Reset all offsets
     gyro_offset_x = 0.0f;
     gyro_offset_y = 0.0f;
     gyro_offset_z = 0.0f;
+    accel_offset_x = 0.0f;
+    accel_offset_y = 0.0f;
 
-    // Collect samples
+    // Welford's online algorithm accumulators for mean + variance in single pass.
+    // Avoids storing 1000 samples in RAM (would need 24KB for 6 axes × float).
+    // Reference: Welford (1962), Knuth TAOCP Vol 2, §4.2.2
+    float mean_ax = 0, mean_ay = 0, mean_az = 0;
+    float mean_gx = 0, mean_gy = 0, mean_gz = 0;
+    float m2_ax = 0, m2_ay = 0, m2_az = 0;
+    float m2_gx = 0, m2_gy = 0, m2_gz = 0;
+
+    // Collect samples (robot must be stationary and level)
     for (uint16_t i = 0; i < CALIBRATION_SAMPLES; i++)
     {
         if (imu_read_raw(&raw_data) == 0)
         {
-            sum_x += raw_data.gyro_x;
-            sum_y += raw_data.gyro_y;
-            sum_z += raw_data.gyro_z;
             valid_samples++;
+            float n = (float)valid_samples;
+
+            // Convert to physical units for variance computation
+            float ax = raw_data.accel_x * accel_scale;
+            float ay = raw_data.accel_y * accel_scale;
+            float az = raw_data.accel_z * accel_scale;
+            float gx = raw_data.gyro_x * gyro_scale;
+            float gy = raw_data.gyro_y * gyro_scale;
+            float gz = raw_data.gyro_z * gyro_scale;
+
+            // Welford update: delta = x - old_mean; mean += delta/n; m2 += delta*(x - new_mean)
+            float d;
+            d = ax - mean_ax; mean_ax += d / n; m2_ax += d * (ax - mean_ax);
+            d = ay - mean_ay; mean_ay += d / n; m2_ay += d * (ay - mean_ay);
+            d = az - mean_az; mean_az += d / n; m2_az += d * (az - mean_az);
+            d = gx - mean_gx; mean_gx += d / n; m2_gx += d * (gx - mean_gx);
+            d = gy - mean_gy; mean_gy += d / n; m2_gy += d * (gy - mean_gy);
+            d = gz - mean_gz; mean_gz += d / n; m2_gz += d * (gz - mean_gz);
         }
 
         imu_delay_ms(1);  // 1ms between samples
@@ -748,10 +787,32 @@ int imu_calibrate(void)
         return -1;  // Too few valid samples
     }
 
-    // Calculate average offsets
-    gyro_offset_x = (sum_x / (float)valid_samples) * gyro_scale;
-    gyro_offset_y = (sum_y / (float)valid_samples) * gyro_scale;
-    gyro_offset_z = (sum_z / (float)valid_samples) * gyro_scale;
+    // ---- Offsets (mean of stationary readings) ----
+    // Gyro: all 3 axes (expected 0 rad/s when stationary)
+    gyro_offset_x = mean_gx;
+    gyro_offset_y = mean_gy;
+    gyro_offset_z = mean_gz;
+
+    // Accel: X/Y only (Z has gravity, don't offset it)
+    accel_offset_x = mean_ax;
+    accel_offset_y = mean_ay;
+
+    // ---- Variance (sensor noise, for ROS2 Imu covariance) ----
+    // variance = m2 / (n - 1) for sample variance
+    float n_minus_1 = (float)(valid_samples - 1);
+    accel_variance[0] = m2_ax / n_minus_1;
+    accel_variance[1] = m2_ay / n_minus_1;
+    accel_variance[2] = m2_az / n_minus_1;
+    gyro_variance[0] = m2_gx / n_minus_1;
+    gyro_variance[1] = m2_gy / n_minus_1;
+    gyro_variance[2] = m2_gz / n_minus_1;
+
+    BOOT_PRINTF("[IMU]   accel offsets: X=%.4f Y=%.4f m/s2\r\n",
+                accel_offset_x, accel_offset_y);
+    BOOT_PRINTF("[IMU]   accel variance: X=%.6f Y=%.6f Z=%.6f (m/s2)^2\r\n",
+                accel_variance[0], accel_variance[1], accel_variance[2]);
+    BOOT_PRINTF("[IMU]   gyro variance:  X=%.6f Y=%.6f Z=%.6f (rad/s)^2\r\n",
+                gyro_variance[0], gyro_variance[1], gyro_variance[2]);
 
     return 0;
 }
@@ -854,6 +915,22 @@ void imu_get_mag_calibration(mag_calibration_t *cal)
     if (cal != NULL)
     {
         *cal = mag_cal;
+    }
+}
+
+void imu_get_noise_variance(float accel_var[3], float gyro_var[3])
+{
+    if (accel_var)
+    {
+        accel_var[0] = accel_variance[0];
+        accel_var[1] = accel_variance[1];
+        accel_var[2] = accel_variance[2];
+    }
+    if (gyro_var)
+    {
+        gyro_var[0] = gyro_variance[0];
+        gyro_var[1] = gyro_variance[1];
+        gyro_var[2] = gyro_variance[2];
     }
 }
 

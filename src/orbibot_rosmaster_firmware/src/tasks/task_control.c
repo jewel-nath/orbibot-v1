@@ -48,6 +48,9 @@ static volatile uint8_t g_battery_lockout = 0;
 // Velocity ramp: desire speeds track ramped targets (mm/s, signed)
 static float desire_wheel_speed_mm[4] = {0};
 
+// Last valid wheel speed for encoder anomaly rejection (mm/s)
+static float last_valid_wheel_speed_mm[4] = {0};
+
 // Firmware-side odometry (integrated at 100Hz)
 static odometry_t firmware_odom;
 
@@ -241,6 +244,20 @@ void task_control(void *params)
         for (int i = 0; i < 4; i++)
         {
             wheel_speed_mm_s[i] = (float)delta[i] * pulse_to_mm * CONTROL_LOOP_RATE_HZ;
+
+            // Encoder anomaly rejection: discard readings beyond physical motor limits.
+            // EMI spikes or loose connectors can produce huge deltas (e.g., 60000 mm/s)
+            // which cause PID overshoot → dangerous motor jerk.
+            // lgdxrobot2 uses same approach (motor.c:406-407).
+            if (fabsf(wheel_speed_mm_s[i]) > MAX_WHEEL_SPEED_MMS)
+            {
+                wheel_speed_mm_s[i] = last_valid_wheel_speed_mm[i];
+            }
+            else
+            {
+                last_valid_wheel_speed_mm[i] = wheel_speed_mm_s[i];
+            }
+
             wheel_speeds[i] = wheel_speed_mm_s[i] / 1000.0f;  // Convert to m/s
         }
 

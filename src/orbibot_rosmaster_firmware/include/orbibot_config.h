@@ -69,6 +69,17 @@
 #define ENCODER_EDGES_PER_REV       ENCODER_PPR // Same as ENCODER_PPR (quadrature already included)
 
 /**
+ * Maximum wheel speed for encoder anomaly rejection.
+ * Theoretical max: 333 RPM × 2π × 0.05m / 60 = 1.745 m/s = 1745 mm/s
+ * Use 2x margin to allow for measurement noise without false positives.
+ * Any encoder reading above this is EMI/noise — discard and use last valid.
+ *
+ * TODO: Measure actual per-motor max speed and replace theoretical value.
+ *       lgdxrobot2 found 23% variation between motors (10.47-12.85 rad/s).
+ */
+#define MAX_WHEEL_SPEED_MMS         3500.0f     // 2× theoretical max (mm/s)
+
+/**
  * Motor PWM Configuration
  * - Frequency: 20kHz (ultrasonic, silent operation)
  * - Resolution: 16-bit timer (0-65535)

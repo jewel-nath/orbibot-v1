@@ -1,6 +1,31 @@
 # Firmware Changelog
 
-## [Unreleased] — 2026-03-22
+## [Unreleased] — 2026-03-23
+
+### Improvements
+
+- **Accelerometer X/Y bias calibration at startup** (`imu_driver.c`)
+  `imu_calibrate()` now calibrates both gyro AND accel offsets from 1000 stationary samples.
+  Computes accel X/Y bias (should be ~0 when level) and subtracts in `imu_read_calibrated()`
+  and `imu_read_both()`. Accel Z is intentionally NOT corrected — Madgwick needs gravity vector
+  (~9.81 m/s²) intact. Inspired by lgdxrobot2 firmware (`imu.c:264-267`) which calibrates both
+  sensors at startup. Boot log updated to show computed offsets.
+  **⚠️ Requires hardware verification: robot must be stationary and level during boot.**
+
+- **Startup IMU noise variance computation** (`imu_driver.c`, `imu_driver.h`)
+  `imu_calibrate()` now computes per-axis variance for accel and gyro using Welford's online
+  algorithm during the existing 1000-sample calibration loop. No extra RAM (vs lgdxrobot2's
+  500×3 float arrays = 6KB). Values exposed via `imu_get_noise_variance()` for protocol
+  reporting. Ready for ROS2 Imu covariance diagonal entries.
+
+- **Encoder anomaly detection** (`task_control.c`, `orbibot_config.h`)
+  Wheel speed readings beyond `MAX_WHEEL_SPEED_MMS` (3500 mm/s, 2× theoretical motor max)
+  are discarded and replaced with last valid reading. Prevents PID overshoot from EMI spikes
+  or loose encoder connections. Inspired by lgdxrobot2 (`motor.c:406-407`).
+  New config: `MAX_WHEEL_SPEED_MMS` in `orbibot_config.h`.
+  **TODO:** Measure actual per-motor max speed and replace theoretical value.
+
+## [Previous] — 2026-03-22
 
 ### Bug Fixes
 

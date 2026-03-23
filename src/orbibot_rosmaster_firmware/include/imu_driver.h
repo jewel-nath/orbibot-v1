@@ -156,10 +156,13 @@ int imu_read_mag(float *mag_x, float *mag_y, float *mag_z);
 float imu_read_temperature(void);
 
 /**
- * @brief Calibrate IMU (gyroscope zero-rate offset)
+ * @brief Calibrate IMU (gyroscope + accelerometer offsets)
  *
- * Device must be stationary during calibration.
- * Takes 1000 samples and calculates average offsets.
+ * Device must be stationary on a level surface during calibration.
+ * Takes 1000 samples and calculates:
+ * - Gyroscope X/Y/Z zero-rate offsets (rad/s)
+ * - Accelerometer X/Y bias offsets (m/s²)
+ * Accel Z is NOT corrected — Madgwick needs gravity vector intact.
  *
  * @return 0 on success, -1 on failure
  */
@@ -212,6 +215,18 @@ void imu_set_mag_calibration(const mag_calibration_t *cal);
  * @param cal Pointer to store calibration data
  */
 void imu_get_mag_calibration(mag_calibration_t *cal);
+
+/**
+ * @brief Get IMU sensor noise variance (computed at startup from 1000 stationary samples)
+ *
+ * Uses Welford's online algorithm for numerically stable single-pass computation.
+ * Values are true variance (m2/(n-1)), not standard deviation.
+ * Ready for ROS2 sensor_msgs/Imu covariance diagonal entries.
+ *
+ * @param accel_var Output: accel variance [X, Y, Z] in (m/s²)² (may be NULL)
+ * @param gyro_var Output: gyro variance [X, Y, Z] in (rad/s)² (may be NULL)
+ */
+void imu_get_noise_variance(float accel_var[3], float gyro_var[3]);
 
 /* ========================================================================
  * PROTOCOL-COMPATIBLE WRAPPER FUNCTIONS
