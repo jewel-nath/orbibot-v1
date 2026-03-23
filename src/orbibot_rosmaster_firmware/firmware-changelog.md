@@ -2,6 +2,12 @@
 
 ## [Unreleased] — 2026-03-23
 
+### Documentation
+
+- **PID tuning procedure** (`README.md`)
+  Added step-by-step PID tuning guide using Ziegler-Nichols method with ROS2 commands.
+  Covers P-only tuning → add Ki → add Kd → save to flash → real-world verification.
+
 ### Improvements
 
 - **Accelerometer X/Y bias calibration at startup** (`imu_driver.c`)

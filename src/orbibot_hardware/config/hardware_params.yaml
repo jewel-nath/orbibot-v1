@@ -28,15 +28,23 @@ orbibot_hardware_node:
       battery_low_threshold: 11.0    # Volts - low battery warning
       battery_critical_voltage: 10.5 # Volts - critical battery level (auto-disable)
 
-    # IMU covariance (R4) — diagonal entries for accel, gyro, orientation
+    # IMU covariance (R4) — per-axis diagonal entries for accel and gyro.
+    # Run `ros2 run orbibot_localization measure_imu_noise` to get measured values.
+    # Firmware also computes these at boot via Welford's algorithm (see boot log).
     imu:
-      linear_acceleration_covariance: 0.01
-      angular_velocity_covariance: 0.0025
+      accel_covariance_x: 0.01     # (m/s²)² — replace with measured value
+      accel_covariance_y: 0.01
+      accel_covariance_z: 0.01
+      gyro_covariance_x: 0.0025    # (rad/s)² — replace with measured value
+      gyro_covariance_y: 0.0025
+      gyro_covariance_z: 0.0025
       orientation_covariance: 0.0025
 
-      # Magnetometer calibration — run calibrate_magnetometer to update these values.
+      # Magnetometer calibration (Python-side correction in hardware_node._publish_mag).
+      # Firmware has a 3x3 soft-iron matrix capability but it is NOT activated — all
+      # correction happens here. Run: ros2 run orbibot_localization calibrate_magnetometer
       # Hard-iron bias (Tesla): constant offset from motors and battery permanent magnets.
-      # Calibrated 2026-03-15 via 3 × 360° rotation (previously in Madgwick mag_bias_x/y/z).
+      # Calibrated 2026-03-15 via 3 × 360° rotation.
       mag_hard_iron_x: -0.00005452
       mag_hard_iron_y: -0.00000832
       mag_hard_iron_z:  0.00007170

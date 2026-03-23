@@ -2,6 +2,24 @@
 
 ## [Unreleased] — 2026-03-23
 
+### Improvements
+
+- **Per-axis IMU covariance** (`hardware_node.py`, `hardware_params.yaml`)
+  Changed from single isotropic covariance (same value all axes) to per-axis diagonal
+  covariance for both accel and gyro. Config params renamed:
+  `linear_acceleration_covariance` → `accel_covariance_x/y/z`,
+  `angular_velocity_covariance` → `gyro_covariance_x/y/z`.
+  Run `ros2 run orbibot_localization measure_imu_noise` to get actual measured values.
+
+- **Deprecated `/orbibot/calibrate_imu` service** (`hardware_node.py`)
+  Service was sending (0,0,0) to firmware which is a no-op. Now returns deprecation
+  warning pointing to `ros2 run orbibot_localization calibrate_magnetometer`.
+  Mag correction is Python-side only (hardware_params.yaml).
+
+- **Clarified mag calibration architecture** (`hardware_params.yaml`)
+  Added comments documenting that firmware 3x3 soft-iron matrix is NOT activated and
+  all correction happens in Python `_publish_mag()`.
+
 ### Documentation
 
 - **IMU topic architecture documented** (`README.md`)

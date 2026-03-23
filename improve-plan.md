@@ -52,7 +52,7 @@ Last updated: 2026-03-23
 | **Gyro calibration** | 1000 samples | 500 samples | **OrbiBot** |
 | **Accel calibration** | ✅ X/Y bias at startup | X/Y/Z bias + gravity removal | **Both** |
 | **Covariance** | ✅ Firmware startup Welford variance + ROS2 script | Firmware rolling 500-sample variance | **OrbiBot** (stationary = correct noise) |
-| **Mag calibration** | Python yaml (3 scalars) | Flash (3x3 matrix + ellipsoid fit) | **lgdxrobot2** |
+| **Mag calibration** | ✅ Python yaml + ellipsoid fit option | Flash (3x3 matrix + ellipsoid fit) | **Both** (OrbiBot now has ellipsoid) |
 | **Madgwick `zeta`** | 0.001 (drift correction) | 0.0 (none) | **OrbiBot** |
 | **Madgwick `orientation_stddev`** | 0.05 (~3°) | 0.0 ("perfect") | **OrbiBot** |
 | **EKF frequency** | ✅ 25Hz | 50Hz | lgdx (faster, C++ node) |
@@ -82,41 +82,26 @@ Last updated: 2026-03-23
 | 2b | Firmware startup variance (Welford) | `imu_driver.c` + `imu_driver.h` | `firmware-changelog.md` |
 | 11 | IMU topic architecture docs | `hardware/README.md` | `hardware-changelog.md` |
 | 12 | Encoder anomaly detection | `task_control.c` + `orbibot_config.h` | `firmware-changelog.md` |
+| 13 | Per-axis IMU covariance | `hardware_node.py` + `hardware_params.yaml` | `hardware-changelog.md` |
+| 14 | Mag calibration architecture cleanup | `hardware_node.py` + `hardware_params.yaml` | `hardware-changelog.md` |
+| 15 | Ellipsoid fitting for mag calibration | `calibrate_magnetometer.py` | `localization-changelog.md` |
+| 16 | PID tuning procedure documentation | `firmware/README.md` | `firmware-changelog.md` |
 
 ---
 
-## Remaining Items — IMU & Localization
+## Remaining Items — Hardware Test Required
 
-### [MEDIUM] Mag Calibration Architecture — Firmware 3x3 Unused
+### [HIGH] Per-Motor Max Speed Measurement (hardware required)
 
-Python hardware_node applies 3 scalar corrections. Firmware has full 3x3 soft-iron matrix
-capability but `mag_cal.calibrated = 0` at boot. `_calibrate_imu_callback` sends (0,0,0).
+lgdxrobot2 measured 23% variation between motors. OrbiBot uses theoretical uniform value.
 
-**Action (staged):**
-- Stage 1: Comment cleanup + deprecate confusing `_calibrate_imu_callback` service
-- Stage 2: Move correction to firmware, add flash persistence (like lgdxrobot2)
+### [MEDIUM] Madgwick `gain` Tuning (hardware required)
 
-### [MEDIUM] Ellipsoid Fitting for Soft-Iron
+Test `gain: 0.05` vs `0.1` on actual robot — compare orientation stability at stop.
 
-`calibrate_magnetometer.py` uses min/max span → 3 diagonal scale factors.
-lgdxrobot2 uses Eigen SVD ellipsoid fitting (`fit.cpp`) → full 3x3 matrix.
+### [LOW] Mag Calibration Flash Persistence (hardware required)
 
-**Action:** Add `--method ellipsoid` flag using numpy least-squares (AlignedXYEqual mode).
-
-### [MEDIUM] Madgwick `gain` Tuning (test needed)
-
-Both OrbiBot and lgdxrobot2 use `gain: 0.1`. Madgwick paper default is `0.033`.
-Mecanum motor vibration may make 0.1 too aggressive for accelerometer trust.
-
-**Action:** Test `gain: 0.05` vs `0.1` on actual robot — compare orientation stability at stop.
-
-### [LOW] Mag Calibration Flash Persistence
-
-lgdxrobot2 stores mag hard-iron + soft-iron in STM32 flash. OrbiBot stores in Python yaml.
-
-### [LOW] Per-axis IMU Covariance
-
-After running `measure_imu_noise`, update `hardware_node.py` to publish per-axis covariance.
+Move mag correction from Python yaml to firmware flash (like lgdxrobot2).
 
 ---
 
@@ -147,37 +132,15 @@ OrbiBot ধরে নেয় সব motor সমান। কিন্তু J
 **Impact:** Encoder anomaly filter, PID tuning accuracy, odometry accuracy.
 **Effort:** 30 min test + 10 min config update
 
-### [MEDIUM] PID tuning — Single PID তোমার জন্য যথেষ্ট, কিন্তু সঠিকভাবে tune হওয়া দরকার
+### [MEDIUM] PID Tuning WebGUI Page (future feature)
 
-**তোমার ধারণা সঠিক:** OrbiBot এর speed range (100-500 mm/s indoor navigation) এ single PID
-যথেষ্ট। lgdxrobot2 এর 3-level PID system তাদের wider speed range (2-10 rad/s, ~75-375 mm/s
-at their wheel radius) এর জন্য — এটা over-engineering করার দরকার নেই।
+Single PID যথেষ্ট — systematic tuning procedure documented in `firmware/README.md` (✅ done).
 
-**কিন্তু lgdxrobot2 থেকে ২টা জিনিস শেখা যায়:**
+**Remaining:** `orbibot_webgui` তে PID tuning page (step response graph) যোগ করলে
+visual tuning সহজ হবে। lgdxrobot2 এর chassistuner Qt app এর মতো — target velocity set →
+real-time motor response graph দেখো → P, I, D adjust করো live।
 
-1. **PID tuner GUI / real-time chart:** lgdxrobot2 এর chassistuner Qt app এ:
-   - Target velocity set করো → real-time motor response graph দেখো
-   - Overshoot, settling time, steady-state error visually দেখা যায়
-   - P, I, D separately adjust করো live
-
-   OrbiBot এ topic-based PID tuning আছে (`/orbibot/pid_params`) কিন্তু real-time graph নেই।
-   `orbibot_webgui` তে একটা PID tuning page যোগ করলে অনেক সহজ হবে।
-
-2. **Step response test procedure:** Systematic PID tuning method:
-   ```
-   ১. Ki=0, Kd=0 রাখো
-   ২. Kp বাড়াও যতক্ষণ না oscillation শুরু হয় (Ku = ultimate gain)
-   ৩. Kp = 0.6 * Ku (Ziegler-Nichols)
-   ৪. Ki যোগ করো slowly — steady-state error কমাও
-   ৫. Kd যোগ করো — overshoot কমাও
-   ৬. Real-world test: straight line 1m, 90° turn, figure-8
-   ```
-
-**Action:**
-- Phase 1: WebGUI তে PID tuning page (step response graph) — orbibot_webgui scope
-- Phase 2: Document systematic PID tuning procedure in firmware README
-
-**Effort:** Phase 1: 4-6h (webgui), Phase 2: 30 min doc
+**Effort:** 4-6h (webgui scope)
 
 ### [MEDIUM] PID Output Normalization
 
@@ -255,16 +218,12 @@ circular arc motion এ significant error দেয়। OrbiBot already better
 
 ## Priority Summary
 
-| Priority | Item | Category | Effort |
+| Priority | Item | Category | Status |
 |----------|------|----------|--------|
-| **HIGH** | Per-motor max speed measurement | PID/Motor | 30 min test |
-| **MEDIUM** | Mag calibration architecture cleanup | IMU | 1h |
-| **MEDIUM** | Ellipsoid fitting for soft-iron | IMU/Calibration | 3h |
-| **MEDIUM** | Madgwick gain tuning test | IMU/Localization | 30 min test |
-| **MEDIUM** | PID tuning tool (webgui page) | PID/UX | 4-6h |
-| **LOW** | Mag flash persistence | Firmware | 3h |
-| **LOW** | Per-axis IMU covariance | ROS2 | 30 min |
-| **LOW** | PID output normalization | Firmware | 2h |
+| **HIGH** | Per-motor max speed measurement | PID/Motor | ⏳ Hardware required |
+| **MEDIUM** | Madgwick gain tuning test | IMU/Localization | ⏳ Hardware required |
+| **MEDIUM** | PID tuning webgui page | PID/UX | Future feature |
+| **LOW** | Mag flash persistence | Firmware | ⏳ Hardware required |
 
 ---
 

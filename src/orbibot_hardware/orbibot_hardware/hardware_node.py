@@ -150,9 +150,14 @@ class OrbiBotHardwareNode(Node):
         self.declare_parameter('odometry.covariance_decay', 0.99)  # G2: Decay factor for accumulated errors
         self.declare_parameter('odometry.heartbeat_interval', 0.5)  # s; re-publish unchanged odom so late joiners get data; 0=disable
 
-        # R4: IMU covariance (diagonal entries; -1 for orientation means "unknown")
-        self.declare_parameter('imu.linear_acceleration_covariance', 0.01)
-        self.declare_parameter('imu.angular_velocity_covariance', 0.0025)
+        # R4: IMU covariance — per-axis diagonal entries
+        # Run `ros2 run orbibot_localization measure_imu_noise` to get measured values.
+        self.declare_parameter('imu.accel_covariance_x', 0.01)
+        self.declare_parameter('imu.accel_covariance_y', 0.01)
+        self.declare_parameter('imu.accel_covariance_z', 0.01)
+        self.declare_parameter('imu.gyro_covariance_x', 0.0025)
+        self.declare_parameter('imu.gyro_covariance_y', 0.0025)
+        self.declare_parameter('imu.gyro_covariance_z', 0.0025)
         self.declare_parameter('imu.orientation_covariance', 0.0025)
 
         # Magnetometer calibration (applied before publishing /imu/mag)
@@ -191,9 +196,17 @@ class OrbiBotHardwareNode(Node):
         self.wheel_radius = self.get_parameter('robot.wheel_radius').value
         self.encoder_edges_per_rev = self.get_parameter('robot.encoder_edges_per_rev').value
 
-        # IMU covariance (R4)
-        self._imu_accel_cov = self.get_parameter('imu.linear_acceleration_covariance').value
-        self._imu_gyro_cov = self.get_parameter('imu.angular_velocity_covariance').value
+        # IMU covariance (R4) — per-axis
+        self._imu_accel_cov = [
+            self.get_parameter('imu.accel_covariance_x').value,
+            self.get_parameter('imu.accel_covariance_y').value,
+            self.get_parameter('imu.accel_covariance_z').value,
+        ]
+        self._imu_gyro_cov = [
+            self.get_parameter('imu.gyro_covariance_x').value,
+            self.get_parameter('imu.gyro_covariance_y').value,
+            self.get_parameter('imu.gyro_covariance_z').value,
+        ]
         self._imu_orient_cov = self.get_parameter('imu.orientation_covariance').value
 
         # Magnetometer calibration
@@ -652,10 +665,10 @@ class OrbiBotHardwareNode(Node):
             msg.orientation.y = float(cr * sp * cy + sr * cp * sy)
             msg.orientation.z = float(cr * cp * sy - sr * sp * cy)
 
-            c = self._imu_accel_cov
-            msg.linear_acceleration_covariance = [c, 0.0, 0.0, 0.0, c, 0.0, 0.0, 0.0, c]
-            c = self._imu_gyro_cov
-            msg.angular_velocity_covariance = [c, 0.0, 0.0, 0.0, c, 0.0, 0.0, 0.0, c]
+            ac = self._imu_accel_cov  # [x, y, z] per-axis variance
+            msg.linear_acceleration_covariance = [ac[0], 0.0, 0.0, 0.0, ac[1], 0.0, 0.0, 0.0, ac[2]]
+            gc = self._imu_gyro_cov
+            msg.angular_velocity_covariance = [gc[0], 0.0, 0.0, 0.0, gc[1], 0.0, 0.0, 0.0, gc[2]]
             c = self._imu_orient_cov
             msg.orientation_covariance = [c, 0.0, 0.0, 0.0, c, 0.0, 0.0, 0.0, c]
             self.imu_pub.publish(msg)
@@ -677,10 +690,10 @@ class OrbiBotHardwareNode(Node):
             msg.angular_velocity.y = float(gyro_data[1])
             msg.angular_velocity.z = float(gyro_data[2])
             msg.orientation_covariance[0] = -1.0
-            c = self._imu_accel_cov
-            msg.linear_acceleration_covariance = [c, 0.0, 0.0, 0.0, c, 0.0, 0.0, 0.0, c]
-            c = self._imu_gyro_cov
-            msg.angular_velocity_covariance = [c, 0.0, 0.0, 0.0, c, 0.0, 0.0, 0.0, c]
+            ac = self._imu_accel_cov  # [x, y, z] per-axis variance
+            msg.linear_acceleration_covariance = [ac[0], 0.0, 0.0, 0.0, ac[1], 0.0, 0.0, 0.0, ac[2]]
+            gc = self._imu_gyro_cov
+            msg.angular_velocity_covariance = [gc[0], 0.0, 0.0, 0.0, gc[1], 0.0, 0.0, 0.0, gc[2]]
             self.imu_raw_pub.publish(msg)
         except Exception as e:
             self.get_logger().error(f"IMU raw publish failed: {e}")
@@ -971,44 +984,31 @@ class OrbiBotHardwareNode(Node):
         return response
 
     def _calibrate_imu_callback(self, request, response):
-        """Trigger zero-offset magnetometer calibration via set_mag_calibration(0,0,0).
+        """DEPRECATED: Use `ros2 run orbibot_localization calibrate_magnetometer` instead.
 
-        Limitation: This sends hard-iron offsets of (0, 0, 0) to the firmware, which
-        causes the ICM-20948 to use the current magnetometer reading as its internal
-        reference offset. The actual bias values computed by the firmware are NOT
-        read back — bias_values always returns [0.0, 0.0, 0.0].
+        This service sends (0,0,0) to firmware mag calibration, which is a no-op.
+        Actual mag correction is applied in Python (_publish_mag) using values from
+        hardware_params.yaml. The firmware's 3x3 soft-iron matrix capability exists
+        but is not activated during normal operation.
 
-        For precise calibration with known bias values, use /orbibot/set_mag_calibration
-        directly after computing offsets externally (e.g. with a calibration tool).
+        Proper calibration workflow:
+          1. ros2 run orbibot_localization calibrate_magnetometer
+          2. Copy printed values to hardware_params.yaml (imu section)
+          3. Restart hardware_node
+
+        Kept for backward compatibility — always returns success with zero bias.
         """
-        if not self.hardware_connected:
-            response.success = False
-            response.message = "Hardware not connected"
-            response.bias_values = [0.0, 0.0, 0.0]
-            return response
-
-        try:
-            calibration_time = request.calibration_time if request.calibration_time > 0 else 10
-            self.get_logger().info(
-                f"Triggering zero-offset mag calibration (wait {calibration_time}s "
-                "before sending — keep robot stationary)...")
-
-            self.bot.set_mag_calibration(0.0, 0.0, 0.0)
-
-            response.success = True
-            response.message = (
-                f"Zero-offset calibration sent. Firmware uses current reading as reference. "
-                f"bias_values not available — use /orbibot/set_mag_calibration for explicit offsets."
-            )
-            # Firmware stores bias internally; no read-back command exists in the protocol.
-            response.bias_values = [0.0, 0.0, 0.0]
-            self.get_logger().info("Magnetometer zero-offset calibration applied")
-
-        except Exception as e:
-            response.success = False
-            response.message = f"Calibration failed: {e}"
-            response.bias_values = [0.0, 0.0, 0.0]
-
+        self.get_logger().warn(
+            "calibrate_imu service is DEPRECATED. "
+            "Use: ros2 run orbibot_localization calibrate_magnetometer"
+        )
+        response.success = True
+        response.message = (
+            "DEPRECATED: This service sends zero offsets (no-op). "
+            "Use `ros2 run orbibot_localization calibrate_magnetometer` "
+            "and copy values to hardware_params.yaml instead."
+        )
+        response.bias_values = [0.0, 0.0, 0.0]
         return response
 
     def _reset_odometry_callback(self, request, response):

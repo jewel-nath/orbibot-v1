@@ -258,23 +258,65 @@ orbibot_rosmaster_firmware/
 
 ## PID Control
 
-Multi-level incremental PID with gains interpolated by wheel speed (100Hz):
+Single-set incremental PID at 100Hz. OrbiBot's indoor navigation speed range (100-500 mm/s)
+does not require multi-level PID — a well-tuned single set is sufficient.
 
-| Level | Speed Range | Kp | Ki | Kd |
-|-------|-------------|-----|------|-----|
-| 0 | Low speed | 0.8 | 0.06 | 0.5 |
-| 1 | Medium speed | 0.8 | 0.06 | 0.5 |
-| 2 | High speed | 0.8 | 0.06 | 0.5 |
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| Kp | 0.8 | Proportional gain |
+| Ki | 0.06 | Integral gain (trapezoidal rule) |
+| Kd | 0.5 | Derivative gain |
 
-> Gains and speed thresholds are runtime-tunable via serial protocol and persisted to flash.
+> Gains are runtime-tunable via `/orbibot/pid_params` topic and persisted to flash.
 
 **Incremental PID formula:**
 ```
-deltaOut = Kp * (Ek - Ek_1) + Ki * Ek + Kd * (Ek - 2*Ek_1 + Ek_2)
+deltaOut = Kp * (Ek - Ek_1) + Ki * 0.5*(Ek + Ek_1) + Kd * (Ek - 2*Ek_1 + Ek_2)
 Out_k = Out_k_1 + deltaOut
 ```
 
-Anti-windup: output saturated at +/-3600 (max PWM).
+Anti-windup: conditional integral clamp at ±4000 (stops I accumulation when output
+is saturated in the same direction as the error).
+
+### PID Tuning Procedure
+
+If PID needs re-tuning (e.g., after motor/wheel change), follow this systematic method:
+
+```
+Step 1: Set Ki=0, Kd=0 (P-only)
+  ros2 topic pub --once /orbibot/pid_params std_msgs/msg/Float32MultiArray \
+    "data: [0.5, 0.0, 0.0]"
+
+Step 2: Send step velocity command
+  ros2 topic pub --once /cmd_vel geometry_msgs/msg/Twist "linear: {x: 0.3}"
+
+Step 3: Watch response
+  ros2 topic echo /odom --field twist.twist.linear.x
+  - If oscillating: Kp too high → reduce
+  - If sluggish:    Kp too low → increase
+  - Find Ku (ultimate gain) where oscillation just starts
+  - Set Kp = 0.6 × Ku (Ziegler-Nichols starting point)
+
+Step 4: Add Ki slowly (eliminates steady-state error)
+  ros2 topic pub --once /orbibot/pid_params std_msgs/msg/Float32MultiArray \
+    "data: [<Kp>, 0.02, 0.0]"
+  - Increase Ki until steady-state error < 5%
+  - If oscillation returns: Ki too high
+
+Step 5: Add Kd (reduces overshoot)
+  ros2 topic pub --once /orbibot/pid_params std_msgs/msg/Float32MultiArray \
+    "data: [<Kp>, <Ki>, 0.3]"
+  - Increase Kd until overshoot is acceptable (<10%)
+
+Step 6: Save to flash (persists across reboot)
+  ros2 topic pub --once /orbibot/pid_save std_msgs/msg/Float32MultiArray \
+    "data: [<Kp>, <Ki>, <Kd>]"
+
+Step 7: Verify with real-world tests
+  - Straight line 1m forward → check odometry accuracy
+  - 90° turn in place → check heading
+  - Figure-8 pattern → check combined motion
+```
 
 ---
 

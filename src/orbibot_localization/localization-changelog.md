@@ -6,6 +6,12 @@ Reference: `lgdxrobot2` open-source project (same ICM-20948, mecanum wheels)
 
 ### Improvements
 
+- **Ellipsoid fitting for magnetometer calibration** (`calibrate_magnetometer.py`)
+  Added `--method ellipsoid` flag that uses numpy least-squares AlignedXYEqual ellipsoid
+  fit for better hard-iron center and soft-iron scale computation. Captures cross-axis
+  distortion that min/max span method misses. Inspired by lgdxrobot2 chassistuner
+  (`fit.cpp`, Eigen SVD). Falls back to min/max if numpy unavailable or fit fails.
+
 - **EKF frequency 15Hz → 25Hz** (`config/ekf_params.yaml`)
   Increased from 15Hz (66ms cycle, 3.3cm/cycle at 0.5 m/s) to 25Hz (40ms cycle, 2cm/cycle).
   lgdxrobot2 runs at 50Hz; 25Hz balances accuracy with RPi5 CPU headroom during Nav2.
