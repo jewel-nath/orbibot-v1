@@ -592,20 +592,37 @@ class OrbiBotHardwareNode(Node):
 
     def _sensor_callback(self):
         """Publish sensor data @ 50Hz. R1/Q4: single fetch per cycle. S1/S2: data freshness."""
-        if not self.hardware_connected:
-            return
-
-        # S1/S2: Data freshness — if no firmware data for data_timeout, mark disconnected
+        # S1/S2: Data freshness check — MUST happen before early-return so recovery
+        # (hardware_connected = True) is reachable after a timeout.
+        #
+        # Bug history: the early return was above this block, making recovery unreachable.
+        # After a timeout, hardware_connected was stuck False forever until node restart.
+        # Fix: check freshness first, then gate publishing on hardware_connected.
         try:
             last_ts = self.bot.get_last_data_timestamp()
             if last_ts > 0 and (time.time() - last_ts) > self._data_timeout:
-                self.hardware_connected = False
-                self.get_logger().warn("Hardware data timeout — marking disconnected")
+                if self.hardware_connected:
+                    self.hardware_connected = False
+                    self.get_logger().warn("Hardware data timeout — marking disconnected")
+                    # Re-enable auto-report so firmware resumes sending when it wakes up.
+                    # This handles cases where auto-report was lost (firmware reset, glitch).
+                    try:
+                        self.bot.set_auto_report_state(True, forever=False)
+                    except Exception:
+                        pass
                 return
-            if last_ts > 0:
-                self.hardware_connected = True  # recover when data flows again
+            if last_ts > 0 and not self.hardware_connected:
+                # Data is flowing again — reconnected.
+                self.hardware_connected = True
+                self.get_logger().info("Hardware reconnected — data flowing again")
+                return  # Skip publishing this cycle; next cycle will publish normally
+            elif last_ts > 0:
+                self.hardware_connected = True
         except (AttributeError, TypeError):
             pass
+
+        if not self.hardware_connected:
+            return
 
         # Command timeout safety — G1: send stop once, G4: thread-safe state reads.
         # Both cmd_age check and _timeout_stop_sent update are guarded by _cmd_time_lock

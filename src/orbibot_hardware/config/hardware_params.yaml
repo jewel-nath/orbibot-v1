@@ -4,7 +4,9 @@ orbibot_hardware_node:
     # Hardware Configuration
     hardware:
       serial_port: "/dev/motordriver"
-      data_timeout: 2.0   # seconds without firmware data → hardware_connected = false (S1/S2)
+      data_timeout: 5.0   # seconds without firmware data → hardware_connected = false (S1/S2)
+                         # Increased from 2.0: firmware sends at 50Hz but serial buffers can
+                         # cause brief gaps; 2s was too tight and caused spurious disconnects.
 
     # Robot geometry (R2) — wheel radius (m), encoder edges per revolution
     robot:
