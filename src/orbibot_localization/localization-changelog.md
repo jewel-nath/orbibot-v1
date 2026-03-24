@@ -1,8 +1,14 @@
 # orbibot_localization — Changelog
 
-## [Unreleased] — 2026-03-23
+## [Unreleased] — 2026-03-24
 
 Reference: `lgdxrobot2` open-source project (same ICM-20948, mecanum wheels)
+
+### Bug Fixes
+
+- **Fixed QoS mismatch in measure_imu_noise** (`measure_imu_noise.py`)
+  Subscription used default RELIABLE QoS but hardware_node publishes BEST_EFFORT.
+  Changed to `qos_profile_sensor_data` — tool now receives data correctly.
 
 ### Improvements
 

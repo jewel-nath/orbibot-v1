@@ -32,12 +32,12 @@ orbibot_hardware_node:
     # Run `ros2 run orbibot_localization measure_imu_noise` to get measured values.
     # Firmware also computes these at boot via Welford's algorithm (see boot log).
     imu:
-      accel_covariance_x: 0.01     # (m/s²)² — replace with measured value
-      accel_covariance_y: 0.01
-      accel_covariance_z: 0.01
-      gyro_covariance_x: 0.0025    # (rad/s)² — replace with measured value
-      gyro_covariance_y: 0.0025
-      gyro_covariance_z: 0.0025
+      accel_covariance_x: 0.000081  # (m/s²)² — measured 2026-03-24, 212 samples, robot stationary
+      accel_covariance_y: 0.000053
+      accel_covariance_z: 0.000041
+      gyro_covariance_x: 0.000001  # (rad/s)² — measured 2026-03-24
+      gyro_covariance_y: 0.000026
+      gyro_covariance_z: 0.000001
       orientation_covariance: 0.0025
 
       # Magnetometer calibration (Python-side correction in hardware_node._publish_mag).

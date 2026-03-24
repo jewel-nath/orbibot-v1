@@ -20,6 +20,7 @@ Why per-axis?
 
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import Imu
 import math
 import signal
@@ -63,7 +64,7 @@ class ImuNoiseMeasurer(Node):
         self._gyro = [WelfordAccumulator() for _ in range(3)]
 
         self._sub = self.create_subscription(
-            Imu, '/imu/data_raw', self._imu_callback, 10
+            Imu, '/imu/data_raw', self._imu_callback, qos_profile_sensor_data
         )
 
         self._timer = self.create_timer(2.0, self._print_progress)

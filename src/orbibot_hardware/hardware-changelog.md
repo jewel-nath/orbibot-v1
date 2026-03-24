@@ -1,8 +1,13 @@
 # Hardware Node Changelog
 
-## [Unreleased] — 2026-03-23
+## [Unreleased] — 2026-03-24
 
 ### Improvements
+
+- **Measured real IMU noise covariance** (`hardware_params.yaml`)
+  Replaced hardcoded guesses (accel=0.01, gyro=0.0025) with actual measured values
+  from 212 stationary samples. Previous values were ~100× too high for accel.
+  Per-axis: accel X=0.000081, Y=0.000053, Z=0.000041; gyro X=0.000001, Y=0.000026, Z=0.000001.
 
 - **Per-axis IMU covariance** (`hardware_node.py`, `hardware_params.yaml`)
   Changed from single isotropic covariance (same value all axes) to per-axis diagonal

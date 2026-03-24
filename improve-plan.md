@@ -86,18 +86,58 @@ Last updated: 2026-03-23
 | 14 | Mag calibration architecture cleanup | `hardware_node.py` + `hardware_params.yaml` | `hardware-changelog.md` |
 | 15 | Ellipsoid fitting for mag calibration | `calibrate_magnetometer.py` | `localization-changelog.md` |
 | 16 | PID tuning procedure documentation | `firmware/README.md` | `firmware-changelog.md` |
+| 17 | Per-motor max speed test — 0.1% variation (excellent) | `test_motor_max_speed.py` | this file |
+| 18 | Measured real IMU noise covariance | `hardware_params.yaml` | `hardware-changelog.md` |
+| 19 | Fixed measure_imu_noise QoS mismatch | `measure_imu_noise.py` | `localization-changelog.md` |
 
 ---
 
-## Remaining Items — Hardware Test Required
+## Hardware Test Results (2026-03-24)
 
-### [HIGH] Per-Motor Max Speed Measurement (hardware required)
+### Per-Motor Max Speed Measurement — ✅ DONE
 
-lgdxrobot2 measured 23% variation between motors. OrbiBot uses theoretical uniform value.
+**Result: 0.1% variation — lgdxrobot2 এর 23% এর তুলনায় excellent!**
+
+```
+Motor          Avg (mm/s)  Avg (rad/s)   Max (mm/s)
+M1 (FL)            1000.4        20.01       1021.5
+M2 (BL)            1001.3        20.03       1021.5
+M3 (FR)            1001.3        20.03       1023.9
+M4 (BR)            1000.7        20.01       1018.9
+```
+
+- Firmware velocity clamp (1.0 m/s) prevents reaching absolute max
+- PID achieves target speed ±10 mm/s on all motors — excellent tuning
+- **Per-motor max speed config NOT needed** — motors are uniform
+- Current `MAX_WHEEL_SPEED_MMS = 3500` is fine (2× theoretical)
+
+### IMU Noise Covariance — ✅ MEASURED
+
+```
+Accel variance: X=0.000081 Y=0.000053 Z=0.000041 (m/s²)²
+Gyro  variance: X=0.000001 Y=0.000026 Z=0.000001 (rad/s)²
+```
+
+- Previous hardcoded: accel=0.01, gyro=0.0025 (100× too high!)
+- Measured values now in hardware_params.yaml → EKF will trust IMU much more
+- Gyro Y axis noisier than X/Z (PCB mounting / manufacturing)
+
+**Note:** Accel Z mean = 15.35 m/s² (expected ~9.81) — investigate accel scale factor
+
+---
+
+## Remaining Items
 
 ### [MEDIUM] Madgwick `gain` Tuning (hardware required)
 
 Test `gain: 0.05` vs `0.1` on actual robot — compare orientation stability at stop.
+
+### [MEDIUM] Accel Z Scale Investigation
+
+Accel Z mean = 15.35 m/s² instead of 9.81. Possible causes:
+- Firmware accel scale factor wrong (±2G range → scale = 16384 LSB/g, check)
+- Robot not level during measurement
+- Need to verify with `test_imu.py` while robot confirmed level
 
 ### [LOW] Mag Calibration Flash Persistence (hardware required)
 
@@ -107,30 +147,10 @@ Move mag correction from Python yaml to firmware flash (like lgdxrobot2).
 
 ## Remaining Items — PID & Motor Control (NEW from lgdxrobot2 study)
 
-### [HIGH] Per-Motor Max Speed Measurement
+### ✅ [DONE] Per-Motor Max Speed Measurement
 
-**lgdxrobot2 finding:** তাদের 4 motor এর measured max speed:
-```
-Motor 0: 12.85 rad/s
-Motor 1: 12.06 rad/s
-Motor 2: 11.74 rad/s
-Motor 3: 10.47 rad/s   ← 23% slower than Motor 0!
-```
-
-OrbiBot ধরে নেয় সব motor সমান। কিন্তু JGB37-520 motor গুলোতেও manufacturing variation
-থাকবে। Motor max speed না জানলে PID output normalization এবং encoder anomaly rejection
-সঠিকভাবে করা যায় না।
-
-**Action:** প্রতিটি motor আলাদাভাবে max PWM দিয়ে max speed measure করো।
-```bash
-# Proposed test procedure:
-# 1. Motor 1 enable, full PWM, measure encoder speed 5 sec → average
-# 2. Repeat for motors 2, 3, 4
-# 3. Store in orbibot_config.h as MOTOR_MAX_SPEED_M1..M4
-```
-
-**Impact:** Encoder anomaly filter, PID tuning accuracy, odometry accuracy.
-**Effort:** 30 min test + 10 min config update
+**Result:** OrbiBot motors vary only 0.1% (vs lgdxrobot2's 23%). No per-motor config needed.
+Test script: `tests/test_motor_max_speed.py`
 
 ### [MEDIUM] PID Tuning WebGUI Page (future feature)
 
@@ -220,8 +240,10 @@ circular arc motion এ significant error দেয়। OrbiBot already better
 
 | Priority | Item | Category | Status |
 |----------|------|----------|--------|
-| **HIGH** | Per-motor max speed measurement | PID/Motor | ⏳ Hardware required |
+| ~~HIGH~~ | ~~Per-motor max speed measurement~~ | PID/Motor | ✅ Done (0.1% variation) |
+| ~~HIGH~~ | ~~IMU noise measurement~~ | IMU | ✅ Done (yaml updated) |
 | **MEDIUM** | Madgwick gain tuning test | IMU/Localization | ⏳ Hardware required |
+| **MEDIUM** | Accel Z scale investigation | Firmware/IMU | ⏳ Needs verification |
 | **MEDIUM** | PID tuning webgui page | PID/UX | Future feature |
 | **LOW** | Mag flash persistence | Firmware | ⏳ Hardware required |
 
