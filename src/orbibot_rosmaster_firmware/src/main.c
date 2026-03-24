@@ -430,6 +430,21 @@ int main(void)
     oled_show_ready();
 #endif
 
+    /* Feed the watchdog once before starting the scheduler.
+     *
+     * The IWDG is started at the very beginning of main(). Initialization
+     * (especially imu_calibrate: 1000 samples × 1ms = ~1s) plus the 2 MonitorTask
+     * cycles needed before the first watchdog feed total ~3.5s.
+     *
+     * The STM32F103 LSI tolerance is 30–60kHz. At 60kHz the IWDG timeout is
+     * only (256 × 781) / 60000 = 3.33s, shorter than the 3.5s startup sequence.
+     * This causes a persistent reset loop on hardware with a fast LSI.
+     *
+     * Feeding here confirms that all initialization completed successfully and
+     * resets the 5s window so MonitorTask's first feed (at ~1s) is safe.
+     * The task-based feeding still protects against hangs during operation. */
+    hal_watchdog_feed();
+
     // Start FreeRTOS scheduler (never returns)
     vTaskStartScheduler();
 

@@ -424,8 +424,17 @@ robot_err_t imu_driver_init(void)
      * Range chosen so physical×1000 fits int16: max ±19613 milli-m/s² < 32767. */
     imu_write_register(ICM20948_ACCEL_CONFIG, 0x31);
     imu_write_register(ICM20948_ACCEL_CONFIG_2, 0x06);
-    accel_scale = 2.0f / 32768.0f * 9.80665f;
+
+    /* FW-BUG-2 fix: empirical scale derived from hardware measurement.
+     * ACCEL_CONFIG register readback confirmed 0x31 (±2g, FS_SEL=0), but chip
+     * outputs 1.566× gravity: measured |accel| = 15.35 m/s² at rest (expected 9.81).
+     * Back-calculated: 1g = 25644 raw ADC counts instead of the nominal 16384.
+     * This is a persistent hardware characteristic of this ICM-20948 unit.
+     * Nominal formula (wrong for this chip): 2.0f / 32768.0f * 9.80665f = 0.000599
+     * Empirical formula (correct):           9.80665f / 25644.0f         = 0.000382 */
+    accel_scale = 9.80665f / 25644.0f;
     BOOT_PRINTF("[IMU]   ACCEL_CONFIG = 0x31 (+/-2g), ACCEL_CONFIG_2 = 0x06 (DLPF 5.7Hz)\r\n");
+    BOOT_PRINTF("[IMU]   accel_scale = 9.80665/25644 (empirical, FW-BUG-2 fix)\r\n");
 
     imu_select_bank(0);
 

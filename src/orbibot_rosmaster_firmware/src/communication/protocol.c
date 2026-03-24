@@ -222,10 +222,15 @@ uint8_t protocol_calculate_checksum(const uint8_t *data, uint8_t length)
 {
     uint16_t sum = 0;
 
-    // Sum bytes from Device_ID (index 1) through last data byte (index length-2).
+    // Sum bytes from Length (index 2) through last data byte (index length-2).
     // Packet layout: [0xFF][Device_ID][Length][Func][Data...][Checksum]
-    // Checksum covers: Device_ID, Length, Func, and all Data bytes.
-    for (uint8_t i = 1; i < length - 1; i++)
+    // Checksum covers: Length, Func, and all Data bytes (NOT HEAD or Device_ID).
+    //
+    // Formula matches host-side (ROS 2 driver and test library):
+    //   checksum = sum(cmd, COMPLEMENT) & 0xFF,  COMPLEMENT = 257 - DEVICE_ID
+    //   which simplifies to: (Length + Func + Data...) & 0xFF
+    // Starting from index 1 (Device_ID) would add 0xFC and break the match.
+    for (uint8_t i = 2; i < length - 1; i++)
     {
         sum += data[i];
     }
