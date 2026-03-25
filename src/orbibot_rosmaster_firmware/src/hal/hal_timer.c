@@ -36,7 +36,6 @@ static void hal_timer_pwm_init(void)
     TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
     TIM_OCInitTypeDef TIM_OCInitStructure;
 
-    // Enable timer clocks and remap
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM8 | RCC_APB2Periph_TIM1, ENABLE);
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
     GPIO_PinRemapConfig(GPIO_PartialRemap_TIM1, ENABLE);
@@ -44,10 +43,8 @@ static void hal_timer_pwm_init(void)
     TIM_DeInit(TIM8);
     TIM_DeInit(TIM1);
 
-    // GPIO AF_PP pins are configured by hal_gpio_init_motor_pwm_pins() in hal_gpio.c.
-    // No duplicate GPIO init here.
+    // GPIO AF_PP pins configured in hal_gpio.c
 
-    // Configure timer timebase
     TIM_TimeBaseStructure.TIM_Prescaler = 0;
     TIM_TimeBaseStructure.TIM_Period = 3600 - 1;
     TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;
@@ -56,37 +53,31 @@ static void hal_timer_pwm_init(void)
     TIM_TimeBaseInit(TIM8, &TIM_TimeBaseStructure);
     TIM_TimeBaseInit(TIM1, &TIM_TimeBaseStructure);
 
-    // ========== STEP 4: Configure PWM channels ==========
-
-    // Standard outputs: TIM8 CH1-4 and TIM1 CH1, CH4
+    // Standard PWM outputs: TIM8 CH1-4 and TIM1 CH1, CH4
     TIM_OCStructInit(&TIM_OCInitStructure);
     TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
     TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
     TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
     TIM_OCInitStructure.TIM_Pulse = 0;
 
-    // TIM8 CH1-4 (M1, M2 motors)
     TIM_OC1Init(TIM8, &TIM_OCInitStructure);
     TIM_OC2Init(TIM8, &TIM_OCInitStructure);
     TIM_OC3Init(TIM8, &TIM_OCInitStructure);
     TIM_OC4Init(TIM8, &TIM_OCInitStructure);
 
-    // TIM1 CH1, CH4 (M3 motor standard outputs)
     TIM_OC1Init(TIM1, &TIM_OCInitStructure);
     TIM_OC4Init(TIM1, &TIM_OCInitStructure);
 
-    // TIM1 CH2N, CH3N (M4 motor complementary outputs)
-    // PC8/PC9 are wired to complementary outputs, not standard channels
+    // M4: complementary outputs CH2N/CH3N (PC8/PC9 wired to N-channels)
     TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
-    TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Disable;   // Disable CH2/CH3
-    TIM_OCInitStructure.TIM_OutputNState = TIM_OutputNState_Enable;  // Enable CH2N/CH3N
+    TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Disable;
+    TIM_OCInitStructure.TIM_OutputNState = TIM_OutputNState_Enable;
     TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
     TIM_OCInitStructure.TIM_Pulse = 0;
 
     TIM_OC2Init(TIM1, &TIM_OCInitStructure);
     TIM_OC3Init(TIM1, &TIM_OCInitStructure);
 
-    // ========== STEP 5: Enable PWM outputs ==========
     TIM_CtrlPWMOutputs(TIM8, ENABLE);
     TIM_CtrlPWMOutputs(TIM1, ENABLE);
     TIM_Cmd(TIM8, ENABLE);

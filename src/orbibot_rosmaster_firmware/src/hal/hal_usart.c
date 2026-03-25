@@ -307,14 +307,13 @@ uint32_t hal_usart_get_errors(void)
  */
 void USART1_IRQHandler(void)
 {
-    // Check for RX data available
     if (USART_GetITStatus(USART1, USART_IT_RXNE) != RESET)
     {
         uint8_t data = USART_ReceiveData(USART1);
 
         protocol_receive_byte(data);
 
-        // Also store in circular buffer for debugging (optional)
+        // Store in circular buffer (available via hal_usart_read_byte for debug)
         uint16_t next_head = (rx_head + 1) % USART_RX_BUFFER_SIZE;
         if (next_head != rx_tail)
         {
@@ -327,28 +326,21 @@ void USART1_IRQHandler(void)
         }
     }
 
-    // Check for overrun error
+    // Clear hardware errors by reading DR (STM32 requirement)
     if (USART_GetFlagStatus(USART1, USART_FLAG_ORE) != RESET)
     {
-        // Clear error by reading DR
         (void)USART_ReceiveData(USART1);
-        usart_errors |= (1 << 1);  // Bit 1: Hardware overrun error
+        usart_errors |= (1 << 1);
     }
-
-    // Check for framing error
     if (USART_GetFlagStatus(USART1, USART_FLAG_FE) != RESET)
     {
-        // Clear error by reading DR
         (void)USART_ReceiveData(USART1);
-        usart_errors |= (1 << 2);  // Bit 2: Framing error
+        usart_errors |= (1 << 2);
     }
-
-    // Check for noise error
     if (USART_GetFlagStatus(USART1, USART_FLAG_NE) != RESET)
     {
-        // Clear error by reading DR
         (void)USART_ReceiveData(USART1);
-        usart_errors |= (1 << 3);  // Bit 3: Noise error
+        usart_errors |= (1 << 3);
     }
 }
 

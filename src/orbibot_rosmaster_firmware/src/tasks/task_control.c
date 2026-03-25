@@ -231,14 +231,14 @@ void task_control(void *params)
             }
         }
 
-        // 1. Read encoder deltas with direction correction
+        // Read encoder deltas
         int16_t delta[4];
         for (int i = 0; i < 4; i++)
         {
             delta[i] = encoder_read_delta(i);  // HAL handles midpoint, driver handles direction
         }
 
-        // 2. Calculate wheel speeds in mm/s for PID
+        // Calculate wheel speeds (mm/s for PID, m/s for odometry)
         float wheel_speed_mm_s[4];
         float wheel_speeds[4];  // m/s for odometry
         for (int i = 0; i < 4; i++)
@@ -267,9 +267,7 @@ void task_control(void *params)
         current_wheel_vel.fr = wheel_speeds[2];
         current_wheel_vel.br = wheel_speeds[3];
 
-        // 2. Calculate and store measured robot velocity (for auto-report)
-        // Critical section: communication task reads measured_vel at 20Hz.
-        // 3-float struct write is not atomic on ARM Cortex-M3.
+        // Store measured velocity (critical section: comm task reads at 20Hz)
         robot_velocity_t meas_local;
         mecanum_forward_kinematics(&current_wheel_vel, &meas_local);
         taskENTER_CRITICAL();
@@ -278,12 +276,11 @@ void task_control(void *params)
         measured_vel.omega = meas_local.omega;
         taskEXIT_CRITICAL();
 
-        // 2b. Update firmware odometry at 100Hz
+        // Update firmware odometry
         const float dt = 1.0f / (float)CONTROL_LOOP_RATE_HZ;
         odometry_update(&firmware_odom, &current_wheel_vel, dt);
 
-        // 3. Calculate Target Wheel Velocities
-        // Copy volatile target to local variable (critical section protects read)
+        // Copy target velocity (critical section: protocol task writes)
         robot_velocity_t target_local;
         taskENTER_CRITICAL();
         target_local.vx = target_vel.vx;
@@ -294,7 +291,7 @@ void task_control(void *params)
         wheel_velocity_t target_wheel_vel;
         mecanum_inverse_kinematics(&target_local, &target_wheel_vel);
 
-        // 5. PID Control (operates in mm/s for tuned gains)
+        // PID operates in mm/s
         float target_wheel_speeds[4] = {
             target_wheel_vel.fl * 1000.0f,  // Convert m/s to mm/s
             target_wheel_vel.bl * 1000.0f,
@@ -302,8 +299,7 @@ void task_control(void *params)
             target_wheel_vel.br * 1000.0f
         };
 
-        // Check if robot should be stopped (all targets near zero)
-        // This prevents PID runaway when wheels are manually moved
+        // Stop check: prevents PID runaway when wheels are manually moved
         float total_target = fabsf(target_local.vx) + fabsf(target_local.vy) + fabsf(target_local.omega);
         uint8_t is_stopped = (total_target < 0.001f);
 

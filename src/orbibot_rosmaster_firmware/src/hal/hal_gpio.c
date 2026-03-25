@@ -20,9 +20,7 @@
 #include "stm32f10x.h"
 #include "orbibot_config.h"
 
-// ============================================================================
-// Motor PWM Pin Definitions (use config definitions)
-// ============================================================================
+// Motor PWM pin aliases (from orbibot_config.h)
 #define M1A_PORT    MOTOR1_IN1_PORT
 #define M1A_PIN     MOTOR1_IN1_PIN
 #define M1B_PORT    MOTOR1_IN2_PORT
@@ -44,16 +42,14 @@
 #define M4B_PIN     MOTOR4_IN2_PIN
 
 /**
- * @brief Initialize motor PWM GPIO pins as Alternate Function Push-Pull
+ * @brief Initialize motor PWM GPIO pins as AF_PP
  *
- * CRITICAL: This function MUST be called for motor PWM to work!
- * Without AF_PP configuration, the timer PWM outputs won't reach the motor drivers.
+ * Without AF_PP, timer PWM outputs don't reach the motor drivers.
  */
 static void hal_gpio_init_motor_pwm_pins(void)
 {
     GPIO_InitTypeDef GPIO_InitStructure;
 
-    // Configure all motor PWM pins as Alternate Function Push-Pull
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
     GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
 
@@ -89,16 +85,13 @@ int hal_gpio_init(void)
 {
     GPIO_InitTypeDef GPIO_InitStructure;
 
-    // Enable GPIO clocks for ALL ports we use
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOB |
                            RCC_APB2Periph_GPIOC | RCC_APB2Periph_GPIOD |
                            RCC_APB2Periph_AFIO, ENABLE);
 
-    // CRITICAL: Initialize motor PWM pins as Alternate Function
-    // This MUST be done for PWM output to work!
     hal_gpio_init_motor_pwm_pins();
 
-    // Configure LED pins as outputs (from orbibot_config.h)
+    // LED pins
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
     GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
 
@@ -107,21 +100,17 @@ int hal_gpio_init(void)
     GPIO_InitStructure.GPIO_Pin = LED2_PIN;
     GPIO_Init(LED2_PORT, &GPIO_InitStructure);
 
-    // Initialize LEDs OFF
     GPIO_ResetBits(LED1_PORT, LED1_PIN);
     GPIO_ResetBits(LED2_PORT, LED2_PIN);
 
-    // Configure Buzzer pin as output (PC5)
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    // Buzzer pin
     GPIO_InitStructure.GPIO_Pin = BUZZER_PIN;
     GPIO_Init(BUZZER_PORT, &GPIO_InitStructure);
 
-    // Initialize Buzzer OFF
     BUZZER_OFF();
 
-    // Configure KEY1 pin as input with pull-up (PD2)
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;  // Input with Pull-Up
+    // KEY1 button (active-low with pull-up)
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;
     GPIO_InitStructure.GPIO_Pin = KEY1_PIN;
     GPIO_Init(KEY1_PORT, &GPIO_InitStructure);
 
