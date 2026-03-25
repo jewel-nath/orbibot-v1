@@ -1,6 +1,12 @@
 # orbibot_hardware
 
-ROS 2 hardware interface for OrbiBot. Bridges the Yahboom ROSMaster V3.0 expansion board (STM32) to the ROS 2 ecosystem via serial protocol.
+ROS 2 hardware interface for OrbiBot. Bridges the Yahboom ROSMaster V3.0 expansion board
+(STM32 firmware) to the ROS 2 ecosystem over USB serial (115200 baud).
+
+The STM32 firmware runs motor PID control and odometry at 100Hz. This package
+publishes the sensor data as standard ROS 2 topics and forwards `/cmd_vel` commands
+to the firmware. For firmware internals, see
+[orbibot_rosmaster_firmware/README.md](../orbibot_rosmaster_firmware/README.md).
 
 ---
 
@@ -40,7 +46,7 @@ Publishes sensor data and accepts velocity/PID commands.
 | Service | Type | Description |
 |---------|------|-------------|
 | `/orbibot/set_motor_enable` | `orbibot_msgs/SetMotorEnable` | Enable/disable motors |
-| `/orbibot/calibrate_imu` | `orbibot_msgs/CalibrateIMU` | Send hard-iron offset (0,0,0) to firmware — firmware uses current reading as reference. `bias_values` always returns `[0,0,0]` (no read-back). Use `/orbibot/set_mag_calibration` for explicit offsets. |
+| `/orbibot/calibrate_imu` | `orbibot_msgs/CalibrateIMU` | **DEPRECATED.** Sends (0,0,0) to firmware (no-op). Use `ros2 run orbibot_localization calibrate_magnetometer` instead. |
 | `/orbibot/reset_odometry` | `orbibot_msgs/ResetOdometry` | Reset firmware odometry to `(0,0,0)`; encoder counts unchanged. `reset_pose` field is not supported — firmware always resets to zero. |
 | `/orbibot/reset_encoders` | `orbibot_msgs/ResetEncoders` | Reset encoder counts to zero (MCU + node state); odometry unchanged |
 | `/orbibot/get_firmware_version` | `orbibot_msgs/GetFirmwareVersion` | Request firmware version from STM32; returns `major`, `minor`, `version_string` |
@@ -99,9 +105,9 @@ See [config/hardware_params.yaml](config/hardware_params.yaml) for all parameter
 | `rates` | `status_rate` | `10.0` Hz | System/safety status publish rate |
 | `safety` | `battery_low_threshold` | `11.0` V | Low battery warning level |
 | `safety` | `battery_critical_voltage` | `10.5` V | Emergency stop threshold |
-| `imu` | `linear_acceleration_covariance` | `0.01` | IMU accel covariance (diagonal) |
-| `imu` | `angular_velocity_covariance` | `0.0025` | IMU gyro covariance (diagonal) |
-| `imu` | `orientation_covariance` | `0.0025` | IMU orientation covariance (diagonal) |
+| `imu` | `accel_covariance_x/y/z` | `0.01` | Per-axis accel covariance (m/s^2)^2 |
+| `imu` | `gyro_covariance_x/y/z` | `0.0025` | Per-axis gyro covariance (rad/s)^2 |
+| `imu` | `orientation_covariance` | `0.0025` | Orientation covariance (rad^2) |
 | `imu` | `mag_hard_iron_x/y/z` | `0.0` T | Hard-iron bias (permanent magnet offset). Run `calibrate_magnetometer` to compute. |
 | `imu` | `mag_soft_iron_scale_x/y/z` | `1.0` | Soft-iron axis scale (ferromagnetic distortion). Run `calibrate_magnetometer` to compute. |
 | `odometry` | `pose_base` | `0.001` | Base position variance (m²) |
@@ -145,8 +151,8 @@ ros2 service call /orbibot/get_firmware_version orbibot_msgs/srv/GetFirmwareVers
 ros2 service call /orbibot/set_mag_calibration orbibot_msgs/srv/SetMagCalibration \
   '{offset_x: 5.2, offset_y: -3.1, offset_z: 1.0}'
 
-# Trigger zero-offset auto-calibration (use current reading as bias)
-ros2 service call /orbibot/calibrate_imu orbibot_msgs/srv/CalibrateIMU '{calibration_time: 5}'
+# Full magnetometer calibration procedure (recommended)
+ros2 run orbibot_localization calibrate_magnetometer
 ```
 
 ## Buzzer Examples
