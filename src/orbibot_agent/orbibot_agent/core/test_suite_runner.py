@@ -122,7 +122,7 @@ class TestSuiteRunner:
 
         PASS: voltage > 10.5 V (3S LiPo minimum safe)
         """
-        result = self._call('get_battery_status')
+        result = self._call('get_battery')
         if 'error' in result:
             return {'pass': False, 'error': result['error'], 'details': result}
 
@@ -145,24 +145,26 @@ class TestSuiteRunner:
     def _run_imu_test(self) -> Dict[str, Any]:
         """Test IMU accelerometer and gyroscope data.
 
+        Uses get_imu_raw (raw ICM-20948 data with both accel and gyro).
         PASS: no NaN values, accelerometer magnitude near 9.81 m/s²,
               gyroscope values near zero (robot stationary).
         """
-        result = self._call('get_imu_data')
+        result = self._call('get_imu_raw')
         if 'error' in result:
             return {'pass': False, 'error': result['error'], 'details': result}
 
         import math
 
-        accel = result.get('linear_acceleration', {})
-        gyro = result.get('angular_velocity', {})
+        # get_imu_raw returns: gyro.{x,y,z}_rad_s, accel.{x,y,z}_m_s2
+        accel = result.get('accel', {})
+        gyro = result.get('gyro', {})
 
-        ax = float(accel.get('x', float('nan')))
-        ay = float(accel.get('y', float('nan')))
-        az = float(accel.get('z', float('nan')))
-        gx = float(gyro.get('x', float('nan')))
-        gy = float(gyro.get('y', float('nan')))
-        gz = float(gyro.get('z', float('nan')))
+        ax = float(accel.get('x_m_s2', float('nan')))
+        ay = float(accel.get('y_m_s2', float('nan')))
+        az = float(accel.get('z_m_s2', float('nan')))
+        gx = float(gyro.get('x_rad_s', float('nan')))
+        gy = float(gyro.get('y_rad_s', float('nan')))
+        gz = float(gyro.get('z_rad_s', float('nan')))
 
         has_nan = any(math.isnan(v) for v in [ax, ay, az, gx, gy, gz])
 
@@ -256,33 +258,39 @@ class TestSuiteRunner:
         }
 
     def _run_magnetometer_test(self) -> Dict[str, Any]:
-        """Test magnetometer by checking heading data.
+        """Test magnetometer field strength.
 
-        PASS: heading is a valid float in [-180, 360] degrees, no NaN.
+        PASS: magnitude in 20-80 µT range (typical Earth field), no NaN.
         """
-        result = self._call('get_magnetometer_data')
+        result = self._call('get_magnetometer')
         if 'error' in result:
             return {'pass': False, 'error': result['error'], 'details': result}
 
         import math
 
-        heading = result.get('heading', result.get('yaw', float('nan')))
-        try:
-            heading = float(heading)
-        except (TypeError, ValueError):
-            heading = float('nan')
+        x = float(result.get('x_uT', float('nan')))
+        y = float(result.get('y_uT', float('nan')))
+        z = float(result.get('z_uT', float('nan')))
 
-        has_nan = math.isnan(heading)
-        in_range = not has_nan and -180.0 <= heading <= 360.0
+        has_nan = any(math.isnan(v) for v in [x, y, z])
+        if has_nan:
+            return {
+                'pass': False,
+                'verdict': 'FAIL — NaN values (check magnetometer wiring/calibration)',
+                'details': result,
+            }
 
-        passed = not has_nan and in_range
+        magnitude = math.sqrt(x**2 + y**2 + z**2)
+        in_range = 20.0 <= magnitude <= 80.0
 
         return {
-            'pass': passed,
-            'heading': None if has_nan else round(heading, 2),
-            'verdict': 'PASS' if passed else (
-                'FAIL — NaN heading (check magnetometer wiring/calibration)'
-                if has_nan else f'FAIL — heading {heading} out of range'
+            'pass': in_range,
+            'magnitude_uT': round(magnitude, 2),
+            'x_uT': round(x, 2),
+            'y_uT': round(y, 2),
+            'z_uT': round(z, 2),
+            'verdict': 'PASS' if in_range else (
+                f'FAIL — magnitude {magnitude:.1f} µT outside 20-80 µT range'
             ),
             'details': result,
         }
