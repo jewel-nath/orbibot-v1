@@ -54,7 +54,7 @@ RAD_TO_DEG = 57.2957795
 # Driver version / Yahboom protocol compatibility (V3.3.9)
 class Rosmaster:
 
-    def __init__(self, car_type=1, com="/dev/motordriver", delay=.002, debug=False):
+    def __init__(self, car_type=CARTYPE_ORBIBOT, com="/dev/motordriver", delay=.002, debug=False):
         self._com_port = com
         self._running = True  # Flag to control receive thread
 
@@ -115,13 +115,11 @@ class Rosmaster:
         self._odom_vy = 0.0
         self._odom_omega = 0.0
 
-        if self._debug:
-            print("cmd_delay=" + str(self._delay_time) + "s")
-
         if self.ser.is_open:
-            print("Rosmaster Serial Opened! Baudrate=115200")
+            if self._debug:
+                print(f"Rosmaster serial opened: {com} @ 115200 baud (delay={delay}s)")
         else:
-            print("Serial Open Failed!")
+            print(f"Rosmaster serial open failed: {com}")
         time.sleep(.002)
 
     def close(self):
@@ -290,42 +288,35 @@ class Rosmaster:
             self.ser.write(bytearray(cmd))
         time.sleep(self._delay_time)
 
-    # Start thread for receiving and processing data
     def create_receive_threading(self):
+        """Start daemon thread for receiving serial data from firmware."""
         try:
             if self._uart_state == 0:
-                name1 = "task_serial_receive"
-                task_receive = threading.Thread(target=self._receive_data, name=name1)
-                task_receive.daemon = True
+                task_receive = threading.Thread(
+                    target=self._receive_data, name="task_serial_receive", daemon=True)
                 task_receive.start()
-                print("----------------create receive threading--------------")
                 self._uart_state = 1
                 time.sleep(.05)
         except Exception as e:
             print(f'---create_receive_threading error: {e}---')
 
-    # MCU automatically returns data status bit (default enabled).
-    # forever=True: Permanent (saved to flash), forever=False: Temporary.
     def set_auto_report_state(self, enable, forever=False):
+        """Enable/disable firmware auto-report. forever=True saves to flash."""
         try:
             self._auto_report_enabled = bool(enable)
             state1 = 1 if enable else 0
             state2 = 0x5F if forever else 0
             self._send_command(FUNC_AUTO_REPORT, [state1, state2])
-            if self._debug:
-                print("report: auto_report", state1, state2)
         except (serial.SerialException, OSError) as e:
             print(f'---set_auto_report_state error: {e}---')
 
-    # Buzzer: on_time=0 off, 1=always on, >=10 beep for N ms then auto off.
     def set_beep(self, on_time):
+        """Buzzer control: 0=off, 1=continuous, >=10=beep for N ms."""
         if on_time < 0:
             raise ValueError(f"set_beep: on_time must be >= 0, got {on_time}")
         try:
             value = bytearray(struct.pack('h', int(on_time)))
             self._send_command(FUNC_BEEP, [value[0], value[1]])
-            if self._debug:
-                print("beep:", on_time)
         except (serial.SerialException, OSError) as e:
             print(f'---set_beep error: {e}---')
 
@@ -386,8 +377,6 @@ class Rosmaster:
             oz = bytearray(struct.pack('h', int(offset_z * 100)))
             data = [ox[0], ox[1], oy[0], oy[1], oz[0], oz[1]]
             self._send_command(FUNC_SET_MAG_CAL, data)
-            if self._debug:
-                print("mag_cal:", offset_x, offset_y, offset_z)
         except (serial.SerialException, OSError) as e:
             print(f'---set_mag_calibration error: {e}---')
 
