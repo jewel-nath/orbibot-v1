@@ -1,124 +1,149 @@
 # Firmware Issue Tracker
 
-**Package:** `orbibot_rosmaster_firmware` (STM32F103RCT6, v2.0.0)
-**Last Updated:** 2026-03-25 (session 2)
+**Package:** `orbibot_rosmaster_firmware` (STM32F103RCT6, v2.0.1)
+**Last Updated:** 2026-03-25
 
 ---
 
-## 🔴 Open
+## 🔴 Open Issues
 
-*(none)*
+### FW-ISSUE-1: Unused circular RX buffer wastes RAM and ISR cycles
+**Severity:** MEDIUM
+**File:** `src/hal/hal_usart.c`
 
----
+The USART1 ISR stores every received byte into both the protocol state machine AND
+a 256-byte circular buffer (`rx_buffer`). The circular buffer read functions
+(`hal_usart_available`, `hal_usart_read_byte`, `hal_usart_read_bytes`) are never
+called by any firmware code.
 
-## ✅ Closed
+**Impact:** 256 bytes wasted RAM + unnecessary ISR work on every byte (~11.5K/sec at 115200 baud).
 
-### FW-BUG-2: Accelerometer Z Reads 1.566× Gravity (Scale Factor Bug) ✅
-**Closed:** 2026-03-25
-**Severity:** HIGH
-**File:** `src/drivers/imu_driver.c`
-
-**Root cause:** ICM-20948 on this hardware produces 25644 raw ADC counts per 1g
-instead of the nominal 16384 (±2g range). ACCEL_CONFIG register readback confirmed
-0x31 (correct), but chip sensitivity is persistently 1.566× off — likely a silicon
-lot variation or internal trim difference.
-
-**Fix applied:** Empirical scale in `imu_driver_init()`:
-```c
-// Before (wrong): accel_scale = 2.0f / 32768.0f * 9.80665f = 0.000599
-// After (correct): 1g = 25644 counts measured at rest
-accel_scale = 9.80665f / 25644.0f;  // = 0.000382 m/s²/count
-```
-
-**Verification result (2026-03-25, 170 samples, robot flat):**
-```
-ax = 0.004 m/s²   ay = 0.127 m/s²   az = 9.797 m/s²
-|accel| = 9.798 m/s²  (expected 9.807 m/s²)
-Error: 0.09%  ✓
-```
+**Fix:** Remove circular buffer writes from ISR and the unused read functions. Keep `hal_usart_flush_rx()` as a no-op or remove as well.
 
 ---
 
-### FW-BUG-3: IWDG Reset Loop on Production Firmware ✅
-**Closed:** 2026-03-25
-**Severity:** HIGH
-**File:** `src/main.c`
+### FW-ISSUE-2: hal_gpio_beep() uses blocking busy-wait delay
+**Severity:** LOW
+**File:** `src/hal/hal_gpio.c`
 
-**Root cause:** STM32F103 LSI tolerance is 30–60 kHz. At 60 kHz the IWDG timeout
-shrinks from 5.0s to 3.33s. The startup sequence (imu_calibrate 1000 samples ≈ 1s,
-other init ≈ 0.6s) plus 2 MonitorTask cycles before first watchdog feed ≈ 3.5s
-exceeds 3.33s on fast-LSI hardware, causing a persistent reset loop.
+`hal_gpio_beep()` uses a `for(volatile ...)` loop for timing. Only called during boot
+(inside `#if ENABLE_BOOT_MESSAGES`), but if called after FreeRTOS starts it blocks the
+calling task and starves lower-priority tasks.
 
-**Fix applied:** Added `hal_watchdog_feed()` at the end of `main()` just before
-`vTaskStartScheduler()`. This resets the 5s window after init completes, so
-MonitorTask's first feed (at t=1s into FreeRTOS) is safely within budget.
+**Fix:** Replace with non-blocking buzzer via `protocol_start_double_beep()` pattern, or
+add a `__attribute__((deprecated))` warning.
 
 ---
 
-### FW-BUG-4: Checksum Mismatch — All Incoming Commands Silently Rejected ✅
-**Closed:** 2026-03-25
-**Severity:** HIGH
+### FW-ISSUE-3: hal_gpio_set_buzzer() is never called
+**Severity:** LOW
+**File:** `src/hal/hal_gpio.c`
+
+Buzzer is controlled directly via `BUZZER_ON()` / `BUZZER_OFF()` macros everywhere.
+The wrapper function exists but has zero callers.
+
+**Fix:** Remove function and header declaration, or consolidate all buzzer usage through it.
+
+---
+
+### FW-ISSUE-4: MAX_WHEEL_SPEED_MMS is theoretical, not measured
+**Severity:** INFO
+**File:** `include/orbibot_config.h`
+
+`MAX_WHEEL_SPEED_MMS` (3500 mm/s) is 2× the theoretical max from motor specs.
+lgdxrobot2 found 23% variation between individual motors (10.47–12.85 rad/s).
+An overly generous threshold reduces anomaly rejection effectiveness.
+
+**Fix:** Run `test_motor_speed.py` at full PWM, measure actual per-motor max speed,
+and set threshold to 1.5× measured max.
+
+---
+
+### FW-ISSUE-5: OLED display code compiles but is unused (~3KB flash)
+**Severity:** INFO
+**Files:** `oled_driver.c`, `hal_ssd1306.c`, `oled_fonts.c`, `hal_i2c.c`
+
+`ENABLE_OLED_DISPLAY=1` in config, but the OLED is a stub on most OrbiBot builds
+(no display connected). The font table alone is ~1.9KB. Total ~3KB flash for an
+unused peripheral.
+
+**Fix:** Set `ENABLE_OLED_DISPLAY=0` as default. Only enable for boards with display.
+
+---
+
+## 🟡 Technical Debt
+
+### TD-1: protocol.c is too large (807 lines)
 **File:** `src/communication/protocol.c`
 
-**Root cause:** `protocol_calculate_checksum()` summed bytes from index 1
-(including DEVICE_ID = 0xFC), but both the ROS 2 hardware driver and the Python
-test library use a formula that effectively sums from index 2 (LENGTH onward).
-Result: every checksum comparison failed; `ENABLE_CHECKSUM=1` silently dropped
-all incoming commands, disabling auto-report and all control.
+Mixes RX state machine, command dispatch, TX reporting, PID handlers, buzzer
+state machine, and odometry reporting in one file.
 
-**Fix applied:** Changed loop start from `i = 1` to `i = 2`:
-```c
-// Before: for (uint8_t i = 1; ...) → includes Device_ID (0xFC) → mismatch
-// After:  for (uint8_t i = 2; ...) → sums Length+Func+Data → matches host
-for (uint8_t i = 2; i < length - 1; i++)
-```
+**Refactor:** Split into `protocol_rx.c` (state machine + parse), `protocol_tx.c`
+(all `protocol_send_*` functions), `protocol_cmd.c` (command handlers).
 
 ---
 
-### FW-BUG-5: Encoder Direction M2/M4 Inverted — PID Runaway ✅
-**Closed:** 2026-03-25
-**Severity:** HIGH
-**File:** `src/drivers/encoder_driver.c`
+### TD-2: imu_driver.c mixes concerns (~500 lines)
+**File:** `src/drivers/imu_driver.c`
 
-**Root cause:** `encoder_direction[4]` was `{ -1, -1, 1, 1 }` — M2 and M4 had wrong signs.
-A header comment claimed M2=-1, M4=+1, contradicting the function-level comment (M2=+1, M4=-1).
-Wrong sign causes PID to receive inverted feedback → integrator runs away.
+Init, calibration, sensor read, attitude computation, and AK09916 magnetometer
+I2C master are all in one file.
 
-**Symptom (observed 2026-03-25):**
-```
-send_motion(vx=0.3) → M1=+2402 OK, M2=-14695 FAIL, M3=+2388 OK, M4=-11610 FAIL
-```
-M2/M4 showed 6× overspeed with large negative deltas vs normal M1/M3 positive values.
-
-**Fix applied:**
-```c
-// Before (wrong): { -1, -1, 1, 1 }
-// After (correct):
-static const int8_t encoder_direction[4] = { -1, 1, 1, -1 };
-```
-
-**Verification result (2026-03-25):**
-```
-M1 (FL): delta = +2407  → OK ✓
-M2 (BL): delta = +2618  → OK ✓
-M3 (FR): delta = +2399  → OK ✓
-M4 (BR): delta = +2176  → OK ✓
-```
+**Refactor:** Extract `imu_calibration.c` (startup calibration + variance) and
+`imu_mag.c` (AK09916 I2C master functions).
 
 ---
 
-### FW-BUG-1: Encoder Direction Values — VERIFIED ✅
-**Closed:** 2026-03-24
-**Verification result:** Forward command → all 4 encoders positive delta (automated test).
-```
-M1 (FL): delta = +2356  → OK ✓
-M2 (BL): delta = +2651  → OK ✓
-M3 (FR): delta = +2442  → OK ✓
-M4 (BR): delta = +2155  → OK ✓
-```
+### TD-3: task_control.c mixes control, ramping, yaw, and odometry
+**File:** `src/tasks/task_control.c`
+
+The 440-line control loop handles PID control, velocity ramping, yaw drift
+correction, and odometry integration in a single function.
+
+**Refactor:** Extract `yaw_controller.c` (yaw PID + activation logic) and
+keep velocity ramp inline (too small to split).
+
+---
+
+## 💡 Improvement Ideas
+
+### Performance
+
+- **DMA RX for USART1:** Replace byte-by-byte ISR with DMA RX + idle line detection.
+  Eliminates ~11.5K interrupts/sec at 115200 baud.
+
+- **Zero-copy protocol TX:** Build packets directly in DMA buffer instead of
+  stack → memcpy → DMA. Saves one copy per packet (~250 packets/sec).
+
+### ROS 2 Integration
+
+- **Report IMU noise variance:** Calibration computes per-axis variance but never
+  transmits it. Add protocol command (e.g., `0x52`) to query variance for ROS 2
+  Imu message covariance fields.
+
+- **Diagnostics status report:** Package battery voltage, uptime, drop count,
+  unknown cmd count, and USART errors into a periodic status packet for
+  `orbibot/system_status` topic.
+
+### Hardware Abstraction
+
+- **Unified motor API:** Motor control spans `hal_timer.c` (PWM), `motor_driver.c`
+  (deadzone), `encoder_driver.c` (direction), and `task_control.c` (ramp). A single
+  `motor.h` with `motor_set_speed()` + `motor_read_speed()` + `motor_stop()` would
+  simplify the dependency graph.
+
+### Future Scalability
+
+- **Configurable auto-report:** Currently 5 fixed report types at 50Hz each.
+  Make report selection and rate configurable via protocol command to reduce
+  bandwidth when only specific data is needed (e.g., IMU-only mode).
+
+- **CAN bus passthrough:** ROSMaster V3.0 has SN65HVD230 CAN transceiver on-board.
+  Adding CAN RX/TX would enable daisy-chaining external sensor boards or motor
+  controllers without additional wiring.
 
 ---
 
 ## See also
-- `firmware-changelog.md` — resolved improvements
-- `improve-plan.md` — comparison with lgdxrobot2
+- `firmware-changelog.md` — full change history
