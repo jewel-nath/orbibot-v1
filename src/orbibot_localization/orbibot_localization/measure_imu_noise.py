@@ -116,10 +116,6 @@ class ImuNoiseMeasurer(Node):
         accel_var = [a.variance for a in self._accel]
         gyro_var = [g.variance for g in self._gyro]
 
-        # For isotropic config: use max of X/Y/Z as conservative single value
-        accel_iso = max(accel_var)
-        gyro_iso = max(gyro_var)
-
         print('\n' + '=' * 60)
         print('IMU NOISE MEASUREMENT RESULT')
         print('=' * 60)
@@ -139,11 +135,12 @@ class ImuNoiseMeasurer(Node):
         print(f'  X: {self._accel[0].mean:.4f}  Y: {self._accel[1].mean:.4f}  Z: {self._accel[2].mean:.4f}')
         print()
         print('Copy to hardware_params.yaml (imu section):')
-        print(f'      linear_acceleration_covariance: {accel_iso:.6f}')
-        print(f'      angular_velocity_covariance: {gyro_iso:.6f}')
-        print()
-        print('Note: These are isotropic (max of 3 axes). If X/Y/Z differ')
-        print('significantly, consider per-axis covariance in hardware_node.')
+        print(f'      accel_covariance_x: {accel_var[0]:.6f}')
+        print(f'      accel_covariance_y: {accel_var[1]:.6f}')
+        print(f'      accel_covariance_z: {accel_var[2]:.6f}')
+        print(f'      gyro_covariance_x: {gyro_var[0]:.6f}')
+        print(f'      gyro_covariance_y: {gyro_var[1]:.6f}')
+        print(f'      gyro_covariance_z: {gyro_var[2]:.6f}')
         print('=' * 60)
 
 
