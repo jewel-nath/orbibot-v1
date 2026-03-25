@@ -62,6 +62,7 @@ eggs/
 .eggs/
 lib/
 !src/orbibot_rosmaster_firmware/lib/
+!src/orbibot_webgui/frontend/src/lib/
 lib64/
 parts/
 sdist/

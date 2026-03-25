@@ -368,7 +368,7 @@ export function useWebRTC(options: UseWebRTCOptions = {}): UseWebRTCReturn {
 
         signalingRef.current.on('error', (err) => {
           log.error('Signaling error:', err);
-          setError(err);
+          setError(err ?? null);
           setConnectionState('error');
 
           if (WEBRTC_CONFIG.autoReconnect && shouldConnectRef.current) {
