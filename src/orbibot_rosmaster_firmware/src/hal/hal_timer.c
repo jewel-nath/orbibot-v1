@@ -14,7 +14,8 @@
 #include "stm32f10x.h"
 #include "orbibot_config.h"
 
-#define MOTOR_MAX_PWM           3600
+// Use MOTOR_MAX_PULSE from orbibot_config.h (3600)
+#define MOTOR_MAX_PWM           MOTOR_MAX_PULSE
 #define ENCODER_TIM_PERIOD      0xFFFF
 #define ENCODER_MIDPOINT        0x7FFF
 

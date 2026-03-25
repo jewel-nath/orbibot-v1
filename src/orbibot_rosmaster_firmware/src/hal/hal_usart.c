@@ -18,8 +18,8 @@
 // Enable DMA for USART1 TX
 #define ENABLE_USART1_DMA       1
 
-// Circular buffer size for RX
-#define USART_RX_BUFFER_SIZE    256
+// Use RX buffer size from orbibot_config.h
+#define USART_RX_BUFFER_SIZE    SERIAL_RX_BUFFER_SIZE
 
 // DMA TX buffer size (must be large enough for largest packet ~30 bytes)
 #define USART_DMA_TX_BUFFER_SIZE    128
