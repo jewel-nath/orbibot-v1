@@ -1,90 +1,86 @@
 # Firmware Changelog
 
-## [Unreleased] — 2026-03-23
+## [Unreleased] — 2026-03-25
 
-### Documentation
+### Refactoring
 
-- **PID tuning procedure** (`README.md`)
-  Added step-by-step PID tuning guide using Ziegler-Nichols method with ROS2 commands.
-  Covers P-only tuning → add Ki → add Kd → save to flash → real-world verification.
+- **Remove duplicate FreeRTOS sources** (`lib/src/`)
+  Deleted `lib/src/` (exact copy of `lib/FreeRTOS/src/`, not in build filter).
+  Removed stale `lib/FreeRTOS/inc/FreeRTOSConfig.h` (outdated copy of `include/FreeRTOSConfig.h`).
+
+- **Remove unused code**
+  Removed: `hal_gpio_set_motor_direction/enable` (empty stubs), `dma_tx_busy` (set never read),
+  `protocol_get_rx_count` (never called), `pid_get_gains_for_speed` + `pid_multilevel_t` (multi-level
+  PID removed from protocol), `ENCODER_EDGES_PER_REV` alias, `ENCODER_TO_MPS_FACTOR` (unused).
+
+- **Fix hal_i2c.c pin mismatch** — was using PB10/PB11, config defines PA2/PA3 for OLED.
+  Now references `OLED_SCL_PIN/PORT` and `OLED_SDA_PIN/PORT` from `orbibot_config.h`.
+
+- **Deduplicate encoder timer array** (`hal_timer.c`)
+  Extracted `encoder_tim[4]` to file-scope constant (was duplicated in 3 functions).
+  Removed redundant `TIM_SetCounter(TIMx, 0)` before `TIMx->CNT = ENCODER_MIDPOINT`.
+
+- **Use config constants** — `hal_timer.c` references `MOTOR_MAX_PULSE` from config instead of
+  local `MOTOR_MAX_PWM`. `hal_usart.c` references `SERIAL_RX_BUFFER_SIZE` from config.
+
+- **Fix docblocks** — removed duplicate line in `hal_adc.c`, orphaned docblock in `main.c`.
+  Updated OLED display strings from "v1.0" to "v2.0".
+
+- **Comment cleanup** — removed obvious/redundant comments across HAL and task files.
+  Focused on "why" (hardware quirks, safety) not "what" (obvious code).
+
+---
+
+## [2.0.1] — 2026-03-25
+
+### Bug Fixes
+
+- **FW-BUG-2 — Accelerometer Z scale factor** (`imu_driver.c`)
+  ICM-20948 on this hardware produces 25644 counts/g instead of nominal 16384.
+  Applied empirical scale: `accel_scale = 9.80665f / 25644.0f`. Error reduced to 0.09%.
+
+- **FW-BUG-3 — IWDG reset loop on fast-LSI hardware** (`main.c`)
+  STM32F103 LSI tolerance (30-60 kHz) can shrink watchdog timeout below startup duration.
+  Added `hal_watchdog_feed()` before `vTaskStartScheduler()` to reset the 5s window.
+
+- **FW-BUG-4 — Checksum mismatch rejected all commands** (`protocol.c`)
+  `protocol_calculate_checksum()` summed from index 1 (including Device_ID=0xFC), but
+  host sums from index 2 (Length onward). Changed loop start from `i = 1` to `i = 2`.
+
+- **FW-BUG-5 — Encoder direction M2/M4 inverted** (`encoder_driver.c`)
+  `encoder_direction[4]` was `{-1, -1, 1, 1}` — M2 and M4 had wrong signs, causing
+  PID runaway (6x overspeed). Corrected to `{-1, 1, 1, -1}`.
 
 ### Improvements
 
 - **Accelerometer X/Y bias calibration at startup** (`imu_driver.c`)
-  `imu_calibrate()` now calibrates both gyro AND accel offsets from 1000 stationary samples.
-  Computes accel X/Y bias (should be ~0 when level) and subtracts in `imu_read_calibrated()`
-  and `imu_read_both()`. Accel Z is intentionally NOT corrected — Madgwick needs gravity vector
-  (~9.81 m/s²) intact. Inspired by lgdxrobot2 firmware (`imu.c:264-267`) which calibrates both
-  sensors at startup. Boot log updated to show computed offsets.
-  **⚠️ Requires hardware verification: robot must be stationary and level during boot.**
+  `imu_calibrate()` now calibrates both gyro and accel offsets from 1000 stationary samples.
+  Accel Z intentionally not corrected (Madgwick needs gravity vector).
 
-- **Startup IMU noise variance computation** (`imu_driver.c`, `imu_driver.h`)
-  `imu_calibrate()` now computes per-axis variance for accel and gyro using Welford's online
-  algorithm during the existing 1000-sample calibration loop. No extra RAM (vs lgdxrobot2's
-  500×3 float arrays = 6KB). Values exposed via `imu_get_noise_variance()` for protocol
-  reporting. Ready for ROS2 Imu covariance diagonal entries.
+- **Startup IMU noise variance** (`imu_driver.c`)
+  Per-axis accel/gyro variance computed via Welford's algorithm during calibration.
+  Exposed via `imu_get_noise_variance()` for ROS 2 Imu covariance.
 
-- **Encoder anomaly detection** (`task_control.c`, `orbibot_config.h`)
-  Wheel speed readings beyond `MAX_WHEEL_SPEED_MMS` (3500 mm/s, 2× theoretical motor max)
-  are discarded and replaced with last valid reading. Prevents PID overshoot from EMI spikes
-  or loose encoder connections. Inspired by lgdxrobot2 (`motor.c:406-407`).
-  New config: `MAX_WHEEL_SPEED_MMS` in `orbibot_config.h`.
-  **TODO:** Measure actual per-motor max speed and replace theoretical value.
+- **Encoder anomaly detection** (`task_control.c`)
+  Readings beyond `MAX_WHEEL_SPEED_MMS` (3500 mm/s) discarded and replaced with last valid.
+  Prevents PID overshoot from EMI spikes.
 
-## [Previous] — 2026-03-22
+- **Vy double negation eliminated** (`protocol.c`, `mecanum_kinematics.c`)
+  Removed duplicate Vy negation in protocol and kinematics. ROS frame convention
+  (positive = left) now used consistently throughout the control stack.
 
-### Bug Fixes
+- **Velocity ramp renamed** (`orbibot_config.h`)
+  `MOTOR_SPEED_RAMP_MMS` → `MOTOR_DECEL_RAMP_MMS` (only applies during deceleration).
 
-- **FW-BUG-2 — Checksum loop now includes Device_ID byte** (`protocol.c`)
-  Loop start corrected from index 2 to index 1, matching the protocol spec: "additive sum
-  of all bytes from Device_ID through last data byte." Previously the Device_ID byte was
-  excluded from the checksum, violating the spec and allowing a corrupted Device_ID to pass
-  validation silently.
+- **IMU init failure halts boot** (`main.c`)
+  Previously continued with garbage SPI data. Now halts and waits for watchdog reset.
 
-- **FW-BUG-3 — Battery voltage uint8 cast overflow guard** (`protocol.c`)
-  Cast now goes through a `uint16_t` intermediate with explicit saturation check at 255
-  before narrowing to `uint8_t`. Prevents IEEE 754 rounding from producing 256 on
-  borderline values (e.g. 25.50001 × 10 = 255.0001 → was truncating to 255 on most
-  compilers but could theoretically overflow).
+- **Battery voltage uint8 overflow guard** (`protocol.c`)
+  Saturate to 255 before uint8 cast to prevent float rounding overflow.
 
-- **FW-ISSUE-1 — IMU initialization failure now halts boot** (`main.c`)
-  Previously, if `imu_driver_init()` returned non-zero (SPI wiring fault, WHO_AM_I
-  mismatch), the firmware continued booting and `task_imu` read garbage SPI data that
-  silently corrupted odometry. Now the boot sequence halts with a diagnostic message and
-  spins until the IWDG watchdog resets the MCU. This makes IMU faults immediately visible
-  (boot messages stop; no auto-report stream).
+### Documentation
 
-- **FW-DOC-1 — Encoder direction table corrected and cross-referenced** (`encoder_driver.c`)
-  `encoder_direction[]` values updated from `{-1, 1, 1, -1}` to `{-1, -1, 1, 1}` to align
-  with the PWM direction flags in `hal_timer.c:motor_map[]` (M1=-1, M2=-1, M3=+1, M4=+1).
-  M2 and M4 were mismatched, causing odometry drift.
-  **⚠️ Requires hardware verification with `python3 tests/test_encoder.py` before deploying.**
-  Cross-reference comment added linking `encoder_direction[]` to `motor_map[]`.
-
-### Improvements
-
-- **FW-QUALITY-1 — Vy double negation eliminated** (`protocol.c`, `mecanum_kinematics.c`, `task_control.c`)
-  The code previously negated `vy` twice — once in `protocol_handle_motion()` and once in
-  `mecanum_inverse_kinematics()` — relying on cancellation. Both negations are removed.
-  `robot->vy` now carries the canonical ROS frame convention (positive = left) throughout
-  the entire control stack, and the kinematics formula uses it directly. The reported
-  measured velocity in `control_get_measured_velocity()` no longer applies the mirroring
-  inversion either, for consistent round-trip semantics.
-
-- **FW-LIMIT-1 — Velocity ramp constant renamed and documented** (`orbibot_config.h`, `task_control.c`)
-  `MOTOR_SPEED_RAMP_MMS` renamed to `MOTOR_DECEL_RAMP_MMS` to reflect that it only applies
-  during deceleration and direction reversal (acceleration remains instant). Extended comment
-  explains effective deceleration rate (1000 mm/s²) and how to add acceleration ramping.
-
-- **FW-ISSUE-2 — SPI timeout behaviour documented in imu_read_register()** (`imu_driver.c`)
-  Added docblock explaining that `hal_spi_read_byte()` returns `0xFF` on timeout, and why
-  the WHO_AM_I identity check at init time naturally rejects bus faults. No per-call
-  overhead added at the 50 Hz sensor rate.
-
-- **FW-DOC-2 — YAW_ENABLE_THRESHOLD explanation added** (`orbibot_config.h`)
-  Comment now explains the threshold prevents IMU drift from fighting static friction at
-  near-zero speed, and documents the empirical tuning rationale (0.05 m/s avoids servo
-  chatter).
+- **PID tuning procedure** added to `README.md`
 
 ---
 
