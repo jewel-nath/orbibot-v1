@@ -1,588 +1,358 @@
 # OrbiBot ROSMaster Firmware
 
-**Clean, OrbiBot-specific firmware for the Yahboom ROSMaster V3.0 Expansion Board**
-
-## Overview
-
-This firmware is specifically designed for the OrbiBot mecanum-wheeled robot, replacing the original Yahboom firmware with a clean, well-documented implementation focused on OrbiBot's needs.
-
-### Key Features
-
-- **OrbiBot-Specific Configuration** — 50mm wheel radius, 360mm track width, 260mm wheelbase, ABBA mecanum layout
-- **ICM-20948 9-Axis IMU** — SPI2 @ 4.5MHz, 50Hz update, gyro calibration, magnetometer with DRDY cache
-- **Clean Architecture** — Modular HAL / Driver / Control / Task layers with FreeRTOS
-- **Safety Hardened** — Battery lockout, per-task watchdog, HSE fallback, fault-safe handlers
-- **Production Build** — `-Werror`, zero debug output, git version injection
-
-### Firmware Statistics
-
-- **Flash Usage**: ~38 KB / 256 KB (~15%)
-- **RAM Usage**: ~19.5 KB / 48 KB (~40%)
-- **Source Files**: 24 C files + 19 headers
-- **Build System**: PlatformIO + GCC ARM Embedded
-- **RTOS**: FreeRTOS v10.x with 4 tasks
+Custom firmware for the Yahboom ROSMaster V3.0 expansion board (STM32F103RCT6).
+Replaces the closed-source Yahboom firmware with an open, OrbiBot-specific implementation.
 
 ---
 
-## Quick Start
+## 1. What This Firmware Does
 
-### Build & Upload
+The firmware runs on a **dedicated microcontroller** (STM32, separate from the Raspberry Pi 5)
+and handles all **real-time hardware control**:
+
+- Drives 4 mecanum wheel motors with PID speed control at 100Hz
+- Reads quadrature encoders and computes wheel odometry
+- Reads the ICM-20948 9-axis IMU (gyro, accelerometer, magnetometer) at 50Hz
+- Monitors battery voltage with safety lockout
+- Streams all sensor data to the Raspberry Pi over USB serial
+
+**The firmware is a black box from the ROS 2 perspective.** The `orbibot_hardware` ROS 2 package
+talks to it over a serial protocol. You send velocity commands in, you get sensor data out.
+
+```
+┌─────────────────────┐   USB Serial (115200)   ┌────────────────────────┐
+│  STM32 Firmware      │ ◄─────────────────────► │  Raspberry Pi 5        │
+│  (this package)      │                          │  orbibot_hardware node │
+│                      │                          │                        │
+│  - Motor PID (100Hz) │  ── cmd_vel ──►          │  - /cmd_vel subscriber │
+│  - Encoders          │  ◄── odom ────           │  - /odom publisher     │
+│  - IMU (50Hz)        │  ◄── imu ─────           │  - /imu publisher      │
+│  - Battery monitor   │  ◄── battery ─           │  - /system_status pub  │
+└─────────────────────┘                          └────────────────────────┘
+```
+
+---
+
+## 2. System Architecture
+
+### Where the firmware sits in the robot stack
+
+```
+  Nav2 / SLAM / Teleop (ROS 2)
+           │
+           ▼
+    /cmd_vel (Twist)
+           │
+           ▼
+  orbibot_hardware node (RPi 5)   ◄── ROS 2 layer
+           │
+       USB Serial                  ◄── binary protocol @ 115200 baud
+           │
+           ▼
+  STM32 Firmware (this package)    ◄── real-time layer (FreeRTOS @ 72MHz)
+           │
+           ▼
+  Motors / Encoders / IMU / Battery
+```
+
+### Firmware responsibilities
+
+| Responsibility | Rate | Detail |
+|---------------|------|--------|
+| Motor PID control | 100Hz | 4 independent PID loops, one per wheel |
+| Encoder reading | 100Hz | Quadrature decoding via hardware timers |
+| Odometry integration | 100Hz | Midpoint (RK2) method for mecanum kinematics |
+| IMU acquisition | 50Hz | ICM-20948: gyro + accel + magnetometer via SPI |
+| Attitude estimation | 50Hz | Complementary filter (gyro + magnetometer) |
+| Battery monitoring | 1Hz | ADC with EMA filter, safety lockout |
+| Data streaming | 50Hz per type | 5 report types, interleaved over serial |
+
+### Communication method
+
+- **Physical**: USB serial (CH340N USB-UART bridge on the board)
+- **Linux device**: `/dev/motordriver` (udev symlink) or `/dev/ttyUSB0`
+- **Baud rate**: 115200, 8N1
+- **Protocol**: Custom binary packets with checksums (ROSMaster-compatible)
+- **Direction**: Bidirectional — commands in, sensor data out
+
+---
+
+## 3. Data Flow
+
+### ROS 2 to Firmware (commands)
+
+| What | ROS 2 Topic | Firmware Action |
+|------|-------------|-----------------|
+| Velocity command | `/cmd_vel` | Mecanum inverse kinematics -> 4 PID targets |
+| Enable streaming | _(internal)_ | Start auto-reporting all sensor data |
+| Buzzer beep | `/orbibot/beep` | Activate buzzer for N milliseconds |
+| Reset odometry | `/orbibot/reset_odometry` | Zero firmware position/heading |
+| PID tuning | `/orbibot/pid_params` | Update Kp/Ki/Kd (optionally save to flash) |
+
+### Firmware to ROS 2 (sensor data)
+
+| What | ROS 2 Topic | Rate | Content |
+|------|-------------|------|---------|
+| Wheel odometry | `/odom` | 50Hz | Position (x, y, theta) + velocity (vx, vy, omega) |
+| IMU raw | `/imu/data_raw` | 50Hz | Gyro (rad/s), accel (m/s^2), magnetometer (uT) |
+| IMU attitude | `/imu/data` | 50Hz | Roll, pitch, yaw (rad) |
+| Encoder counts | `/orbibot/encoders` | 50Hz | Raw tick counts for all 4 motors |
+| Battery + speed | `/orbibot/system_status` | 50Hz | Battery voltage, measured wheel speeds |
+
+> All topic names and message types are handled by `orbibot_hardware` — the firmware
+> only sends/receives binary serial packets. The ROS 2 node does the translation.
+
+### Data flow diagram
+
+```
+                         FIRMWARE (STM32)
+                    ┌─────────────────────────┐
+  /cmd_vel ──────►  │  Inverse Kinematics      │
+                    │  ┌─────┐ ┌─────┐         │
+                    │  │PID 1│ │PID 2│ ...      │  ──► Motor PWM
+                    │  └──┬──┘ └──┬──┘         │
+                    │     │       │             │
+  Motor PWM ──────► │  Encoders ──► Forward Kin │  ──► /odom
+                    │                           │
+  IMU (SPI) ──────► │  Gyro + Accel + Mag       │  ──► /imu/data_raw
+                    │  Complementary Filter      │  ──► /imu/data
+                    │                           │
+  Battery (ADC) ──► │  EMA filter + threshold   │  ──► /system_status
+                    └─────────────────────────┘
+```
+
+---
+
+## 4. Hardware Mapping
+
+### What's connected to the firmware
+
+| Component | Quantity | What It Does |
+|-----------|----------|-------------|
+| Mecanum motors | 4 | JGB37-520, 12V, 333 RPM max, 30:1 gear ratio |
+| Encoders | 4 | Hall-effect quadrature, 1320 counts per wheel revolution |
+| IMU | 1 | ICM-20948: 3-axis gyro + 3-axis accel + 3-axis magnetometer |
+| Battery sensor | 1 | ADC with voltage divider (4S LiFePO4, 10.5V–14.6V) |
+| Buzzer | 1 | Active buzzer for battery warnings |
+| USB serial | 1 | CH340N bridge to Raspberry Pi (115200 baud) |
+
+### Motor positions (mecanum ABBA layout)
+
+```
+    Front
+  ┌───────────┐
+  │ M1    M3  │     M1 = Front-Left
+  │ (FL)  (FR)│     M2 = Back-Left
+  │           │     M3 = Front-Right
+  │ M2    M4  │     M4 = Back-Right
+  │ (BL)  (BR)│
+  └───────────┘
+     Back
+```
+
+### Robot geometry
+
+| Parameter | Value |
+|-----------|-------|
+| Wheel radius | 50mm (100mm diameter mecanum wheels) |
+| Track width | 360mm (left-to-right wheel separation) |
+| Wheelbase | 260mm (front-to-rear wheel separation) |
+| Encoder resolution | 1320 PPR (11 PPR x 30 gear ratio x 4 quadrature) |
+
+> For complete pin mappings and electrical details, see [hardware-doc.md](hardware-doc.md).
+
+---
+
+## 5. Key Firmware Modules
+
+### Motor Control (`task_control.c`)
+Runs at 100Hz. Receives velocity commands, computes mecanum inverse kinematics to get
+per-wheel target speeds, runs 4 independent PID controllers, and outputs PWM to the
+motor drivers. Also integrates odometry at 100Hz using midpoint (RK2) method.
+
+### IMU Acquisition (`task_imu.c`)
+Runs at 50Hz. Reads the ICM-20948 over SPI. Computes roll/pitch from accelerometer
+and yaw from gyro integration with magnetometer correction (complementary filter).
+All data is cached thread-safely for the communication task to read.
+
+### Communication (`task_communication.c`)
+Handles bidirectional serial protocol. Parses incoming commands (velocity, PID tuning,
+reset) and sends 5 auto-report data types at 50Hz each, interleaved 1ms apart to
+avoid serial congestion.
+
+### System Monitoring (`task_monitoring.c`)
+Runs at 1Hz. Reads battery voltage, manages 3-level response (normal / low warning /
+critical lockout), toggles heartbeat LED, and feeds the hardware watchdog only if
+all other tasks are still alive.
+
+### Safety Features
+
+| Feature | What It Does |
+|---------|-------------|
+| Battery lockout | Motors refuse commands below 10.5V; auto-unlocks above 11.0V |
+| Command timeout | Motors stop if no velocity command received for 2 seconds |
+| Per-task watchdog | Watchdog only fed if all 4 tasks are running — MCU resets if any hangs |
+| Velocity clamping | Commands capped at 1.0 m/s linear, 2.0 rad/s angular |
+| Encoder anomaly rejection | Ignores readings above 3500 mm/s (EMI/noise protection) |
+
+---
+
+## 6. For ROS 2 Developers
+
+### What you need to know
+
+- The firmware is a **sealed unit**. You interact with it only through the
+  `orbibot_hardware` ROS 2 package which handles all serial communication.
+- Velocity commands arrive via `/cmd_vel` (standard `geometry_msgs/Twist`).
+- Sensor data appears on standard ROS 2 topics (`/odom`, `/imu/data_raw`, etc.).
+- PID gains are pre-tuned and saved to flash. You don't need to touch them
+  unless you change motors or wheels.
+
+### What you should NOT change
+
+- **Do not modify firmware source files** unless you understand embedded C and FreeRTOS.
+  A bad firmware change can brick the board (requires BOOT0 jumper recovery).
+- **Do not change `orbibot_config.h` values** (wheel radius, encoder PPR, track width)
+  unless the physical robot hardware changes. Wrong values = wrong odometry.
+- **Do not enable debug output in production** (`ENABLE_DEBUG_OUTPUT=1`).
+  Debug printf shares the serial line with the binary protocol and will corrupt data.
+
+### What you CAN safely do from ROS 2
+
+| Action | How |
+|--------|-----|
+| Drive the robot | Publish to `/cmd_vel` |
+| Read odometry | Subscribe to `/odom` |
+| Read IMU | Subscribe to `/imu/data_raw` or `/imu/data` |
+| Check battery | Subscribe to `/orbibot/system_status` |
+| Beep the buzzer | Publish to `/orbibot/beep` |
+| Reset odometry | Call `/orbibot/reset_odometry` service |
+| Tune PID (advanced) | Publish to `/orbibot/pid_params` |
+| Save PID to flash | Publish to `/orbibot/pid_save` |
+
+### How to extend safely
+
+If you need to add new data from firmware to ROS 2:
+1. Add a new report type in `protocol.c` (firmware side)
+2. Add a new function code in `protocol.h`
+3. Add parsing in `orbibot_hardware/rosmaster_driver.py` (ROS 2 side)
+4. Publish to a new ROS 2 topic from `hardware_node.py`
+
+> This requires re-flashing the firmware. See [Build & Upload](#build--upload) below.
+
+---
+
+## 7. Limitations and Design Decisions
+
+### Current limitations
+
+| Limitation | Reason |
+|-----------|--------|
+| 50Hz max sensor report rate | Serial bandwidth at 115200 baud (~22KB/s budget) |
+| No camera/LiDAR on firmware | These are USB devices connected directly to RPi 5 |
+| Single serial port | USART1 shared between protocol and debug — only one at a time |
+| Empirical accel scale | ICM-20948 on this board reads 1.566x; corrected in firmware |
+| OLED display is stub | Code compiles but no physical display on most OrbiBot builds |
+
+### Key design decisions
+
+| Decision | Why |
+|----------|-----|
+| Velocity-only odometry | Prevents wheel encoder position drift from accumulating in EKF |
+| Single PID (not multi-level) | Indoor speeds (100-500 mm/s) don't need speed-dependent gains |
+| 100Hz control loop | Sufficient for PID + odometry; leaves CPU headroom on 72MHz M3 |
+| Midpoint (RK2) integration | Better accuracy than Euler during combined rotation + translation |
+| Complementary filter (not EKF) | Lightweight yaw estimation; full EKF runs on RPi 5 instead |
+| FreeRTOS (not bare-metal) | Clean task isolation; per-task watchdog; safe priority preemption |
+
+---
+
+## Build & Upload
 
 ```bash
 cd src/orbibot_rosmaster_firmware
 
-# Build firmware
+# Build
 ~/.platformio/penv/bin/pio run
 
-# Upload (set BOOT0=HIGH, press RESET, then run)
+# Upload (set BOOT0=HIGH on board, press RESET, then run)
 ~/.platformio/penv/bin/pio run --target upload
 
-# After upload: set BOOT0=LOW, press RESET
-
-# Monitor serial output (115200 baud)
-~/.platformio/penv/bin/pio device monitor
+# After upload: set BOOT0=LOW, press RESET to run firmware
 ```
 
-### Verify on Robot
+### Verify on robot
 
 ```bash
-# From the RPi 5 — start the ROS 2 hardware node
+# Start the ROS 2 hardware node
 ros2 launch orbibot_hardware hardware.launch.py
 
-# Check topics
-ros2 topic hz /odom              # Should be ~20Hz
-ros2 topic hz /imu/data_raw      # Should be ~20Hz (interleaved)
-ros2 topic echo /orbibot/system_status  # Battery voltage
+# Check data is flowing
+ros2 topic hz /odom              # Should be ~50Hz
+ros2 topic hz /imu/data_raw      # Should be ~50Hz
+ros2 topic echo /odom --once     # Inspect odometry data
 
-# Test motors
-ros2 launch orbibot_teleop controller.launch.py  # Gamepad control
+# Test motors with gamepad
+ros2 launch orbibot_teleop controller.launch.py
 ```
-
----
-
-## Architecture
-
-### Directory Structure
-
-```
-orbibot_rosmaster_firmware/
-├── src/
-│   ├── main.c                         # Entry point, clock config, task creation
-│   ├── hal/                           # Hardware Abstraction Layer
-│   │   ├── hal_gpio.c                 #   GPIO initialization
-│   │   ├── hal_usart.c                #   USART1 + DMA TX + printf _write()
-│   │   ├── hal_timer.c                #   PWM (TIM1/8) + encoder capture (TIM2-5)
-│   │   ├── hal_spi.c                  #   SPI2 for ICM-20948 (with timeout)
-│   │   ├── hal_adc.c                  #   ADC for battery monitoring
-│   │   ├── hal_watchdog.c             #   IWDG independent watchdog
-│   │   ├── hal_i2c.c                  #   Software I2C on PA2/PA3 (OLED)
-│   │   └── hal_ssd1306.c             #   SSD1306 OLED low-level (stub)
-│   ├── drivers/                       # Device Drivers
-│   │   ├── motor_driver.c             #   4-channel H-bridge control
-│   │   ├── encoder_driver.c           #   Quadrature encoder reading
-│   │   ├── imu_driver.c              #   ICM-20948 9-axis IMU (SPI2)
-│   │   ├── battery_monitor.c          #   Battery ADC + EMA filter
-│   │   ├── flash_storage.c            #   Flash persistence (PID + mag cal)
-│   │   ├── oled_driver.c             #   SSD1306 OLED display (stub)
-│   │   └── oled_fonts.c              #   Font data for OLED
-│   ├── control/                       # Control Algorithms
-│   │   ├── pid_controller.c           #   Multi-level incremental PID
-│   │   ├── mecanum_kinematics.c       #   Inverse + forward kinematics
-│   │   └── odometry.c                #   Midpoint (RK2) integration
-│   ├── communication/                 # Serial Protocol
-│   │   └── protocol.c                #   RX state machine, command dispatch, auto-report
-│   └── tasks/                         # FreeRTOS Tasks
-│       ├── task_control.c             #   Motion control (100Hz, priority 10)
-│       ├── task_imu.c                 #   IMU acquisition (50Hz, priority 8)
-│       ├── task_communication.c       #   Serial RX/TX (async, priority 7)
-│       └── task_monitoring.c          #   Battery + watchdog (1Hz, priority 5)
-├── include/                           # Headers
-│   ├── orbibot_config.h               #   All robot parameters (geometry, PID, thresholds)
-│   ├── firmware_version.h             #   Version macros + git hash
-│   ├── robot_error.h                 #   Unified error enum (robot_err_t)
-│   ├── FreeRTOSConfig.h              #   FreeRTOS settings
-│   ├── protocol.h                    #   Protocol function codes + API
-│   ├── hal_*.h, *_driver.h, task_*.h  #   Module interfaces
-│   └── stm32f10x.h, core_cm3.h       #   CMSIS + device headers
-├── lib/                               # Libraries
-│   ├── src/                           #   FreeRTOS kernel sources
-│   └── STM32F10x_StdPeriph_Driver/    #   STM32 Standard Peripheral Library
-├── tests/                             # Python test suite (serial)
-│   ├── run_all_tests.py               #   Run full test suite
-│   ├── rosmaster_protocol.py          #   Protocol helper library
-│   ├── test_encoder.py               #   Encoder direction verification
-│   ├── test_imu.py                   #   IMU raw + attitude data
-│   ├── test_motor_speed.py           #   PWM sweep all 4 motors
-│   ├── test_motor_direction.py       #   Motor direction verification
-│   ├── test_beep.py                  #   Buzzer pattern test
-│   ├── test_battery.py               #   Battery voltage readout
-│   ├── test_odometry.py              #   Firmware odometry report
-│   ├── test_pid.py                   #   PID gain read/write
-│   ├── test_safety.py               #   Safety feature tests
-│   ├── test_data_rate.py            #   Auto-report rate measurement
-│   ├── test_version.py              #   Firmware version query
-│   └── test_oled.py                 #   OLED display test
-├── platformio.ini                     # Build configuration
-├── git_version.py                     # Pre-build: injects git hash + branch
-├── README.md                          # This file
-├── firmware-architecture.md           # Detailed architecture document
-├── hardware-doc.md                    # Complete hardware specifications
-├── firmware-changelog.md              # Full change history
-└── firmware-issue.md                  # Open issues & future work
-```
-
-### Layer Diagram
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│  FreeRTOS Tasks                                                     │
-│  ┌──────────┐ ┌──────────┐ ┌──────────────┐ ┌──────────────┐      │
-│  │ control  │ │   imu    │ │communication │ │  monitoring  │      │
-│  │  100Hz   │ │  50Hz    │ │   async      │ │    1Hz       │      │
-│  │  pri 10  │ │  pri 8   │ │   pri 7      │ │   pri 5      │      │
-│  └────┬─────┘ └────┬─────┘ └──────┬───────┘ └──────┬───────┘      │
-├───────┼────────────┼───────────────┼────────────────┼───────────────┤
-│  Control Algorithms                                                 │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐                           │
-│  │   PID    │ │ Mecanum  │ │ Odometry │                            │
-│  │ 4-motor  │ │ ABBA kin │ │ RK2 integ│                            │
-│  └──────────┘ └──────────┘ └──────────┘                            │
-├────────────────────────────────────────────────────────────────────┤
-│  Drivers                                                            │
-│  ┌───────┐ ┌────────┐ ┌────────┐ ┌─────────┐ ┌───────┐           │
-│  │ Motor │ │Encoder │ │  IMU   │ │ Battery │ │ Flash │            │
-│  │4× PWM │ │4× Quad │ │ICM2094│ │ADC+EMA  │ │ PID+  │            │
-│  │       │ │        │ │8 9-axis│ │         │ │ MagCal│            │
-│  └───┬───┘ └───┬────┘ └───┬────┘ └────┬────┘ └───┬───┘            │
-├──────┼─────────┼──────────┼───────────┼──────────┼─────────────────┤
-│  HAL (Hardware Abstraction Layer)                                   │
-│  ┌──────┐ ┌───────┐ ┌──────┐ ┌─────┐ ┌─────┐ ┌────────┐         │
-│  │ GPIO │ │ Timer │ │ SPI2 │ │ ADC │ │USART│ │Watchdog│          │
-│  │      │ │PWM+Enc│ │      │ │     │ │+DMA │ │  IWDG  │          │
-│  └──────┘ └───────┘ └──────┘ └─────┘ └─────┘ └────────┘          │
-├────────────────────────────────────────────────────────────────────┤
-│  STM32F103RCT6 Hardware (72MHz Cortex-M3, 256KB Flash, 48KB RAM)   │
-└────────────────────────────────────────────────────────────────────┘
-```
-
-### FreeRTOS Tasks
-
-| Task | Rate | Priority | Stack | Responsibility |
-|------|------|----------|-------|----------------|
-| `task_control` | 100Hz | 10 | 512 words | PID control, encoder read, kinematics, odometry |
-| `task_imu` | 50Hz | 8 | 1024 words | IMU SPI read (sole reader), attitude computation |
-| `task_communication` | async | 7 | 512 words | Protocol RX dispatch, auto-report TX (5 types @ 20Hz) |
-| `task_monitoring` | 1Hz | 5 | 512 words | Battery check, per-task alive verification, watchdog feed |
-
----
-
-## Safety Features (v2.0.0)
-
-| Feature | Description |
-|---------|-------------|
-| **Battery lockout** | Motors refuse commands when voltage < 10.5V; auto-unlocks above 11.0V (hysteresis) |
-| **Per-task watchdog** | Each task increments an alive counter; watchdog only fed if all tasks are alive |
-| **HSE fallback** | If external crystal fails, MCU falls back to HSI @ 36MHz (degraded but operational) |
-| **Fault-safe handlers** | HardFault/StackOverflow/MallocFailed use direct USART register writes (no heap/printf) |
-| **Bounds checking** | All motor/encoder index parameters validated (>= 4 returns immediately) |
-| **Thread safety** | Critical sections on all shared data (IMU attitude, measured velocity, odometry) |
-| **DMA timeout** | USART DMA TX has ~2ms timeout; disables channel on stall |
-| **SPI timeout** | All SPI2 transfers have timeout to prevent infinite loops |
-
----
-
-## Hardware Configuration
-
-### STM32F103RCT6 Pinout
-
-> Pin configurations verified against actual Yahboom firmware source code
-
-**Motor Driver (AM2857 x 4, 12V, 20kHz PWM, resolution 0-3600):**
-
-| Motor | Position | Timer | PWM_A Pin | PWM_B Pin |
-|-------|----------|-------|-----------|-----------|
-| M1 | Front-Left | TIM8 CH1/CH2 | PA11 | PA8 |
-| M2 | Back-Left | TIM8 CH3/CH4 | PB0 | PB1 |
-| M3 | Front-Right | TIM1 CH4/CH1 | PC6 | PC7 |
-| M4 | Back-Right | TIM1 CH2/CH3 | PC8 | PC9 |
-
-> M2 uses PB0/PB1 (not PA9/PA10) to avoid USART1 conflict.
-
-**Encoders (Quadrature Hall Effect, 1320 PPR, 3.3V):**
-
-| Motor | Timer | Encoder A | Encoder B |
-|-------|-------|-----------|-----------|
-| M1 | TIM2 | PA15 | PB3 |
-| M2 | TIM4 | PB6 | PB7 |
-| M3 | TIM5 | PA0 | PA1 |
-| M4 | TIM3 | PA6 | PA7 |
-
-**IMU (ICM-20948 via SPI2 @ 4.5MHz, Mode 0):**
-
-| Pin | Function |
-|-----|----------|
-| PB12 | CS (NSS) |
-| PB13 | SCK |
-| PB14 | MISO |
-| PB15 | MOSI |
-
-**Other Peripherals:**
-
-| Peripheral | Pin(s) | Notes |
-|------------|--------|-------|
-| USART1 TX/RX | PA9/PA10 | 115200 8N1, DMA TX |
-| Battery ADC | PC4 (CH14) | 4S LiFePO4 voltage divider |
-| Buzzer | PC5 | Active, 5V via SS8050 |
-| KEY1 | PD2 | User button, active-low |
-| OLED (SSD1306) | PA2/PA3 | Software I2C (PB6/PB7 conflicts with TIM4 encoder) |
-| USB (CH340N) | PA11/PA12 | Type-C connector |
-
-**Power Rails:**
-
-| Rail | Voltage | Usage |
-|------|---------|-------|
-| VM | 12V | Motors |
-| VCC_5V | 5V | USB, buzzer, OLED |
-| VCC_3V3 | 3.3V | MCU, IMU, encoders |
-
-### Battery Thresholds (4S LiFePO4)
-
-| State | Voltage | Action |
-|-------|---------|--------|
-| Full | 14.6V | Normal operation |
-| Nominal | 12.8V | Normal operation |
-| Low warning | 11.0V | Buzzer warning, lockout clears above this |
-| Critical | 10.5V | Motors stopped, lockout set, continuous buzzer |
-
----
-
-## PID Control
-
-Single-set incremental PID at 100Hz. OrbiBot's indoor navigation speed range (100-500 mm/s)
-does not require multi-level PID — a well-tuned single set is sufficient.
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| Kp | 0.8 | Proportional gain |
-| Ki | 0.06 | Integral gain (trapezoidal rule) |
-| Kd | 0.5 | Derivative gain |
-
-> Gains are runtime-tunable via `/orbibot/pid_params` topic and persisted to flash.
-
-**Incremental PID formula:**
-```
-deltaOut = Kp * (Ek - Ek_1) + Ki * 0.5*(Ek + Ek_1) + Kd * (Ek - 2*Ek_1 + Ek_2)
-Out_k = Out_k_1 + deltaOut
-```
-
-Anti-windup: conditional integral clamp at ±4000 (stops I accumulation when output
-is saturated in the same direction as the error).
-
-### PID Tuning Procedure
-
-If PID needs re-tuning (e.g., after motor/wheel change), follow this systematic method:
-
-```
-Step 1: Set Ki=0, Kd=0 (P-only)
-  ros2 topic pub --once /orbibot/pid_params std_msgs/msg/Float32MultiArray \
-    "data: [0.5, 0.0, 0.0]"
-
-Step 2: Send step velocity command
-  ros2 topic pub --once /cmd_vel geometry_msgs/msg/Twist "linear: {x: 0.3}"
-
-Step 3: Watch response
-  ros2 topic echo /odom --field twist.twist.linear.x
-  - If oscillating: Kp too high → reduce
-  - If sluggish:    Kp too low → increase
-  - Find Ku (ultimate gain) where oscillation just starts
-  - Set Kp = 0.6 × Ku (Ziegler-Nichols starting point)
-
-Step 4: Add Ki slowly (eliminates steady-state error)
-  ros2 topic pub --once /orbibot/pid_params std_msgs/msg/Float32MultiArray \
-    "data: [<Kp>, 0.02, 0.0]"
-  - Increase Ki until steady-state error < 5%
-  - If oscillation returns: Ki too high
-
-Step 5: Add Kd (reduces overshoot)
-  ros2 topic pub --once /orbibot/pid_params std_msgs/msg/Float32MultiArray \
-    "data: [<Kp>, <Ki>, 0.3]"
-  - Increase Kd until overshoot is acceptable (<10%)
-
-Step 6: Save to flash (persists across reboot)
-  ros2 topic pub --once /orbibot/pid_save std_msgs/msg/Float32MultiArray \
-    "data: [<Kp>, <Ki>, <Kd>]"
-
-Step 7: Verify with real-world tests
-  - Straight line 1m forward → check odometry accuracy
-  - 90° turn in place → check heading
-  - Figure-8 pattern → check combined motion
-```
-
----
-
-## Mecanum Kinematics
-
-**ABBA wheel layout:**
-```
-Front-Left (A)  \   /  Front-Right (B)
-                 \ /
-                 / \
-Rear-Left  (B)  /   \  Rear-Right  (A)
-```
-
-**Robot geometry:**
-- Track width (2a): 360mm
-- Wheelbase (2b): 260mm
-- Wheel radius: 50mm
-
-**Inverse kinematics (chassis velocity -> wheel speeds):**
-```
-V_FL = Vx - Vy - (a + b) * omega
-V_FR = Vx + Vy + (a + b) * omega
-V_RL = Vx + Vy - (a + b) * omega
-V_RR = Vx - Vy + (a + b) * omega
-```
-
-**Odometry:** Midpoint (RK2) integration at 100Hz — uses `mid_theta = theta + delta_theta/2` for reduced drift during combined rotation and translation.
-
----
-
-## Serial Protocol
-
-**Packet format:** `[0xFF] [Device_ID] [Length] [Function] [Data...] [Checksum]`
-- Host -> Firmware: Device ID `0xFC`
-- Firmware -> Host: Device ID `0xFB`
-- Checksum: additive sum of all bytes from Device_ID through last data byte, truncated to `uint8_t`
-- Double-buffered RX with drop counting (no packet loss under load)
-
-### Function Codes
-
-| Code | Dir | Name | Data |
-|------|-----|------|------|
-| `0x01` | H->F | `AUTO_REPORT` | `[enable]` — 1=stream, 0=stop |
-| `0x02` | H->F | `BEEP` | `[dur_lo][dur_hi]` — 0=off, 1=continuous, >=10=ms |
-| `0x08` | H->F | `RESET_ENCODERS` | _(no data)_ — reset encoder counts to zero; odometry unchanged |
-| `0x09` | H->F | `RESET_ODOM` | _(no data)_ — reset firmware odometry (position/heading) to zero; encoders unchanged |
-| `0x0F` | H->F | `RESET_STATE` | _(no data)_ — restart protocol state machine |
-| `0x12` | H->F | `MOTION` | `[car_type][vx_lo][vx_hi][vy_lo][vy_hi][vz_lo][vz_hi]` |
-| `0x13` | H->F | `SET_MOTOR_PID` | `[kp][ki][kd]` as int16 x 1000 + `[save]` flag |
-| `0x14` | H->F | `SET_YAW_PID` | `[kp][ki][kd]` as int16 x 1000 + `[save]` flag |
-| `0x16` | H->F | `SET_MAG_CAL` | `[ox][oy][oz]` as int16 offset x 100 |
-| `0x50`+`0x51` | H->F | `VERSION` | Send `FUNC_REQUEST_DATA (0x50)` with sub-byte `0x51` — firmware replies with `[major][minor]` |
-| `0x0A` | F->H | `REPORT_SPEED` | `[vx][vy][vz]` int16 mm/s x1000 + `[bat]` uint8 x0.1V |
-| `0x0E` | F->H | `REPORT_ICM_RAW` | `[gx][gy][gz][ax][ay][az][mx][my][mz]` raw int16 (ICM-20948) |
-| `0x0C` | F->H | `REPORT_IMU_ATT` | `[roll][pitch][yaw]` int16 x 10000 rad |
-| `0x0D` | F->H | `REPORT_ENCODER` | `[m1][m2][m3][m4]` as int32 LE ticks |
-| `0x15` | F->H | `REPORT_ODOM` | `[x][y][theta]` int32 + `[vx][vy][omega]` int16 |
-
-### Auto-Report Schedule (20Hz each, interleaved)
-
-| Cycle | Report | Code |
-|-------|--------|------|
-| 1 | Speed + Battery | `0x0A` |
-| 11 | IMU Raw (ICM-20948) | `0x0E` |
-| 21 | IMU Attitude | `0x0C` |
-| 31 | Encoder counts | `0x0D` |
-| 41 | Firmware Odometry | `0x15` |
-
-> Full packet format details: see [firmware-architecture.md](firmware-architecture.md)
-
----
-
-## Configuration Reference
-
-All configurable parameters are in `include/orbibot_config.h`:
-
-| Section | Key Parameters |
-|---------|---------------|
-| **Robot Geometry** | `WHEEL_DIAMETER_M` (0.1), `TRACK_WIDTH_M` (0.36), `WHEELBASE_M` (0.26) |
-| **Encoder** | `ENCODER_CPR` (1320), `GEAR_RATIO` (30) |
-| **Motor** | `MAX_RPM` (333), `MAX_PWM` (3600), `PWM_FREQUENCY` (20000) |
-| **Velocity Limits** | `MAX_LINEAR_VELOCITY_MPS` (1.0), `MAX_ANGULAR_VELOCITY_RPS` (2.0) |
-| **PID** | `MOTOR_PID_KP/KI/KD`, `YAW_PID_*`, speed thresholds |
-| **Battery** | `BATTERY_VOLTAGE_LOW` (11.0), `BATTERY_VOLTAGE_CRITICAL` (10.5) |
-| **IMU** | `IMU_UPDATE_RATE_HZ` (50), `IMU_GYRO_SCALE`, `IMU_ACCEL_SCALE` |
-| **Tasks** | Stack sizes, update rates for each FreeRTOS task |
-| **Debug** | `ENABLE_DEBUG_OUTPUT` (0), `DEBUG_LEVEL` (0), `ENABLE_BOOT_MESSAGES` (0) |
-
-> Set `ENABLE_DEBUG_OUTPUT=1` and `ENABLE_BOOT_MESSAGES=1` for bench debugging with serial monitor. Keep both at 0 for production (debug printf corrupts the binary protocol on shared USART1).
 
 ---
 
 ## Debugging
 
-### Firmware Test Suite
+### Quick checks from ROS 2
+
+```bash
+# Is serial port available?
+ls -la /dev/motordriver
+
+# Check topic rates
+ros2 topic hz /odom
+ros2 topic hz /imu/data_raw
+
+# Check battery voltage
+ros2 topic echo /orbibot/system_status --once
+
+# Trigger a beep (200ms)
+ros2 topic pub --once /orbibot/beep std_msgs/msg/UInt16 "data: 200"
+```
+
+### Common issues
+
+| Problem | Likely Cause | Solution |
+|---------|-------------|----------|
+| No data on topics | Serial port not found | Check `/dev/motordriver` exists; verify USB cable |
+| Motors don't move | Battery lockout | Check voltage > 10.5V on `/orbibot/system_status` |
+| Motors stop after 2s | Command timeout | Ensure `/cmd_vel` is being published continuously |
+| Odometry drifts badly | Wrong encoder direction | Re-flash firmware; run `test_encoder.py` |
+| IMU reads zeros | SPI wiring fault | Re-flash firmware; run `test_imu.py` |
+
+### Firmware test suite (direct serial, no ROS 2)
 
 ```bash
 cd src/orbibot_rosmaster_firmware/tests
-
-# Full test run (requires robot connected via /dev/motordriver)
 python3 run_all_tests.py --port /dev/motordriver
-
-# Individual tests
-python3 test_encoder.py          # Spin wheels by hand, verify direction
-python3 test_imu.py              # IMU raw + attitude at 50Hz
-python3 test_motor_speed.py      # PWM sweep all 4 motors
-python3 test_motor_direction.py  # Motor direction verification
-python3 test_beep.py             # Buzzer pattern test
-python3 test_battery.py          # Battery voltage readout
-python3 test_odometry.py         # Firmware odometry report
-python3 test_pid.py              # PID gain read/write
-python3 test_safety.py           # Safety feature tests
-python3 test_data_rate.py        # Auto-report rate measurement
-python3 test_version.py          # Firmware version query
-```
-
-### ROS 2 Debug Commands
-
-```bash
-# Start hardware node
-ros2 launch orbibot_hardware hardware.launch.py
-
-# Check topic rates
-ros2 topic hz /odom                          # ~20Hz
-ros2 topic hz /imu/data_raw                  # ~20Hz
-ros2 topic hz /imu/data                      # ~20Hz
-
-# Inspect data
-ros2 topic echo /odom --once
-ros2 topic echo /orbibot/system_status       # Battery, motor state
-
-# Trigger beep
-ros2 topic pub --once /orbibot/beep std_msgs/msg/UInt16 "data: 200"
-
-# Reset odometry
-ros2 service call /orbibot/reset_odometry std_srvs/srv/Empty
-
-# Check serial port
-ls -la /dev/motordriver   # symlink to /dev/ttyUSB0 or ttyACM0
-```
-
-### Common Hardware Issues
-
-| Symptom | Check |
-|---------|-------|
-| No serial data | BOOT0 must be LOW after upload; press RESET |
-| Wrong encoder direction | `test_encoder.py` — rotate wheel by hand |
-| IMU returns 0 | WHO_AM_I must return `0xEA`; check SPI2 wiring (PB12-PB15) |
-| Battery reads 0V | ADC on PC4 (ADC_Channel_14); check 4S divider resistors |
-| Motors don't respond | Verify `AUTO_REPORT` enabled; check 12V supply |
-| Odometry drift | Verify wheel radius (50mm) and encoder CPR (1320) in config |
-| Motors stop unexpectedly | Battery lockout — check voltage > 10.5V |
-
-### Serial Monitor
-
-```bash
-# Direct serial access (Ctrl+A K to quit)
-screen /dev/motordriver 115200
-
-# Or use PlatformIO
-~/.platformio/penv/bin/pio device monitor
 ```
 
 ---
 
-## Why Custom Firmware?
+## Deep-Dive Documentation
 
-### The Problem with Yahboom's Original Firmware
+These files contain low-level firmware details for embedded developers:
 
-The Yahboom ROSMaster V3.0 board ships with proprietary firmware that has several limitations:
-- **Closed Source**: Binary blob with no source code access
-- **Fixed Configuration**: Hardcoded for Yahboom X3 robot (60mm wheels, 300mm track width)
-- **Bloated**: ~150KB Flash (60%) with many unused features
-- **Limited Documentation**: Minimal English documentation
-- **Hard to Customize**: Cannot modify kinematics, PID tuning, or control algorithms
-
-### Comparison
-
-| Feature | Yahboom Original | OrbiBot Custom |
-|---------|-----------------|----------------|
-| Source Code | Closed binary | Open source |
-| Flash Usage | ~150 KB (60%) | ~38 KB (15%) |
-| Configuration | Hardcoded | `orbibot_config.h` |
-| Kinematics | Fixed differential | Mecanum-specific |
-| Documentation | Chinese/minimal | English/comprehensive |
-| Build System | Keil MDK (proprietary) | PlatformIO (free) |
-| Safety | Basic | Battery lockout, per-task watchdog, HSE fallback |
-| Build Quality | Unknown | `-Werror`, no implicit declarations |
-
-### Hardware on ROSMaster V3.0 Not Used by OrbiBot
-
-| Hardware | Board Support | Firmware |
-|----------|--------------|---------|
-| RGB LED (WS2812B) | on board | excluded |
-| PWM Servos (4ch) | on board | excluded |
-| SBUS RC receiver | on board | excluded |
-| Ackermann steering | on board | excluded |
-| CAN bus (SN65HVD230) | on board | excluded |
-| OLED display (SSD1306) | on board | stub present |
-
----
-
-## Build System Notes
-
-### Build Flags
-
-The firmware builds with strict warnings enabled:
-- `-Wall -Wextra -Werror` — all warnings are build errors
-- `-Wno-unused-parameter` — allowed (common in HAL callbacks)
-- `-ffunction-sections -fdata-sections` — dead code elimination
-
-### Git Version Injection
-
-`git_version.py` runs as a PlatformIO pre-build script, injecting:
-- `GIT_COMMIT_HASH` — short git hash (e.g., `"a1b2c3d"`)
-- `GIT_BRANCH` — current branch (e.g., `"main"`)
-
-These appear in the firmware version response (function code `0x51`).
-
-### Debug vs Production
-
-| Setting | Production | Debug |
-|---------|-----------|-------|
-| `ENABLE_DEBUG_OUTPUT` | 0 | 1 |
-| `DEBUG_LEVEL` | 0 | 1+ (1=Error, 2=Info, 3=Verbose) |
-| `ENABLE_BOOT_MESSAGES` | 0 | 1 |
-
-> In debug mode, `printf` output shares USART1 with the binary protocol. Use debug mode only with a serial monitor, not with the ROS 2 driver.
-
----
-
-## Lessons from PlatformIO Migration
-
-Key issues encountered migrating from Keil MDK to PlatformIO GCC:
-
-1. **Printf support**: Keil uses `fputc()`, GCC newlib requires `_write()` syscall — implemented in `hal_usart.c`
-2. **SPI timeout protection**: Added timeout to all SPI transfers to prevent firmware hang
-3. **FreeRTOS-safe delays**: `imu_delay_ms()` uses DWT cycle counter for accurate pre-scheduler delays (SysTick not available)
-
----
-
-## Documentation
-
-| Document | Contents |
-|----------|----------|
-| [firmware-architecture.md](firmware-architecture.md) | Detailed architecture, data flow, protocol packet formats |
-| [hardware-doc.md](hardware-doc.md) | Complete hardware specs, pin mappings, electrical details |
-| [firmware-changelog.md](firmware-changelog.md) | Full change history (v1.x and v2.0.0) |
-| [firmware-issue.md](firmware-issue.md) | Open issues and future work |
-| [orbibot_config.h](include/orbibot_config.h) | All configurable parameters |
-| [tests/README.md](tests/README.md) | Test suite documentation |
+| Document | Audience | Contents |
+|----------|----------|----------|
+| [firmware-architecture.md](firmware-architecture.md) | Firmware devs | Layer design, task details, protocol packet formats |
+| [hardware-doc.md](hardware-doc.md) | Hardware/firmware devs | Pin mappings, timer configs, electrical specs |
+| [firmware-changelog.md](firmware-changelog.md) | All | Version history and bug fix details |
+| [firmware-issue.md](firmware-issue.md) | Firmware devs | Open issues, tech debt, improvement ideas |
+| [orbibot_config.h](include/orbibot_config.h) | Firmware devs | All configurable parameters |
 
 ---
 
 ## Version
 
-- **Version**: v2.0.0
-- **Target**: STM32F103RCT6 (72MHz Cortex-M3, 48KB RAM, 256KB Flash)
+- **Version**: v2.0.1
+- **Target**: STM32F103RCT6 (72MHz Cortex-M3)
 - **Board**: Yahboom ROSMaster V3.0
-- **Robot**: OrbiBot (mecanum-wheeled mobile robot)
 - **Author**: Jewel Nath
-- **Date**: March 2026
-
-## References
-
-- **Yahboom ROSMaster V3.0**: https://github.com/YahboomTechnology/ROS-robot-expansion-board
-- **ICM-20948 Datasheet**: InvenSense DS-000189
-- **STM32F103RCT6 Reference Manual**: RM0008
-- **PlatformIO**: https://platformio.org/

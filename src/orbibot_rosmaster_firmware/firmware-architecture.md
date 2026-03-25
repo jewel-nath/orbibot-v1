@@ -64,7 +64,7 @@ src/orbibot_rosmaster_firmware/
 │   │
 │   ├── control/                # Motion control
 │   │   ├── mecanum_kinematics.c # Forward/inverse kinematics
-│   │   ├── pid_controller.c     # Multi-level incremental PID
+│   │   ├── pid_controller.c     # Incremental PID with anti-windup
 │   │   └── odometry.c           # Midpoint (RK2) odometry
 │   │
 │   ├── communication/          # Serial protocol
@@ -84,8 +84,9 @@ src/orbibot_rosmaster_firmware/
 │   └── test_beep.py
 │
 └── lib/                        # Third-party libraries
-    ├── FreeRTOS/               # FreeRTOS v10.x kernel
+    ├── FreeRTOS/               # FreeRTOS v10.x kernel (src/ + inc/)
     └── STM32F10x_StdPeriph_Driver/  # STM32 Standard Peripheral Library
+    # Note: lib/src/ was removed (was duplicate of lib/FreeRTOS/src/)
 ```
 
 ---
@@ -144,7 +145,7 @@ src/orbibot_rosmaster_firmware/
 ```c
 #define MAX_LINEAR_VELOCITY     1.0f     // m/s
 #define MAX_ANGULAR_VELOCITY    2.0f     // rad/s
-#define BATTERY_VOLTAGE_MIN     10.5f    // Volts (3S LiPo cutoff)
+#define BATTERY_VOLTAGE_MIN     10.5f    // Volts (4S LiFePO4 cutoff)
 #define BATTERY_VOLTAGE_LOW     11.0f    // Volts (warning threshold)
 #define COMMAND_TIMEOUT_MS      2000     // Stop if no command for 2s
 ```
@@ -186,11 +187,11 @@ ROS 2 → /cmd_vel
 
 ```
  0ms  ─ report_count=1  → REPORT_SPEED   (0x0A) — Vx/Vy/Vz + battery
-10ms  ─ report_count=11 → REPORT_IMU_RAW (0x0B) — raw gyro/accel/mag
-20ms  ─ report_count=21 → REPORT_IMU_ATT (0x0C) — roll/pitch/yaw
-30ms  ─ report_count=31 → REPORT_ENCODER (0x0D) — 4 encoder counts
-40ms  ─ report_count=41 → REPORT_ODOM    (0x15) — x/y/theta/vx/vy/omega
-50ms  ─ cycle repeats   (all types at 20Hz = 100 packets/sec)
+10ms  ─ report_count=5  → REPORT_ICM_RAW (0x0E) — calibrated gyro/accel + raw mag
+20ms  ─ report_count=9  → REPORT_IMU_ATT (0x0C) — roll/pitch/yaw
+30ms  ─ report_count=13 → REPORT_ENCODER (0x0D) — 4 encoder counts
+40ms  ─ report_count=17 → REPORT_ODOM    (0x15) — x/y/theta/vx/vy/omega
+20ms  ─ cycle repeats   (all types at 50Hz = 250 packets/sec)
 ```
 
 ---
@@ -208,7 +209,7 @@ ROS 2 → /cmd_vel
 ```
 - **Device ID receive** (host → firmware): `0xFC`
 - **Device ID send** (firmware → host): `0xFB`
-- **Checksum**: additive sum of Device_ID + Length + Function + Data bytes, truncated to `uint8_t` (NOT XOR)
+- **Checksum**: additive sum of Length + Function + Data bytes (NOT Device_ID), truncated to `uint8_t`
 
 ### Function Codes
 
@@ -223,17 +224,17 @@ ROS 2 → /cmd_vel
 | `0x13` | SET_MOTOR_PID | Single-level gains (Kp/Ki/Kd int16 × 1000) + save byte |
 | `0x14` | SET_YAW_PID | Yaw gains (Kp/Ki/Kd int16 × 1000) + save byte |
 | `0x16` | SET_MAG_CAL | Hard-iron offsets (int16 × 100 µT per axis) |
-| `0x18` | SET_PID_MULTILEVEL | 3 thresholds (int16 mm/s) + 3 gain levels + save byte |
-| `0x51` | VERSION | Request firmware version string |
+| `0x08` | RESET_ENCODERS | Reset encoder counts to zero (odometry unchanged) |
+| `0x50`+`0x51` | VERSION | Send REQUEST_DATA (0x50) with sub-byte 0x51 |
 
 **Outgoing (firmware → host), auto-reported at 20Hz each (50ms cycle, interleaved 10ms):**
 | Code | Name | Description |
 |------|------|-------------|
-| `0x0A` | REPORT_SPEED | Vx, Vy, Vz (int16 mm/s × 1000) + battery (int16 mV) |
-| `0x0C` | REPORT_IMU_ATT | Roll, pitch, yaw (int16 × 1000 rad) |
-| `0x0D` | REPORT_ENCODER | FL, BL, FR, BR encoder counts (int16 ticks each) |
-| `0x0B` | REPORT_IMU_RAW | Raw gyro + accel + mag (int16 ADC counts) |
-| `0x15` | REPORT_ODOM | x, y (int32 mm), theta (int16 mrad), vx/vy/omega |
+| `0x0A` | REPORT_SPEED | Vx, Vy, Vz (int16 mm/s) + battery (uint8 × 0.1V) |
+| `0x0E` | REPORT_ICM_RAW | Gyro milli-rad/s + accel milli-m/s² + mag raw counts (int16) |
+| `0x0C` | REPORT_IMU_ATT | Roll, pitch, yaw (int16 × 10000 rad) |
+| `0x0D` | REPORT_ENCODER | FL, BL, FR, BR encoder counts (int32 LE ticks) |
+| `0x15` | REPORT_ODOM | x, y, theta (int32) + vx, vy, omega (int32) — mm/mrad units |
 
 > Full field layouts: see `include/protocol.h` and `src/communication/protocol.c`
 
@@ -268,25 +269,23 @@ Where:
 
 ### Motor Speed Control (Incremental PID)
 
-Multi-level PID — gains selected based on wheel speed:
+Single PID gains — sufficient for OrbiBot's indoor speed range (100-500 mm/s).
 
 ```c
-typedef struct {
-    float kp;           // Proportional gain
-    float ki;           // Integral gain
-    float kd;           // Derivative gain
-    float speed_threshold; // Switch-to-this-level speed (mm/s)
-} pid_level_t;
-
-// Default tuning for JGB37-520 motors (runtime-adjustable via WebGUI + flash save)
-pid_level_t pid_levels[3] = {
-    { .kp = 0.8f, .ki = 0.06f, .kd = 0.5f },   // Level 0: low speed
-    { .kp = 0.8f, .ki = 0.06f, .kd = 0.5f },   // Level 1: medium speed
-    { .kp = 0.8f, .ki = 0.06f, .kd = 0.5f },   // Level 2: high speed
-};
+// Default gains (runtime-tunable via serial, persisted to flash)
+Kp = 0.8    // Proportional
+Ki = 0.06   // Integral (trapezoidal integration)
+Kd = 0.5    // Derivative
 ```
 
-Anti-windup: Output saturated at ±3600 (max PWM).
+**Formula (incremental):**
+```
+deltaOut = Kp*(e[k] - e[k-1]) + Ki*0.5*(e[k] + e[k-1]) + Kd*(e[k] - 2*e[k-1] + e[k-2])
+Out[k] = Out[k-1] + deltaOut
+```
+
+**Anti-windup:** Conditional integral clamp at +/-4000. Stops I accumulation when
+output is saturated in the same direction as the error.
 
 ### Control Loop (100Hz)
 ```
@@ -325,9 +324,10 @@ include_dir = include
 platform = ststm32
 board = genericSTM32F103RC
 framework = cmsis
+extra_scripts = pre:git_version.py   # Injects GIT_COMMIT_HASH + GIT_BRANCH
 
 upload_protocol = serial
-upload_port = COM6
+upload_port = /dev/motordriver
 monitor_speed = 115200
 
 build_flags =
@@ -335,12 +335,22 @@ build_flags =
     -D USE_STDPERIPH_DRIVER
     -D ORBIBOT_FIRMWARE
     -I include
-    -Os  # Optimize for size
-    -Wall -Wextra
+    -I lib/FreeRTOS/inc
+    -I lib/STM32F10x_StdPeriph_Driver/inc
+    -Os
+    -Wall -Wextra -Werror             # All warnings are errors
+    -Wno-unused-parameter             # Allowed (common in HAL callbacks)
+    -ffunction-sections -fdata-sections  # Dead code elimination
 
-lib_deps =
-    FreeRTOS
+build_src_filter =
+    +<**/*.c>
+    +<../lib/FreeRTOS/src/*.c>
+    +<../lib/STM32F10x_StdPeriph_Driver/src/*.c>
 ```
+
+**Debug vs Production:** Set `ENABLE_DEBUG_OUTPUT=1` and `ENABLE_BOOT_MESSAGES=1`
+in `orbibot_config.h` for bench debugging with serial monitor. Keep both at 0 for
+production — debug printf shares USART1 with the binary protocol and will corrupt data.
 
 ---
 
@@ -491,6 +501,6 @@ test: Add motor driver unit tests
 
 ---
 
-**Architecture Version**: 2.2
-**Last Updated**: 2026-03-04
+**Architecture Version**: 2.3
+**Last Updated**: 2026-03-25
 **Status**: Implemented and Active
