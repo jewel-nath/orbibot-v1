@@ -153,17 +153,41 @@ robot_tester:
 
 Central class that ties everything together. Manages provider switching, system prompts (chat vs. robot_tester mode), and the tool-call loop. Supports both blocking (`process_message`) and streaming (`process_message_stream`) execution.
 
-### `core/ros_bridge.py` — ROS 2 Communication
+### `core/ros_bridge/` — ROS 2 Communication
 
-The largest file (~1900 lines). Handles all ROS 2 I/O: topic subscriptions, service calls, action goals, and a `wait_for_message` pattern for synchronous sensor reads. Also implements higher-level operations like `move_for_duration`, `run_pid_test`, and Nav2 wrappers.
+Split into 7 focused modules composed via mixins:
+
+| Module | Responsibility |
+|--------|---------------|
+| `base.py` | Shared state, `wait_for_message`, quaternion utils |
+| `motion.py` | Velocity publishing, `move_for_duration` |
+| `sensors.py` | Battery, IMU, encoders, odometry, LiDAR reads |
+| `firmware.py` | PID set/save, beep, calibration, reset, version |
+| `services.py` | Dynamic service calling, topic listing/publishing |
+| `actions.py` | Action client management, goal tracking |
+| `navigation.py` | Nav2, SLAM, AMCL, exploration wrappers |
+
+Import as `from orbibot_agent.core.ros_bridge import RosBridge` — the facade class composes all mixins.
 
 ### `core/safety_manager.py` — Safety Layer
 
 Validates and clamps velocity/duration before any motion command. Manages emergency stop state. All motion goes through safety validation.
 
-### `tools/tool_registry.py` — Tool Definitions
+### `tools/` — Tool Definitions
 
-Registers 65 tools with JSON schemas (OpenAI function-calling format). Each tool has a name, description, parameter schema, and handler function. The registry is provider-agnostic.
+Split into 7 focused modules:
+
+| Module | Tools |
+|--------|-------|
+| `tool_registry.py` | Thin dispatcher (register, get_schemas, execute) |
+| `motion_tools.py` | move, stop, motor enable, firmware reset (4) |
+| `sensor_tools.py` | battery, IMU, encoders, odometry, LiDAR (15) |
+| `firmware_tools.py` | PID set/save, beep, calibration, reset (9) |
+| `testing_tools.py` | PID test, motor, IMU, encoder, mag, battery (8) |
+| `ros_tools.py` | topics, services, actions, generic publish (11) |
+| `navigation_tools.py` | SLAM, Nav2, AMCL, exploration (18) |
+
+Each module exports `register(registry, ros_bridge, safety_manager)`. All 65 tools use OpenAI function-calling JSON schemas.
 
 ### `llm_providers/` — LLM Backends
 
@@ -234,21 +258,20 @@ ros2 run orbibot_agent mcp_server                   # MCP
 
 ### Adding a New Tool
 
-1. Add a handler method to `tool_registry.py`:
+1. Pick the right module (e.g., `sensor_tools.py` for a new sensor read)
+2. Add a handler and registration inside the `register()` function:
    ```python
-   def _handle_my_tool(self, param: str) -> Dict:
-       return self._ros_bridge.some_method(param)
-   ```
+   def _handle_my_tool(param: str) -> Dict:
+       return ros_bridge.some_method(param)
 
-2. Register it in `_register_default_tools()`:
-   ```python
-   self.register_tool(
+   registry.register_tool(
        name='my_tool',
        description='What it does',
        parameters={'type': 'object', 'properties': {...}, 'required': [...]},
-       handler=self._handle_my_tool,
+       handler=_handle_my_tool,
    )
    ```
+3. If creating a new category, add a new `*_tools.py` module and import it in `tool_registry.py`.
 
 ### Adding a New LLM Provider
 
@@ -271,25 +294,39 @@ Register in `agent_node.py` `_init_providers`.
 orbibot_agent/
   orbibot_agent/
     __init__.py
-    agent_node.py              # Orchestrator (AgentNode)
-    env_loader.py              # .env.local loader
+    agent_node.py                  # Orchestrator (AgentNode)
+    env_loader.py                  # .env.local loader
     core/
-      ros_bridge.py            # Native ROS 2 bridge (~1900 lines)
-      safety_manager.py        # Velocity/duration safety
-      test_suite_runner.py     # LLM-free hardware tests
+      safety_manager.py            # Velocity/duration safety
+      test_suite_runner.py         # LLM-free hardware tests
+      ros_bridge/                  # ROS 2 bridge (mixin architecture)
+        __init__.py                #   Facade — composes all mixins
+        base.py                    #   Shared state, wait_for_message
+        motion.py                  #   cmd_vel, move_for_duration
+        sensors.py                 #   Battery, IMU, encoders, odometry, LiDAR
+        firmware.py                #   PID, beep, calibration, reset
+        services.py                #   Dynamic service/topic calls
+        actions.py                 #   Action client management
+        navigation.py              #   Nav2, SLAM, AMCL, exploration
     llm_providers/
-      base_provider.py         # Abstract base
-      openai_compat_provider.py # Shared OpenAI-compatible base
-      gemini_provider.py       # Google Gemini
-      anthropic_provider.py    # Claude
-      moonshot_provider.py     # Kimi
-      ollama_provider.py       # Ollama local
+      base_provider.py             # Abstract base
+      openai_compat_provider.py    # Shared OpenAI-compatible base
+      gemini_provider.py           # Google Gemini
+      anthropic_provider.py        # Claude
+      moonshot_provider.py         # Kimi (extends OpenAI compat)
+      ollama_provider.py           # Ollama (extends OpenAI compat)
     tools/
-      tool_registry.py         # 65 tools (~1700 lines)
+      tool_registry.py             # Thin dispatcher
+      motion_tools.py              # 4 motion tools
+      sensor_tools.py              # 15 sensor/GET tools
+      firmware_tools.py            # 9 firmware command tools
+      testing_tools.py             # 8 hardware test tools
+      ros_tools.py                 # 11 ROS interface tools
+      navigation_tools.py          # 18 nav/SLAM/exploration tools
     interfaces/
-      chat_server.py           # HTTP + SSE server
-      chat_cli.py              # Terminal CLI
-      mcp_server.py            # MCP stdio server
+      chat_server.py               # HTTP + SSE server
+      chat_cli.py                  # Terminal CLI
+      mcp_server.py                # MCP stdio server
   launch/
     chat_server.launch.py
     mcp_server.launch.py
@@ -302,8 +339,8 @@ orbibot_agent/
 
 - **Single concurrent session** — the chat server uses a lock; only one chat request at a time
 - **No vision tools yet** — camera image capture and object detection are planned
-- **RosBridge is large** — `ros_bridge.py` (~1900 lines) handles too many concerns; future refactor should split it
 - **No persistent conversation** — chat history resets on server restart
+- **No unit tests** — test infrastructure needed (see `agent-issues.md`)
 - **Ollama tool calling** — depends on model support; not all local models handle function calling well
 
 ## License
