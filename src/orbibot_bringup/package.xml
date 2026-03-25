@@ -17,6 +17,7 @@
   <depend>orbibot_navigation</depend>
   <depend>orbibot_exploration</depend>
   <depend>orbibot_teleop</depend>
+  <depend>orbibot_gazebo</depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
