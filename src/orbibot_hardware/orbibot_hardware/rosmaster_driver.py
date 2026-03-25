@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
 # coding: utf-8
 
-# rosmaster_driver is a ROS 2 node clone from Rosmaster_Lib which is used for communicating
-# with the Yahboom ROS Expansion Board V3.
-# This driver has been pruned to remove unused features (RGB, Servo, Arm, raw motor control,
-# car_run, car_type, version query, PID query) and updated to V3.3.9 standards.
-# Matches Yahboom protocol exactly - odometry is calculated on ROS2 side from encoder data.
+# Serial driver for Yahboom ROSMaster V3.0 expansion board (STM32F103RCT6).
+# Handles binary protocol at 115200 baud for motor control, sensor data, and PID tuning.
+# Based on Yahboom Rosmaster_Lib, stripped to OrbiBot essentials.
 
 import struct
 import time
@@ -51,7 +49,6 @@ ICM20948_MAG_RATIO   = 0.15         # AK09916 raw counts → µT
 RAD_TO_DEG = 57.2957795
 
 
-# Driver version / Yahboom protocol compatibility (V3.3.9)
 class Rosmaster:
 
     def __init__(self, car_type=CARTYPE_ORBIBOT, com="/dev/motordriver", delay=.002, debug=False):
@@ -161,8 +158,6 @@ class Rosmaster:
         print(f"Failed to reconnect after {max_retries} attempts — check USB cable and /dev/motordriver")
         return False
 
-    # Parse data based on frame type (OrbiBot firmware sends ICM-20948 only)
-    # Bounds checking to prevent struct.unpack errors on malformed packets
     def _parse_data(self, ext_type, ext_data):
         if ext_type == FUNC_REPORT_SPEED:
             if len(ext_data) < 7:
@@ -225,7 +220,6 @@ class Rosmaster:
                     self._firmware_version = f"{version_major}.{version_minor}"
                     self._last_data_timestamp = time.time()
 
-    # Receive data (R6: buffered reads to reduce syscalls)
     def _receive_data(self):
         self.ser.reset_input_buffer()
         buf = bytearray()
@@ -401,24 +395,21 @@ class Rosmaster:
         with self._data_lock:
             return self._last_data_timestamp
 
-    # Get accelerometer triaxial data (a_x, a_y, a_z)
-    # Uses lock to prevent data tearing
     def get_accelerometer_data(self):
+        """Return (ax, ay, az) in m/s^2."""
         with self._data_lock:
             return self._ax, self._ay, self._az
 
-    # Get gyroscope triaxial data (g_x, g_y, g_z)
     def get_gyroscope_data(self):
+        """Return (gx, gy, gz) in rad/s."""
         with self._data_lock:
             return self._gx, self._gy, self._gz
 
-    # Get magnetometer triaxial data (m_x, m_y, m_z)
     def get_magnetometer_data(self):
+        """Return (mx, my, mz) in uT."""
         with self._data_lock:
             return self._mx, self._my, self._mz
 
-    # Get board attitude angles (yaw, roll, pitch)
-    # to_angle=True: return degrees, to_angle=False: return radians
     def get_imu_attitude_data(self, to_angle=True):
         with self._data_lock:
             if to_angle:
@@ -426,17 +417,14 @@ class Rosmaster:
             else:
                 return self._roll, self._pitch, self._yaw
 
-    # Get car velocity (val_vx, val_vy, val_vz)
     def get_motion_data(self):
         with self._data_lock:
             return self._vx, self._vy, self._vz
 
-    # Get battery voltage
     def get_battery_voltage(self):
         with self._data_lock:
             return self._battery_voltage / 10.0
 
-    # Get four-channel motor encoder data
     def get_motor_encoder(self):
         with self._data_lock:
             return self._encoder_m1, self._encoder_m2, self._encoder_m3, self._encoder_m4
