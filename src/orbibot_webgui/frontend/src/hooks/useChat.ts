@@ -7,8 +7,7 @@
  */
 
 import { useState, useCallback, useRef } from 'react';
-
-const CHAT_API_BASE = `http://${window.location.hostname}:8082`;
+import { useSettings } from '@/contexts/SettingsContext';
 
 export interface ChatMessage {
   id: string;
@@ -50,6 +49,9 @@ function makeId(): string {
 }
 
 export function useChat(): UseChatReturn {
+  const { settings } = useSettings();
+  const baseUrl = settings.chatApiUrl;
+
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,7 +67,7 @@ export function useChat(): UseChatReturn {
 
   const checkConnection = useCallback(async (): Promise<boolean> => {
     try {
-      const resp = await fetch(`${CHAT_API_BASE}/api/health`, {
+      const resp = await fetch(`${baseUrl}/api/health`, {
         signal: AbortSignal.timeout(3000),
       });
       const ok = resp.ok;
@@ -75,7 +77,7 @@ export function useChat(): UseChatReturn {
       setConnected(false);
       return false;
     }
-  }, []);
+  }, [baseUrl]);
 
   const sendMessage = useCallback(async (text: string, modeOverride?: ChatMode) => {
     const trimmed = text.trim();
@@ -107,7 +109,7 @@ export function useChat(): UseChatReturn {
     // Try SSE streaming first, fall back to blocking
     try {
       await sendMessageStream(
-        trimmed, activeMode, selectedProvider, controller, setMessages, history,
+        trimmed, activeMode, selectedProvider, controller, setMessages, history, baseUrl,
       );
       setConnected(true);
     } catch (err: unknown) {
@@ -118,7 +120,7 @@ export function useChat(): UseChatReturn {
 
       try {
         await sendMessageBlocking(
-          trimmed, activeMode, selectedProvider, controller, setMessages, history,
+          trimmed, activeMode, selectedProvider, controller, setMessages, history, baseUrl,
         );
         setConnected(true);
       } catch (fallbackErr: unknown) {
@@ -139,17 +141,17 @@ export function useChat(): UseChatReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [mode, selectedProvider]);
+  }, [mode, selectedProvider, baseUrl]);
 
   const resetChat = useCallback(async () => {
     try {
-      await fetch(`${CHAT_API_BASE}/api/reset`, { method: 'POST' });
+      await fetch(`${baseUrl}/api/reset`, { method: 'POST' });
     } catch {
       // Best-effort
     }
     setMessages([]);
     setError(null);
-  }, []);
+  }, [baseUrl]);
 
   const clearMessages = useCallback(() => {
     setMessages([]);
@@ -175,8 +177,9 @@ async function sendMessageStream(
   controller: AbortController,
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>,
   history: Array<{ role: string; content: string }>,
+  baseUrl: string,
 ): Promise<void> {
-  const resp = await fetch(`${CHAT_API_BASE}/api/chat/stream`, {
+  const resp = await fetch(`${baseUrl}/api/chat/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -291,8 +294,9 @@ async function sendMessageBlocking(
   controller: AbortController,
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>,
   history: Array<{ role: string; content: string }>,
+  baseUrl: string,
 ): Promise<void> {
-  const resp = await fetch(`${CHAT_API_BASE}/api/chat`, {
+  const resp = await fetch(`${baseUrl}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

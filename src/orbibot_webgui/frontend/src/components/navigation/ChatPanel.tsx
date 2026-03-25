@@ -28,13 +28,12 @@ import {
 import ReactMarkdown from 'react-markdown';
 import { useChat } from '@/hooks/useChat';
 import type { ChatMessage, ToolCallInfo } from '@/hooks/useChat';
+import { useSettings } from '@/contexts/SettingsContext';
 import { cn } from '@/lib/utils';
 
 interface ChatPanelProps {
   className?: string;
 }
-
-const CHAT_API_BASE = `http://${window.location.hostname}:8082`;
 
 const QUICK_ACTIONS = [
   { label: 'Battery?', icon: Battery, message: "What's the battery level?" },
@@ -75,6 +74,8 @@ interface TestReport {
 }
 
 export function ChatPanel({ className }: ChatPanelProps) {
+  const { settings } = useSettings();
+  const chatApiBase = settings.chatApiUrl;
   const {
     messages, isLoading, error, connected,
     selectedProvider, mode,
@@ -90,12 +91,12 @@ export function ChatPanel({ className }: ChatPanelProps) {
 
   // Fetch providers and check connection on mount
   useEffect(() => {
-    fetch(`${CHAT_API_BASE}/api/providers`)
+    fetch(`${chatApiBase}/api/providers`)
       .then(r => r.json())
       .then(d => setProviders(d.providers || []))
       .catch(() => setProviders([]));
     checkConnection();
-  }, [checkConnection]);
+  }, [checkConnection, chatApiBase]);
 
   // Auto-scroll on new messages
   useEffect(() => {
@@ -128,7 +129,7 @@ export function ChatPanel({ className }: ChatPanelProps) {
     setTestRunning(true);
     setTestReport(null);
     try {
-      const resp = await fetch(`${CHAT_API_BASE}/api/run_test_suite`, { method: 'POST' });
+      const resp = await fetch(`${chatApiBase}/api/run_test_suite`, { method: 'POST' });
       const data = await resp.json();
       setTestReport(data.status === 'ok' ? data.report : { _error: data.message || 'Test suite failed' });
     } catch (e) {

@@ -7,6 +7,7 @@ import type { ReactNode } from 'react';
 export interface AppSettings {
     websocketUrl: string;
     webrtcUrl: string;
+    chatApiUrl: string;
     maxLinearVelocity: number;
     maxAngularVelocity: number;
     scanTopic: string;
@@ -22,6 +23,7 @@ const host = typeof window !== 'undefined' ? window.location.hostname : 'localho
 export const DEFAULT_SETTINGS: AppSettings = {
     websocketUrl: `ws://${host}:9090`,
     webrtcUrl: `http://${host}:8081`,
+    chatApiUrl: `http://${host}:8082`,
     maxLinearVelocity: 1.0,
     maxAngularVelocity: 2.0,
     scanTopic: '/scan',
