@@ -243,3 +243,5 @@ cython_debug/
 .cursorindexingignore
 src/orbibot_webgui/.claude/settings.local.json
 
+.claude/settings.local.json
+src/orbibot_webgui/frontend/package-lock.json
