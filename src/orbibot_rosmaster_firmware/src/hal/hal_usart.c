@@ -32,7 +32,6 @@ static volatile uint16_t rx_tail = 0;
 #if ENABLE_USART1_DMA
 // DMA TX buffer
 static uint8_t dma_tx_buffer[USART_DMA_TX_BUFFER_SIZE];
-static volatile uint8_t dma_tx_busy = 0;
 #endif
 
 // Error tracking
@@ -72,7 +71,6 @@ static void usart1_dma_init(void)
     // Enable USART1 DMA TX request
     USART_DMACmd(USART1, USART_DMAReq_Tx, ENABLE);
 
-    dma_tx_busy = 0;
 }
 #endif
 

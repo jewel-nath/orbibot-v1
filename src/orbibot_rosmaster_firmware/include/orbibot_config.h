@@ -66,7 +66,6 @@
 #define MOTOR_GEAR_RATIO            30.0f
 #define MOTOR_RPM_MAX               333
 #define ENCODER_PPR                 1320        // Counts per wheel revolution (11 PPR × 30 gear × 4 quadrature)
-#define ENCODER_EDGES_PER_REV       ENCODER_PPR // Same as ENCODER_PPR (quadrature already included)
 
 /**
  * Maximum wheel speed for encoder anomaly rejection.
@@ -479,14 +478,6 @@
 #define HALF_WHEEL_BASE             (WHEEL_BASE_M / 2.0f)
 #define HALF_TRACK_WIDTH            (TRACK_WIDTH_M / 2.0f)
 #define WHEELBASE_PLUS_TRACK        (HALF_WHEEL_BASE + HALF_TRACK_WIDTH)
-
-/**
- * Encoder to Velocity Conversion
- * wheel_velocity (m/s) = (encoder_delta / ENCODER_EDGES_PER_REV)
- *                        × (2π × WHEEL_RADIUS_M)
- *                        × CONTROL_LOOP_RATE_HZ
- */
-#define ENCODER_TO_MPS_FACTOR       ((2.0f * PI_F * WHEEL_RADIUS_M) / ENCODER_EDGES_PER_REV)
 
 /**
  * Task Stack Sizes (FreeRTOS)

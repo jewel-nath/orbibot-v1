@@ -208,11 +208,6 @@ void protocol_receive_byte(uint8_t byte)
     }
 }
 
-// Get RX byte count for debugging
-uint32_t protocol_get_rx_count(void)
-{
-    return g_rx_byte_count;
-}
 
 /* ========================================================================
  * CHECKSUM FUNCTIONS

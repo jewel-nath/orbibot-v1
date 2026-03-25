@@ -43,19 +43,6 @@ void hal_gpio_set_led(uint8_t led_num, uint8_t state);
  */
 void hal_gpio_toggle_led(uint8_t led_num);
 
-/**
- * @brief Set motor direction pin
- * @param motor Motor number (0-3)
- * @param direction 1 = forward, 0 = reverse
- */
-void hal_gpio_set_motor_direction(uint8_t motor, uint8_t direction);
-
-/**
- * @brief Set motor enable pin
- * @param motor Motor number (0-3)
- * @param enable 1 = enabled, 0 = disabled
- */
-void hal_gpio_set_motor_enable(uint8_t motor, uint8_t enable);
 
 /**
  * @brief Set buzzer state

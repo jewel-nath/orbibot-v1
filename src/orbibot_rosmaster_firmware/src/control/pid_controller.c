@@ -15,7 +15,6 @@
  */
 
 #include "pid_controller.h"
-#include <math.h>
 
 static const float PID_MAX_INTEGRAL_LIMIT = 4000.0f;
 
@@ -108,48 +107,3 @@ float pid_calculate_incremental(pid_controller_t *pid, float current_val)
     return pid->output;
 }
 
-pid_gains_t pid_get_gains_for_speed(const pid_multilevel_t *ml, float speed_mm_s)
-{
-    pid_gains_t gains;
-    float speed = fabsf(speed_mm_s);
-
-    // Below lowest threshold: use Level 0
-    if (speed <= ml->speed_thresholds[0])
-    {
-        gains = ml->levels[0];
-        return gains;
-    }
-
-    // Above highest threshold: use Level 2
-    if (speed >= ml->speed_thresholds[2])
-    {
-        gains = ml->levels[2];
-        return gains;
-    }
-
-    // Interpolate between adjacent levels
-    int lower, upper;
-    if (speed <= ml->speed_thresholds[1])
-    {
-        lower = 0;
-        upper = 1;
-    }
-    else
-    {
-        lower = 1;
-        upper = 2;
-    }
-
-    float range = ml->speed_thresholds[upper] - ml->speed_thresholds[lower];
-    float alpha = (speed - ml->speed_thresholds[lower]) / range;
-
-    // Clamp alpha for safety
-    if (alpha < 0.0f) alpha = 0.0f;
-    if (alpha > 1.0f) alpha = 1.0f;
-
-    gains.kp = ml->levels[lower].kp + alpha * (ml->levels[upper].kp - ml->levels[lower].kp);
-    gains.ki = ml->levels[lower].ki + alpha * (ml->levels[upper].ki - ml->levels[lower].ki);
-    gains.kd = ml->levels[lower].kd + alpha * (ml->levels[upper].kd - ml->levels[lower].kd);
-
-    return gains;
-}

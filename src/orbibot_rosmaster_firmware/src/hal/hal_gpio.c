@@ -170,38 +170,6 @@ void hal_gpio_toggle_led(uint8_t led_num)
     }
 }
 
-/**
- * @brief Set motor direction (for H-bridge control)
- * @param motor Motor number (0-3)
- * @param direction 1 = forward, 0 = reverse
- *
- * ROSMaster uses complementary PWM with direction control:
- * - Forward: DIR1=PWM, DIR2=0
- * - Reverse: DIR1=0, DIR2=PWM
- * - Brake: DIR1=0, DIR2=0
- *
- * This function is actually controlled by PWM timer, kept for compatibility.
- */
-void hal_gpio_set_motor_direction(uint8_t motor, uint8_t direction)
-{
-    // Motor direction is controlled by PWM duty cycle assignment
-    // This is handled in hal_timer.c motor control functions
-    // Kept for API compatibility
-    (void)motor;
-    (void)direction;
-}
-
-/**
- * @brief Set motor enable (emergency stop control)
- */
-void hal_gpio_set_motor_enable(uint8_t motor, uint8_t enable)
-{
-    // On ROSMaster, motor enable is done by setting PWM to 0
-    // This is handled in hal_timer.c
-    // Kept for API compatibility
-    (void)motor;
-    (void)enable;
-}
 
 /**
  * @brief Set buzzer state

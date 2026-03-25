@@ -203,7 +203,7 @@ void task_control(void *params)
 
     TickType_t last_wake_time = xTaskGetTickCount();
     const TickType_t period = pdMS_TO_TICKS(1000 / CONTROL_LOOP_RATE_HZ); // 10ms
-    const float pulse_to_mm = (2.0f * PI_F * WHEEL_RADIUS_M * 1000.0f) / ENCODER_EDGES_PER_REV;
+    const float pulse_to_mm = (2.0f * PI_F * WHEEL_RADIUS_M * 1000.0f) / ENCODER_PPR;
 
     for (;;)
     {
