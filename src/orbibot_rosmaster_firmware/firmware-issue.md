@@ -1,7 +1,7 @@
 # Firmware Issue Tracker
 
 **Package:** `orbibot_rosmaster_firmware` (STM32F103RCT6, v2.0.0)
-**Last Updated:** 2026-03-25
+**Last Updated:** 2026-03-25 (session 2)
 
 ---
 
@@ -71,6 +71,38 @@ all incoming commands, disabling auto-report and all control.
 // Before: for (uint8_t i = 1; ...) → includes Device_ID (0xFC) → mismatch
 // After:  for (uint8_t i = 2; ...) → sums Length+Func+Data → matches host
 for (uint8_t i = 2; i < length - 1; i++)
+```
+
+---
+
+### FW-BUG-5: Encoder Direction M2/M4 Inverted — PID Runaway ✅
+**Closed:** 2026-03-25
+**Severity:** HIGH
+**File:** `src/drivers/encoder_driver.c`
+
+**Root cause:** `encoder_direction[4]` was `{ -1, -1, 1, 1 }` — M2 and M4 had wrong signs.
+A header comment claimed M2=-1, M4=+1, contradicting the function-level comment (M2=+1, M4=-1).
+Wrong sign causes PID to receive inverted feedback → integrator runs away.
+
+**Symptom (observed 2026-03-25):**
+```
+send_motion(vx=0.3) → M1=+2402 OK, M2=-14695 FAIL, M3=+2388 OK, M4=-11610 FAIL
+```
+M2/M4 showed 6× overspeed with large negative deltas vs normal M1/M3 positive values.
+
+**Fix applied:**
+```c
+// Before (wrong): { -1, -1, 1, 1 }
+// After (correct):
+static const int8_t encoder_direction[4] = { -1, 1, 1, -1 };
+```
+
+**Verification result (2026-03-25):**
+```
+M1 (FL): delta = +2407  → OK ✓
+M2 (BL): delta = +2618  → OK ✓
+M3 (FR): delta = +2399  → OK ✓
+M4 (BR): delta = +2176  → OK ✓
 ```
 
 ---
