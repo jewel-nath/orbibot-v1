@@ -45,6 +45,17 @@ Modern web-based dashboard for real-time monitoring, control, and autonomous nav
 - **Map Saving** - Save SLAM maps via nav2_map_server
 - **Integration** - Works with orbibot_exploration package
 
+### AI Chat (orbibot_agent integration)
+- **Chat Panel** - Tab in MissionControl right panel for natural language robot control
+- **SSE Streaming** - Live text chunks and tool execution badges as the AI works
+- **Provider Selector** - Switch between Gemini, Claude, Kimi, Ollama from the header
+- **RobotTester Mode** - Toggle for systematic hardware testing with pass/fail reporting
+- **Quick Actions** - One-tap buttons for battery, position, IMU, status queries
+- **Nav Actions** - Forward/backward/strafe/spin buttons in tester mode
+- **Hardware Test Suite** - Run LLM-free tests with pass/fail display and AI review
+- **Connection Status** - Offline indicator with retry when chat server is unreachable
+- **Markdown Rendering** - Tables, code blocks, lists in AI responses
+
 ### Safety
 - **Emergency Stop Monitor** - Monitors `/orbibot/emergency_stop` topic (e.g. from hardware/battery)
 - **Connection Status Bar** - Top-of-screen warnings for ROS/network disconnection with auto-dismiss on reconnect
