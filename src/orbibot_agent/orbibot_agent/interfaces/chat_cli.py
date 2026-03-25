@@ -14,11 +14,7 @@ from rich.table import Table
 from ..agent_node import AgentNode
 from ..env_loader import load_dotenv_local
 
-try:
-    from rich import print
-    RICH_AVAILABLE = True
-except ImportError:
-    RICH_AVAILABLE = False
+RICH_AVAILABLE = True  # rich is imported at top level; fail at startup if missing
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +91,7 @@ Commands:
     def print_providers(self):
         """Print available providers."""
         available = self._node.get_available_providers()
-        current = self._node._current_provider.name if self._node._current_provider else None
+        current = self._node.current_provider_name
 
         if RICH_AVAILABLE:
             table = Table(title="LLM Providers")
@@ -117,7 +113,7 @@ Commands:
 
     def print_tools(self):
         """Print available tools."""
-        tools = self._node._tool_registry.get_tool_schemas()
+        tools = self._node.tool_registry.get_tool_schemas()
 
         if RICH_AVAILABLE:
             table = Table(title="Available Tools")
@@ -174,8 +170,7 @@ Commands:
                 continue
 
             if user_input == '/reset':
-                if self._node._current_provider:
-                    self._node._current_provider.start_chat(self._node._system_prompt)
+                self._node.reset_chat()
                 console.print("[dim]Chat session reset[/dim]")
                 continue
 

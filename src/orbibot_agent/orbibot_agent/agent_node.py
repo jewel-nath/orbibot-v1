@@ -434,14 +434,32 @@ Always explain what you are doing before calling tools. If a command is unsafe o
             logger.error(f'process_message_stream failed: {e}')
             yield {'event': 'error', 'message': str(e)}
 
-    def get_safety_manager(self) -> SafetyManager:
-        return self._safety_manager
+    # -- Public properties (avoid direct _private access from interfaces) --
 
-    def get_ros_bridge(self) -> RosBridge:
-        return self._ros_bridge
+    @property
+    def current_provider_name(self) -> Optional[str]:
+        return self._current_provider_name
 
-    def get_tool_registry(self) -> ToolRegistry:
+    @property
+    def config(self) -> Dict:
+        return self._config
+
+    @property
+    def system_prompt(self) -> str:
+        return self._system_prompt
+
+    @property
+    def tool_registry(self) -> ToolRegistry:
         return self._tool_registry
+
+    @property
+    def current_provider(self):
+        return self._current_provider
+
+    def reset_chat(self) -> None:
+        """Reset the current chat session."""
+        if self._current_provider:
+            self._current_provider.start_chat(self._system_prompt)
 
 
 def main(args=None):

@@ -47,13 +47,13 @@ class ChatServerNode(Node):
         # Agent uses this node's subscriptions/publishers via ros_node param
         self._agent = AgentNode(ros_node=self, config_file=config_file or '')
 
-        max_workers = self._agent._config.get('chat_server', {}).get('max_workers', DEFAULT_MAX_WORKERS)
+        max_workers = self._agent.config.get('chat_server', {}).get('max_workers', DEFAULT_MAX_WORKERS)
         self._chat_executor = ThreadPoolExecutor(
             max_workers=max_workers,
             thread_name_prefix='orbibot_chat',
         )
 
-        self._test_suite_runner = TestSuiteRunner(self._agent._tool_registry)
+        self._test_suite_runner = TestSuiteRunner(self._agent.tool_registry)
 
         # Chat lock for concurrent requests
         self._chat_lock = asyncio.Lock()
@@ -79,7 +79,7 @@ class ChatServerNode(Node):
             Response dictionary
         """
         # Override provider if requested
-        if provider and provider != self._agent._current_provider_name:
+        if provider and provider != self._agent.current_provider_name:
             if not self._agent.set_provider(provider):
                 available = self._agent.get_available_providers()
                 return {
@@ -87,8 +87,8 @@ class ChatServerNode(Node):
                     'tool_calls': []
                 }
 
-        if client_history and self._agent._current_provider:
-            self._agent._current_provider.inject_history(client_history)
+        if client_history and self._agent.current_provider:
+            self._agent.current_provider.inject_history(client_history)
 
         response = self._agent.process_message(message, mode=mode)
 
@@ -166,12 +166,12 @@ class ChatServerNode(Node):
             """Run process_message_stream in thread pool and push events to queue."""
             try:
                 # Set provider if requested
-                if provider and provider != self._agent._current_provider_name:
+                if provider and provider != self._agent.current_provider_name:
                     self._agent.set_provider(provider)
 
                 # Inject client history
-                if client_history and self._agent._current_provider:
-                    self._agent._current_provider.inject_history(client_history)
+                if client_history and self._agent.current_provider:
+                    self._agent.current_provider.inject_history(client_history)
 
                 for event in self._agent.process_message_stream(message, mode=mode):
                     loop.call_soon_threadsafe(queue.put_nowait, event)
@@ -200,8 +200,7 @@ class ChatServerNode(Node):
 
     async def handle_reset(self, request: web.Request) -> web.Response:
         """Reset chat session."""
-        if self._agent._current_provider:
-            self._agent._current_provider.start_chat(self._agent._system_prompt)
+        self._agent.reset_chat()
         return web.json_response({'status': 'ok'})
 
     async def handle_health(self, request: web.Request) -> web.Response:
@@ -210,7 +209,7 @@ class ChatServerNode(Node):
         return web.json_response({
             'status': 'ok',
             'available_providers': providers,
-            'current_provider': self._agent._current_provider_name,
+            'current_provider': self._agent.current_provider_name,
         })
 
     async def handle_providers(self, request: web.Request) -> web.Response:
@@ -218,7 +217,7 @@ class ChatServerNode(Node):
         providers = self._agent.get_available_providers()
         return web.json_response({
             'providers': providers,
-            'current': self._agent._current_provider_name,
+            'current': self._agent.current_provider_name,
         })
 
     async def handle_run_test_suite(self, request: web.Request) -> web.Response:

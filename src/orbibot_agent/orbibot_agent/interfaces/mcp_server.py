@@ -43,7 +43,7 @@ class McpServerNode:
             if not self._agent:
                 return []
 
-            tools = self._agent._tool_registry.get_tool_schemas()
+            tools = self._agent.tool_registry.get_tool_schemas()
             mcp_tools = []
 
             for tool in tools:
@@ -73,7 +73,7 @@ class McpServerNode:
                 loop = asyncio.get_event_loop()
                 result = await loop.run_in_executor(
                     None,
-                    lambda: self._agent._tool_registry.execute_tool(name, arguments or {}),
+                    lambda: self._agent.tool_registry.execute_tool(name, arguments or {}),
                 )
                 return [TextContent(
                     type="text",
