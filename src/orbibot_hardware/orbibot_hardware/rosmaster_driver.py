@@ -329,88 +329,40 @@ class Rosmaster:
         except (serial.SerialException, OSError) as e:
             print(f'---set_beep error: {e}---')
 
-    # Car motion control. v_x=[-1.0, 1.0], v_y=[-1.0, 1.0], v_z=[-5, 5]
     def set_car_motion(self, v_x, v_y, v_z):
+        """Send velocity command. vx/vy in m/s [-1.0, 1.0], vz in rad/s [-5, 5]."""
         try:
-            vx_parms = bytearray(struct.pack('h', int(v_x*1000)))
-            vy_parms = bytearray(struct.pack('h', int(v_y*1000)))
-            vz_parms = bytearray(struct.pack('h', int(v_z*1000)))
-            cmd = [SERIAL_HEAD, SERIAL_DEVICE_ID, 0x00, FUNC_MOTION, self._car_type, \
-                vx_parms[0], vx_parms[1], vy_parms[0], vy_parms[1], vz_parms[0], vz_parms[1]]
-            cmd[2] = len(cmd) - 1
-            checksum = sum(cmd, SERIAL_COMPLEMENT) & 0xff
-            cmd.append(checksum)
-            with self._write_lock:
-                self.ser.write(cmd)
-            if self._debug:
-                print("motion:", cmd)
-            time.sleep(self._delay_time)
+            vx_b = bytearray(struct.pack('h', int(v_x * 1000)))
+            vy_b = bytearray(struct.pack('h', int(v_y * 1000)))
+            vz_b = bytearray(struct.pack('h', int(v_z * 1000)))
+            data = [self._car_type, vx_b[0], vx_b[1], vy_b[0], vy_b[1], vz_b[0], vz_b[1]]
+            self._send_command(FUNC_MOTION, data)
         except (serial.SerialException, OSError) as e:
             print(f'---set_car_motion error: {e}---')
 
-    # PID parameter control. Affects set_car_motion speed changes. Optional by default.
-    # kp ki kd = [0, 10.00], decimals allowed.
-    # forever=True: Permanent (saved to flash), forever=False: Temporary.
-    # Permanent storage takes time, so delay is added to avoid packet loss.
-    # Temporary effect is fast, single use, data lost after restart.
-    def set_pid_param(self, kp, ki, kd, forever=False):
+    def _send_pid(self, func_code, kp, ki, kd, forever=False):
+        """Send PID gains to firmware. kp/ki/kd in [0, 10.0]. forever=True saves to flash."""
+        if kp > 10 or ki > 10 or kd > 10 or kp < 0 or ki < 0 or kd < 0:
+            raise ValueError("PID values must be in [0, 10.00]")
         try:
-            state = 0
+            kp_b = bytearray(struct.pack('h', int(kp * 1000)))
+            ki_b = bytearray(struct.pack('h', int(ki * 1000)))
+            kd_b = bytearray(struct.pack('h', int(kd * 1000)))
+            state = 0x5F if forever else 0
+            data = [kp_b[0], kp_b[1], ki_b[0], ki_b[1], kd_b[0], kd_b[1], state]
+            self._send_command(func_code, data)
             if forever:
-                state = 0x5F
-            if kp > 10 or ki > 10 or kd > 10 or kp < 0 or ki < 0 or kd < 0:
-                print("PID value must be:[0, 10.00]")
-                return
-            kp_params = bytearray(struct.pack('h', int(kp * 1000)))
-            ki_params = bytearray(struct.pack('h', int(ki * 1000)))
-            kd_params = bytearray(struct.pack('h', int(kd * 1000)))
-            cmd = [SERIAL_HEAD, SERIAL_DEVICE_ID, 0x00, FUNC_SET_MOTOR_PID,
-                   kp_params[0], kp_params[1],
-                   ki_params[0], ki_params[1],
-                   kd_params[0], kd_params[1],
-                   state]
-            cmd[2] = len(cmd) - 1  # set length byte dynamically
-            checksum = sum(cmd, SERIAL_COMPLEMENT) & 0xff
-            cmd.append(checksum)
-            with self._write_lock:
-                self.ser.write(cmd)
-            if self._debug:
-                print("pid:", cmd)
-            time.sleep(self._delay_time)
-            if forever:
-                time.sleep(.1)
+                time.sleep(0.1)  # Flash write needs time
         except (serial.SerialException, OSError) as e:
-            print(f'---set_pid_param error: {e}---')
+            print(f'---_send_pid error: {e}---')
 
-    # Set Yaw Angle PID
+    def set_pid_param(self, kp, ki, kd, forever=False):
+        """Set motor PID gains. forever=True saves to flash (persists across reboot)."""
+        self._send_pid(FUNC_SET_MOTOR_PID, kp, ki, kd, forever)
+
     def set_yaw_pid_param(self, kp, ki, kd, forever=False):
-        try:
-            state = 0
-            if forever:
-                state = 0x5F
-            if kp > 10 or ki > 10 or kd > 10 or kp < 0 or ki < 0 or kd < 0:
-                print("YAW PID value must be:[0, 10.00]")
-                return
-            kp_params = bytearray(struct.pack('h', int(kp * 1000)))
-            ki_params = bytearray(struct.pack('h', int(ki * 1000)))
-            kd_params = bytearray(struct.pack('h', int(kd * 1000)))
-            cmd = [SERIAL_HEAD, SERIAL_DEVICE_ID, 0x00, FUNC_SET_YAW_PID,
-                   kp_params[0], kp_params[1],
-                   ki_params[0], ki_params[1],
-                   kd_params[0], kd_params[1],
-                   state]
-            cmd[2] = len(cmd) - 1  # set length byte dynamically
-            checksum = sum(cmd, SERIAL_COMPLEMENT) & 0xff
-            cmd.append(checksum)
-            with self._write_lock:
-                self.ser.write(cmd)
-            if self._debug:
-                print("pid:", cmd)
-            time.sleep(self._delay_time)
-            if forever:
-                time.sleep(.1)
-        except (serial.SerialException, OSError) as e:
-            print(f'---set_yaw_pid_param error: {e}---')
+        """Set yaw PID gains. forever=True saves to flash (persists across reboot)."""
+        self._send_pid(FUNC_SET_YAW_PID, kp, ki, kd, forever)
 
     # Maximum magnetometer offset in µT that fits in int16 with ×100 scaling.
     _MAG_OFFSET_MAX_UT = 327.67
