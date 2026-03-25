@@ -29,6 +29,15 @@ import { toast } from 'sonner';
 // Storage key for persisting waypoints
 const WAYPOINTS_STORAGE_KEY = 'orbibot_waypoints';
 
+// action_msgs/GoalStatus status codes
+const NAV_STATUS = {
+  ACCEPTED: 1,
+  EXECUTING: 2,
+  SUCCEEDED: 4,
+  CANCELED: 5,
+  ABORTED: 6,
+} as const;
+
 interface NavigationContextValue {
   // Interaction mode
   mode: InteractionMode;
@@ -291,22 +300,21 @@ export function NavigationProvider({ children }: NavigationProviderProps) {
 
       const latestStatus = status_list[status_list.length - 1].status;
 
-      // STATUS_ACCEPTED=1, EXECUTING=2, SUCCEEDED=4, CANCELED=5, ABORTED=6
       switch (latestStatus) {
-        case 1:
-        case 2:
+        case NAV_STATUS.ACCEPTED:
+        case NAV_STATUS.EXECUTING:
           setIsNavigating(true);
           setGoalStatus('navigating');
           break;
-        case 4:
+        case NAV_STATUS.SUCCEEDED:
           setIsNavigating(false);
           setGoalStatus('succeeded');
           break;
-        case 5:
+        case NAV_STATUS.CANCELED:
           setIsNavigating(false);
           setGoalStatus('canceled');
           break;
-        case 6:
+        case NAV_STATUS.ABORTED:
           setIsNavigating(false);
           setGoalStatus('failed');
           break;
