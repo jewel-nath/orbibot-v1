@@ -1,14 +1,12 @@
 """HTTP Chat Server for OrbiBot Agent.
 
-Provides REST API for web GUI integration.
-
 Endpoints:
-  POST /api/chat          — blocking JSON response (backward-compatible)
-  POST /api/chat/stream   — Server-Sent Events stream (new)
-  POST /api/reset         — reset chat session
-  POST /api/run_test_suite — run structured hardware tests (no LLM)
-  GET  /api/health        — health check
-  GET  /api/providers     — list available providers
+  POST /api/chat           — blocking JSON response
+  POST /api/chat/stream    — Server-Sent Events stream
+  POST /api/reset          — reset chat session
+  POST /api/run_test_suite — LLM-free hardware tests
+  GET  /api/health         — health check
+  GET  /api/providers      — list available providers
 """
 
 import asyncio
@@ -49,24 +47,18 @@ class ChatServerNode(Node):
         # Agent uses this node's subscriptions/publishers via ros_node param
         self._agent = AgentNode(ros_node=self, config_file=config_file or '')
 
-        # Dedicated thread pool for chat work (Phase 4)
         max_workers = self._agent._config.get('chat_server', {}).get('max_workers', DEFAULT_MAX_WORKERS)
         self._chat_executor = ThreadPoolExecutor(
             max_workers=max_workers,
             thread_name_prefix='orbibot_chat',
         )
 
-        # Test suite runner (Phase 6)
         self._test_suite_runner = TestSuiteRunner(self._agent._tool_registry)
 
         # Chat lock for concurrent requests
         self._chat_lock = asyncio.Lock()
 
         self.get_logger().info(f'Chat server starting on port {self._port}')
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
 
     def _process_message_sync(
         self,
@@ -95,21 +87,15 @@ class ChatServerNode(Node):
                     'tool_calls': []
                 }
 
-        # Inject client history if provided (Phase 7)
         if client_history and self._agent._current_provider:
             self._agent._current_provider.inject_history(client_history)
 
-        # Process message with mode support (Phase 5)
         response = self._agent.process_message(message, mode=mode)
 
         return {
             'reply': response.get('text', 'No response'),
             'tool_calls': response.get('tool_calls', [])
         }
-
-    # ------------------------------------------------------------------
-    # HTTP handlers
-    # ------------------------------------------------------------------
 
     async def handle_chat(self, request: web.Request) -> web.Response:
         """Handle blocking chat request (backward-compatible)."""
@@ -120,8 +106,8 @@ class ChatServerNode(Node):
 
         message = body.get('message', '').strip()
         provider = body.get('provider', None)
-        mode = body.get('mode', 'chat')                    # Phase 5
-        client_history = body.get('messages', None)        # Phase 7
+        mode = body.get('mode', 'chat')
+        client_history = body.get('messages', None)
 
         if not message:
             return web.json_response({'error': 'Empty message'}, status=400)
@@ -130,7 +116,7 @@ class ChatServerNode(Node):
             loop = asyncio.get_event_loop()
             try:
                 result = await loop.run_in_executor(
-                    self._chat_executor,                   # Phase 4
+                    self._chat_executor,
                     self._process_message_sync,
                     message, provider, mode, client_history
                 )
@@ -144,18 +130,7 @@ class ChatServerNode(Node):
         return web.json_response(result)
 
     async def handle_chat_stream(self, request: web.Request) -> web.StreamResponse:
-        """Handle streaming chat request via Server-Sent Events (Phase 1).
-
-        The client should read the response body as a stream of SSE events.
-        Each event is a JSON object on a line prefixed with 'data: '.
-
-        Event types:
-          {'event': 'text_chunk', 'content': '...'}
-          {'event': 'tool_start', 'name': '...', 'args': {...}}
-          {'event': 'tool_result', 'name': '...', 'result': {...}}
-          {'event': 'done', 'tool_calls': [...]}
-          {'event': 'error', 'message': '...'}
-        """
+        """SSE streaming chat — yields text_chunk, tool_start, tool_result, done events."""
         try:
             body = await request.json()
         except json.JSONDecodeError:
@@ -239,7 +214,7 @@ class ChatServerNode(Node):
         })
 
     async def handle_providers(self, request: web.Request) -> web.Response:
-        """Get available providers (Phase 3)."""
+        """List available LLM providers."""
         providers = self._agent.get_available_providers()
         return web.json_response({
             'providers': providers,
@@ -247,15 +222,7 @@ class ChatServerNode(Node):
         })
 
     async def handle_run_test_suite(self, request: web.Request) -> web.Response:
-        """Run structured hardware test suite without LLM (Phase 6).
-
-        Optionally accepts a JSON body with:
-          {'tests': ['battery_test', 'imu_test', ...]}  — run selected tests only
-          {}  — run all tests
-
-        Returns:
-          {'status': 'ok', 'report': {...}}
-        """
+        """Run LLM-free hardware tests. Body: {'tests': [...]} or {} for all."""
         try:
             body = await request.json()
         except Exception:
@@ -284,10 +251,6 @@ class ChatServerNode(Node):
                 status=500
             )
 
-    # ------------------------------------------------------------------
-    # App builder
-    # ------------------------------------------------------------------
-
     def build_app(self) -> web.Application:
         """Build aiohttp app with all routes."""
         app = web.Application()
@@ -304,11 +267,11 @@ class ChatServerNode(Node):
 
         # Routes
         cors.add(app.router.add_post('/api/chat', self.handle_chat))
-        cors.add(app.router.add_post('/api/chat/stream', self.handle_chat_stream))   # Phase 1
+        cors.add(app.router.add_post('/api/chat/stream', self.handle_chat_stream))
         cors.add(app.router.add_post('/api/reset', self.handle_reset))
-        cors.add(app.router.add_post('/api/run_test_suite', self.handle_run_test_suite))  # Phase 6
+        cors.add(app.router.add_post('/api/run_test_suite', self.handle_run_test_suite))
         cors.add(app.router.add_get('/api/health', self.handle_health))
-        cors.add(app.router.add_get('/api/providers', self.handle_providers))        # Phase 3
+        cors.add(app.router.add_get('/api/providers', self.handle_providers))
 
         return app
 

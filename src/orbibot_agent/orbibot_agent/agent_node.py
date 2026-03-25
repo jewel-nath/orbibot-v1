@@ -113,14 +113,7 @@ class AgentNode(Node):
         self.get_logger().info('OrbiBot Agent initialized')
 
     def _load_config(self, config_file: str) -> Dict:
-        """Load configuration from file.
-
-        Args:
-            config_file: Path to config file
-
-        Returns:
-            Configuration dictionary
-        """
+        """Load config from YAML file, merged with defaults."""
         default_config = {
             'safety': {
                 'max_linear_vel': 0.5,
@@ -173,33 +166,22 @@ class AgentNode(Node):
         return default_config
 
     def _init_providers(self) -> None:
-        """Initialize all LLM providers."""
+        """Initialize all configured LLM providers."""
         providers_config = self._config.get('llm_providers', {})
-
-        # Gemini
-        if 'gemini' in providers_config:
-            self._providers['gemini'] = GeminiProvider(providers_config['gemini'])
-
-        # Anthropic
-        if 'anthropic' in providers_config:
-            self._providers['anthropic'] = AnthropicProvider(providers_config['anthropic'])
-
-        # Moonshot
-        if 'moonshot' in providers_config:
-            self._providers['moonshot'] = MoonshotProvider(providers_config['moonshot'])
-
-        # Ollama
-        if 'ollama' in providers_config:
-            self._providers['ollama'] = OllamaProvider(providers_config['ollama'])
+        provider_classes = {
+            'gemini': GeminiProvider,
+            'anthropic': AnthropicProvider,
+            'moonshot': MoonshotProvider,
+            'ollama': OllamaProvider,
+        }
+        for name, cls in provider_classes.items():
+            if name in providers_config:
+                self._providers[name] = cls(providers_config[name])
 
         self.get_logger().info(f'Initialized {len(self._providers)} LLM providers')
 
     def _load_system_prompt(self) -> str:
-        """Load default system prompt for the agent.
-
-        Returns:
-            System prompt string
-        """
+        """Build the default chat system prompt."""
         return """You are OrbiBot, a helpful AI assistant for a Mecanum-wheeled ROS 2 mobile robot (Raspberry Pi 5 + Yahboom ROSMaster V3.0).
 
 You can control the robot using natural language commands. Available capabilities:
@@ -261,14 +243,7 @@ Always explain what you are doing before calling tools. If a command is unsafe o
 """
 
     def _get_system_prompt(self, mode: str = 'chat') -> str:
-        """Get system prompt for the given mode.
-
-        Args:
-            mode: 'chat' (default) or 'robot_tester'
-
-        Returns:
-            System prompt string
-        """
+        """Return system prompt for 'chat' or 'robot_tester' mode."""
         if mode == 'robot_tester':
             # Try to load from file first
             prompt_file = self._config.get('robot_tester', {}).get('prompt_file', '')
@@ -283,14 +258,7 @@ Always explain what you are doing before calling tools. If a command is unsafe o
         return self._system_prompt
 
     def _get_provider_name_for_mode(self, mode: str) -> str:
-        """Get the provider name to use for the given mode.
-
-        Args:
-            mode: 'chat' or 'robot_tester'
-
-        Returns:
-            Provider name string
-        """
+        """Return provider name: robot_tester overrides default if configured."""
         if mode == 'robot_tester':
             tester_cfg = self._config.get('robot_tester', {})
             provider = tester_cfg.get('provider', '')
@@ -299,23 +267,10 @@ Always explain what you are doing before calling tools. If a command is unsafe o
         return self._config.get('default_provider', 'gemini')
 
     def get_available_providers(self) -> List[str]:
-        """Get list of available providers.
-
-        Returns:
-            List of provider names
-        """
         return [name for name, provider in self._providers.items() if provider.is_available()]
 
     def set_provider(self, provider_name: str, system_prompt: Optional[str] = None) -> bool:
-        """Set the active LLM provider.
-
-        Args:
-            provider_name: Name of the provider
-            system_prompt: Optional system prompt override
-
-        Returns:
-            True if successful
-        """
+        """Activate a provider by name. Returns True on success."""
         if provider_name not in self._providers:
             self.get_logger().error(f'Unknown provider: {provider_name}')
             return False
@@ -480,27 +435,12 @@ Always explain what you are doing before calling tools. If a command is unsafe o
             yield {'event': 'error', 'message': str(e)}
 
     def get_safety_manager(self) -> SafetyManager:
-        """Get safety manager.
-
-        Returns:
-            SafetyManager instance
-        """
         return self._safety_manager
 
     def get_ros_bridge(self) -> RosBridge:
-        """Get ROS bridge.
-
-        Returns:
-            RosBridge instance
-        """
         return self._ros_bridge
 
     def get_tool_registry(self) -> ToolRegistry:
-        """Get tool registry.
-
-        Returns:
-            ToolRegistry instance
-        """
         return self._tool_registry
 
 

@@ -719,8 +719,7 @@ class ToolRegistry:
             handler=self._handle_run_full_hardware_test,
         )
 
-        # Phase 2: SLAM / Nav2 / Exploration tools
-        self._register_phase2_tools()
+        self._register_slam_nav_exploration_tools()
 
         logger.info(f'Registered {len(self._tools)} default tools')
 
@@ -1330,12 +1329,8 @@ class ToolRegistry:
             'details': report,
         }
 
-    # =========================================================================
-    # Phase 2 — Registration helpers (called from _register_default_tools)
-    # =========================================================================
-
-    def _register_phase2_tools(self) -> None:
-        """Register Phase 2 SLAM / Nav2 / Exploration tools."""
+    def _register_slam_nav_exploration_tools(self) -> None:
+        """Register SLAM, Nav2, exploration, and generic publish tools."""
         self._register_slam_tools()
         self._register_nav_tools()
         self._register_exploration_tools()
