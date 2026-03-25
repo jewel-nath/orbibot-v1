@@ -2,17 +2,12 @@
  * useChat — React hook for OrbiBot AI chat panel.
  *
  * Talks to the chat_server HTTP API (default port 8082).
- * Supports:
- *   - SSE streaming via POST /api/chat/stream (Phase 1)
- *   - Provider selection (Phase 3)
- *   - RobotTester mode (Phase 5)
- *   - Client-side conversation history (Phase 7)
- *   - Fallback to blocking POST /api/chat
+ * Supports SSE streaming, provider selection, RobotTester mode,
+ * client-side conversation history, and fallback to blocking requests.
  */
 
-import { useState, useCallback, useRef, Dispatch, SetStateAction } from 'react';
+import { useState, useCallback, useRef } from 'react';
 
-// Chat server lives on the same host, different port
 const CHAT_API_BASE = `http://${window.location.hostname}:8082`;
 
 export interface ChatMessage {
@@ -20,7 +15,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   toolCalls?: ToolCallInfo[];
-  /** Live tool names currently executing (streaming only) */
+  /** Tool names currently executing (streaming only) */
   liveTools?: string[];
   timestamp: number;
 }
@@ -33,10 +28,11 @@ export interface ToolCallInfo {
 
 export type ChatMode = 'chat' | 'robot_tester';
 
-interface UseChatReturn {
+export interface UseChatReturn {
   messages: ChatMessage[];
   isLoading: boolean;
   error: string | null;
+  connected: boolean;
   selectedProvider: string | null;
   mode: ChatMode;
   setSelectedProvider: (p: string | null) => void;
@@ -44,6 +40,7 @@ interface UseChatReturn {
   sendMessage: (text: string, modeOverride?: ChatMode) => Promise<void>;
   resetChat: () => Promise<void>;
   clearMessages: () => void;
+  checkConnection: () => Promise<boolean>;
 }
 
 let _nextId = 0;
@@ -56,11 +53,29 @@ export function useChat(): UseChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [connected, setConnected] = useState(true);
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
   const [mode, setMode] = useState<ChatMode>('chat');
 
-  // Abort controller ref so we can cancel in-flight requests
   const abortRef = useRef<AbortController | null>(null);
+  // Keep a ref to messages so streaming helpers can read current state
+  // without needing setState-as-getter hack
+  const messagesRef = useRef<ChatMessage[]>([]);
+  messagesRef.current = messages;
+
+  const checkConnection = useCallback(async (): Promise<boolean> => {
+    try {
+      const resp = await fetch(`${CHAT_API_BASE}/api/health`, {
+        signal: AbortSignal.timeout(3000),
+      });
+      const ok = resp.ok;
+      setConnected(ok);
+      return ok;
+    } catch {
+      setConnected(false);
+      return false;
+    }
+  }, []);
 
   const sendMessage = useCallback(async (text: string, modeOverride?: ChatMode) => {
     const trimmed = text.trim();
@@ -79,57 +94,47 @@ export function useChat(): UseChatReturn {
     setIsLoading(true);
     setError(null);
 
-    // Cancel any previous in-flight request
+    // Cancel any in-flight request
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
 
-    // Build last-10 history for context recovery (Phase 7)
-    // We read messages from state snapshot before adding userMsg
-    // (userMsg is added above but we capture the snapshot here)
-    const buildHistory = (msgs: ChatMessage[]) =>
-      msgs.slice(-10).map(m => ({ role: m.role, content: m.content }));
+    // Build last-10 history for context recovery
+    const history = messagesRef.current
+      .slice(-10)
+      .map(m => ({ role: m.role, content: m.content }));
 
-    // Try SSE streaming first (Phase 1)
+    // Try SSE streaming first, fall back to blocking
     try {
       await sendMessageStream(
-        trimmed,
-        activeMode,
-        selectedProvider,
-        controller,
-        setMessages,
-        buildHistory,
+        trimmed, activeMode, selectedProvider, controller, setMessages, history,
       );
+      setConnected(true);
     } catch (err: unknown) {
       if (err instanceof DOMException && err.name === 'AbortError') {
         setIsLoading(false);
         return;
       }
 
-      // SSE failed — fall back to blocking request
       try {
         await sendMessageBlocking(
-          trimmed,
-          activeMode,
-          selectedProvider,
-          controller,
-          setMessages,
-          buildHistory,
+          trimmed, activeMode, selectedProvider, controller, setMessages, history,
         );
+        setConnected(true);
       } catch (fallbackErr: unknown) {
         if (fallbackErr instanceof DOMException && fallbackErr.name === 'AbortError') {
           setIsLoading(false);
           return;
         }
-        const message = fallbackErr instanceof Error ? fallbackErr.message : 'Unknown error';
+        const message = fallbackErr instanceof Error ? fallbackErr.message : 'Connection failed';
         setError(message);
-        const errMsg: ChatMessage = {
+        setConnected(false);
+        setMessages(prev => [...prev, {
           id: makeId(),
           role: 'assistant',
           content: `Error: ${message}`,
           timestamp: Date.now(),
-        };
-        setMessages(prev => [...prev, errMsg]);
+        }]);
       }
     } finally {
       setIsLoading(false);
@@ -140,7 +145,7 @@ export function useChat(): UseChatReturn {
     try {
       await fetch(`${CHAT_API_BASE}/api/reset`, { method: 'POST' });
     } catch {
-      // Best-effort reset
+      // Best-effort
     }
     setMessages([]);
     setError(null);
@@ -152,21 +157,15 @@ export function useChat(): UseChatReturn {
   }, []);
 
   return {
-    messages,
-    isLoading,
-    error,
-    selectedProvider,
-    mode,
-    setSelectedProvider,
-    setMode,
-    sendMessage,
-    resetChat,
-    clearMessages,
+    messages, isLoading, error, connected,
+    selectedProvider, mode,
+    setSelectedProvider, setMode,
+    sendMessage, resetChat, clearMessages, checkConnection,
   };
 }
 
 // ---------------------------------------------------------------------------
-// SSE streaming implementation (Phase 1)
+// SSE streaming
 // ---------------------------------------------------------------------------
 
 async function sendMessageStream(
@@ -175,16 +174,8 @@ async function sendMessageStream(
   provider: string | null,
   controller: AbortController,
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>,
-  buildHistory: (msgs: ChatMessage[]) => Array<{ role: string; content: string }>,
+  history: Array<{ role: string; content: string }>,
 ): Promise<void> {
-  // Capture current messages for history (before the new user message was added)
-  // We use a ref-like approach: read from the DOM state via a functional update
-  let capturedHistory: Array<{ role: string; content: string }> = [];
-  setMessages(prev => {
-    capturedHistory = buildHistory(prev.slice(0, -1)); // exclude the just-added user msg
-    return prev;
-  });
-
   const resp = await fetch(`${CHAT_API_BASE}/api/chat/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -192,20 +183,14 @@ async function sendMessageStream(
       message,
       provider: provider ?? undefined,
       mode,
-      messages: capturedHistory,
+      messages: history,
     }),
     signal: controller.signal,
   });
 
-  if (!resp.ok) {
-    throw new Error(`HTTP ${resp.status}`);
-  }
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  if (!resp.body) throw new Error('No response body for SSE stream');
 
-  if (!resp.body) {
-    throw new Error('No response body for SSE stream');
-  }
-
-  // Add placeholder assistant message
   const assistantId = makeId();
   setMessages(prev => [
     ...prev,
@@ -215,7 +200,7 @@ async function sendMessageStream(
   const reader = resp.body.getReader();
   const decoder = new TextDecoder();
   let assistantContent = '';
-  const liveToolCalls: ToolCallInfo[] = [];
+  const toolCalls: ToolCallInfo[] = [];
   let buffer = '';
 
   while (true) {
@@ -224,7 +209,7 @@ async function sendMessageStream(
 
     buffer += decoder.decode(value, { stream: true });
     const lines = buffer.split('\n');
-    buffer = lines.pop() ?? ''; // keep incomplete line in buffer
+    buffer = lines.pop() ?? '';
 
     for (const line of lines) {
       if (!line.startsWith('data: ')) continue;
@@ -238,60 +223,65 @@ async function sendMessageStream(
         continue;
       }
 
-      if (event.event === 'text_chunk') {
-        assistantContent += (event.content as string) ?? '';
-        setMessages(prev =>
-          prev.map(m =>
-            m.id === assistantId ? { ...m, content: assistantContent } : m
-          )
-        );
-      } else if (event.event === 'tool_start') {
-        const toolName = event.name as string;
-        setMessages(prev =>
-          prev.map(m =>
-            m.id === assistantId
-              ? { ...m, liveTools: [...(m.liveTools ?? []), toolName] }
-              : m
-          )
-        );
-      } else if (event.event === 'tool_result') {
-        liveToolCalls.push({
-          tool: event.name as string,
-          args: (event.args as Record<string, unknown>) ?? {},
-          result: (event.result as Record<string, unknown>) ?? {},
-        });
-      } else if (event.event === 'done') {
-        setMessages(prev =>
-          prev.map(m =>
-            m.id === assistantId
-              ? { ...m, toolCalls: liveToolCalls.length ? liveToolCalls : undefined, liveTools: undefined }
-              : m
-          )
-        );
-      } else if (event.event === 'error') {
-        setMessages(prev =>
-          prev.map(m =>
-            m.id === assistantId
+      switch (event.event) {
+        case 'text_chunk':
+          assistantContent += (event.content as string) ?? '';
+          setMessages(prev =>
+            prev.map(m => m.id === assistantId ? { ...m, content: assistantContent } : m)
+          );
+          break;
+
+        case 'tool_start':
+          setMessages(prev =>
+            prev.map(m => m.id === assistantId
+              ? { ...m, liveTools: [...(m.liveTools ?? []), event.name as string] }
+              : m)
+          );
+          break;
+
+        case 'tool_result':
+          toolCalls.push({
+            tool: event.name as string,
+            args: (event.args as Record<string, unknown>) ?? {},
+            result: (event.result as Record<string, unknown>) ?? {},
+          });
+          // Remove from live tools
+          setMessages(prev =>
+            prev.map(m => m.id === assistantId
+              ? { ...m, liveTools: (m.liveTools ?? []).filter(t => t !== event.name) }
+              : m)
+          );
+          break;
+
+        case 'done':
+          setMessages(prev =>
+            prev.map(m => m.id === assistantId
+              ? { ...m, toolCalls: toolCalls.length ? toolCalls : undefined, liveTools: undefined }
+              : m)
+          );
+          break;
+
+        case 'error':
+          setMessages(prev =>
+            prev.map(m => m.id === assistantId
               ? { ...m, content: `Error: ${event.message}`, liveTools: undefined }
-              : m
-          )
-        );
+              : m)
+          );
+          break;
       }
     }
   }
 
   // Ensure liveTools is cleared even if 'done' event was missed
   setMessages(prev =>
-    prev.map(m =>
-      m.id === assistantId && m.liveTools !== undefined
-        ? { ...m, liveTools: undefined }
-        : m
-    )
+    prev.map(m => m.id === assistantId && m.liveTools !== undefined
+      ? { ...m, liveTools: undefined }
+      : m)
   );
 }
 
 // ---------------------------------------------------------------------------
-// Blocking fallback (Phase 1 fallback / backward-compat)
+// Blocking fallback
 // ---------------------------------------------------------------------------
 
 async function sendMessageBlocking(
@@ -300,14 +290,8 @@ async function sendMessageBlocking(
   provider: string | null,
   controller: AbortController,
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>,
-  buildHistory: (msgs: ChatMessage[]) => Array<{ role: string; content: string }>,
+  history: Array<{ role: string; content: string }>,
 ): Promise<void> {
-  let capturedHistory: Array<{ role: string; content: string }> = [];
-  setMessages(prev => {
-    capturedHistory = buildHistory(prev.slice(0, -1));
-    return prev;
-  });
-
   const resp = await fetch(`${CHAT_API_BASE}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -315,7 +299,7 @@ async function sendMessageBlocking(
       message,
       provider: provider ?? undefined,
       mode,
-      messages: capturedHistory,
+      messages: history,
     }),
     signal: controller.signal,
   });
@@ -325,16 +309,12 @@ async function sendMessageBlocking(
     throw new Error((errBody as { error?: string }).error || `HTTP ${resp.status}`);
   }
 
-  const data = await resp.json() as { reply?: string; tool_calls?: unknown[] };
-
-  const assistantMsg: ChatMessage = {
+  const data = await resp.json() as { reply?: string; tool_calls?: ToolCallInfo[] };
+  setMessages(prev => [...prev, {
     id: makeId(),
     role: 'assistant',
     content: data.reply || '',
-    toolCalls: data.tool_calls?.length
-      ? (data.tool_calls as ToolCallInfo[])
-      : undefined,
+    toolCalls: data.tool_calls?.length ? data.tool_calls : undefined,
     timestamp: Date.now(),
-  };
-  setMessages(prev => [...prev, assistantMsg]);
+  }]);
 }
