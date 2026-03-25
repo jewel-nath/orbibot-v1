@@ -49,7 +49,8 @@ export function RosProvider({ children, autoConnect = true, url = WS_CONFIG.defa
 
   const reconnectTimeoutRef = useRef<number | null>(null);
   const reconnectAttemptsRef = useRef<number>(0);
-  const rosRef = useRef<ROSLIB.Ros | null>(null);  // G15: Track current ROS instance for cleanup
+  // Ref tracks the current ROS instance so cleanup doesn't close a stale reference
+  const rosRef = useRef<ROSLIB.Ros | null>(null);
 
   const clearReconnectTimeout = () => {
     if (reconnectTimeoutRef.current) {
@@ -126,7 +127,7 @@ export function RosProvider({ children, autoConnect = true, url = WS_CONFIG.defa
       });
     });
 
-    rosRef.current = newRos;  // G15: Update ref for cleanup
+    rosRef.current = newRos;
     setRos(newRos);
   };
 
@@ -138,7 +139,7 @@ export function RosProvider({ children, autoConnect = true, url = WS_CONFIG.defa
     if (ros) {
       ros.close();
       setRos(null);
-      rosRef.current = null;  // G15: Clear ref
+      rosRef.current = null;
     }
 
     setConnectionState('disconnected');
@@ -157,7 +158,7 @@ export function RosProvider({ children, autoConnect = true, url = WS_CONFIG.defa
       connect();
     }
 
-    // Cleanup on unmount - G15: Use ref to avoid stale closure
+    // Cleanup on unmount — use ref to avoid closing a stale ROS instance
     return () => {
       clearReconnectTimeout();
       if (rosRef.current) {
