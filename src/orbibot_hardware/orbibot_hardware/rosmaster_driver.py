@@ -31,9 +31,7 @@ FUNC_SET_MOTOR_PID = 0x13
 FUNC_SET_YAW_PID = 0x14
 FUNC_REPORT_ODOM = 0x15
 FUNC_SET_MAG_CAL = 0x16
-FUNC_SET_MOTOR_PID_MULTILEVEL = 0x18
 FUNC_VERSION = 0x51
-FUNC_RESET_FLASH = 0xA0
 
 # Car type (OrbiBot uses mecanum only; byte required in MOTION packet format)
 CARTYPE_ORBIBOT = 0x07
@@ -103,11 +101,6 @@ class Rosmaster:
 
         # Data freshness for S1/S2 (timestamp of last successfully parsed packet)
         self._last_data_timestamp = 0.0
-
-        self._pid_index = 0
-        self._kp1 = 0
-        self._ki1 = 0
-        self._kd1 = 0
 
         self._battery_voltage = 0
 
@@ -225,25 +218,6 @@ class Rosmaster:
                 self._odom_vy = vals[4] / 1000.0      # mm/s → m/s
                 self._odom_omega = vals[5] / 1000.0   # mrad/s → rad/s
                 self._last_data_timestamp = time.time()
-        elif ext_type == FUNC_SET_MOTOR_PID:
-            if len(ext_data) < 7:
-                return
-            self._pid_index = struct.unpack('B', bytearray(ext_data[0:1]))[0]
-            self._kp1 = struct.unpack('h', bytearray(ext_data[1:3]))[0]
-            self._ki1 = struct.unpack('h', bytearray(ext_data[3:5]))[0]
-            self._kd1 = struct.unpack('h', bytearray(ext_data[5:7]))[0]
-            if self._debug:
-                print("FUNC_SET_MOTOR_PID:", self._pid_index, [self._kp1, self._ki1, self._kd1])
-
-        elif ext_type == FUNC_SET_YAW_PID:
-            if len(ext_data) < 7:
-                return
-            self._pid_index = struct.unpack('B', bytearray(ext_data[0:1]))[0]
-            self._kp1 = struct.unpack('h', bytearray(ext_data[1:3]))[0]
-            self._ki1 = struct.unpack('h', bytearray(ext_data[3:5]))[0]
-            self._kd1 = struct.unpack('h', bytearray(ext_data[5:7]))[0]
-            if self._debug:
-                print("FUNC_SET_YAW_PID:", self._pid_index, [self._kp1, self._ki1, self._kd1])
         elif ext_type == FUNC_VERSION:
             # Parse firmware version response: [major, minor, checksum]
             if len(ext_data) >= 2:
@@ -438,15 +412,6 @@ class Rosmaster:
         except (serial.SerialException, OSError) as e:
             print(f'---set_yaw_pid_param error: {e}---')
 
-    def set_pid_multilevel(self, thresholds, gains, forever=False):
-        """DEPRECATED: Multi-level PID removed. Use set_pid_param() instead."""
-        # This method is kept for API compatibility but does nothing
-        # Multi-level PID has been removed in favor of single PID
-        print("WARNING: Multi-level PID is deprecated. Using single PID via set_pid_param().")
-        if len(gains) >= 3:
-            # Use Level 1 gains (middle level) as the single PID setting
-            self.set_pid_param(gains[3], gains[4], gains[5], forever)
-
     # Maximum magnetometer offset in µT that fits in int16 with ×100 scaling.
     _MAG_OFFSET_MAX_UT = 327.67
 
@@ -473,13 +438,6 @@ class Rosmaster:
                 print("mag_cal:", offset_x, offset_y, offset_z)
         except (serial.SerialException, OSError) as e:
             print(f'---set_mag_calibration error: {e}---')
-
-    def reset_flash_value(self):
-        try:
-            self._send_command(FUNC_RESET_FLASH, [0x5F])
-            time.sleep(.1)
-        except (serial.SerialException, OSError) as e:
-            print(f'---reset_flash_value error: {e}---')
 
     def reset_odometry(self):
         """Reset firmware odometry to zero. (BUG-4: length byte = len(cmd)-1 = 0x03.)"""
