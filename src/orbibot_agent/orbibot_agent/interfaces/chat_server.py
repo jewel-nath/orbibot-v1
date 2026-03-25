@@ -20,7 +20,7 @@ from typing import Any, Dict, List, Optional
 
 import rclpy
 from rclpy.node import Node
-from rclpy.executors import MultiThreadedExecutor
+from rclpy.executors import MultiThreadedExecutor  # noqa: F401 — used in main()
 
 from aiohttp import web
 import aiohttp_cors
@@ -46,28 +46,8 @@ class ChatServerNode(Node):
         self._port = self.get_parameter('port').value
         config_file = self.get_parameter('config_file').value
 
-        # Initialize agent components
-        self._agent = AgentNode.__new__(AgentNode)
-        Node.__init__(self._agent, 'chat_agent')
-        self._agent._config = self._agent._load_config(config_file or '')
-        from ..core.safety_manager import SafetyManager
-        from ..core.ros_bridge import RosBridge
-        from ..tools.tool_registry import ToolRegistry
-        safety_cfg = self._agent._config.get('safety', {})
-        self._agent._safety_manager = SafetyManager(
-            max_linear_vel=safety_cfg.get('max_linear_vel'),
-            max_angular_vel=safety_cfg.get('max_angular_vel'),
-            max_duration=safety_cfg.get('max_duration'),
-            sensor_timeout=safety_cfg.get('sensor_timeout'),
-        )
-        self._agent._ros_bridge = RosBridge(self)
-        self._agent._ros_bridge.set_safety_manager(self._agent._safety_manager)
-        self._agent._tool_registry = ToolRegistry(self._agent._ros_bridge, self._agent._safety_manager)
-        self._agent._providers = {}
-        self._agent._init_providers()
-        self._agent._system_prompt = self._agent._load_system_prompt()
-        self._agent._current_provider = None
-        self._agent._current_provider_name = None
+        # Agent uses this node's subscriptions/publishers via ros_node param
+        self._agent = AgentNode(ros_node=self, config_file=config_file or '')
 
         # Dedicated thread pool for chat work (Phase 4)
         max_workers = self._agent._config.get('chat_server', {}).get('max_workers', DEFAULT_MAX_WORKERS)

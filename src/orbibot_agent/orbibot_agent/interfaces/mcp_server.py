@@ -86,11 +86,7 @@ class McpServerNode:
                 )]
 
     def initialize(self) -> bool:
-        """Initialize ROS node and agent.
-
-        Returns:
-            True if successful
-        """
+        """Initialize ROS node and agent."""
         if not MCP_AVAILABLE:
             logger.error('MCP SDK not installed. Install with: pip install mcp')
             return False
@@ -98,36 +94,11 @@ class McpServerNode:
         load_dotenv_local()
         rclpy.init()
 
-        # Create ROS node
+        # Create ROS node — used for subscriptions/publishers
         self._node = rclpy.create_node('orbibot_mcp_server')
 
-        # Initialize agent
-        self._agent = AgentNode.__new__(AgentNode)
-        from rclpy.node import Node
-        Node.__init__(self._agent, 'mcp_agent')
-
-        self._agent._config = self._agent._load_config('')
-        from ..core.safety_manager import SafetyManager
-        from ..core.ros_bridge import RosBridge
-        from ..tools.tool_registry import ToolRegistry
-
-        safety_cfg = self._agent._config.get('safety', {})
-        self._agent._safety_manager = SafetyManager(
-            max_linear_vel=safety_cfg.get('max_linear_vel'),
-            max_angular_vel=safety_cfg.get('max_angular_vel'),
-            max_duration=safety_cfg.get('max_duration'),
-            sensor_timeout=safety_cfg.get('sensor_timeout'),
-        )
-        self._agent._ros_bridge = RosBridge(self._node)
-        self._agent._ros_bridge.set_safety_manager(self._agent._safety_manager)
-        self._agent._tool_registry = ToolRegistry(
-            self._agent._ros_bridge,
-            self._agent._safety_manager
-        )
-        self._agent._providers = {}
-        self._agent._init_providers()
-        self._agent._system_prompt = self._agent._load_system_prompt()
-        self._agent._current_provider = None
+        # Agent uses the MCP node for ROS I/O
+        self._agent = AgentNode(ros_node=self._node)
 
         # Set default provider
         available = self._agent.get_available_providers()

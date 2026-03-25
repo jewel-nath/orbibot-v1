@@ -57,33 +57,52 @@ SAFETY: Max linear 0.2 m/s for tests. Max duration 5 s per move. Call stop_robot
 
 
 class AgentNode(Node):
-    """Main agent node managing LLM and tool interactions."""
+    """Main agent node managing LLM and tool interactions.
 
-    def __init__(self):
-        super().__init__('orbibot_agent')
+    Can be used standalone (creates its own ROS node) or embedded inside
+    another node by passing ros_node and config_file.
+    """
 
-        # Declare parameters
-        self.declare_parameter('config_file', '')
-        self.declare_parameter('default_provider', 'gemini')
+    def __init__(
+        self,
+        ros_node: Optional[Node] = None,
+        config_file: str = '',
+    ):
+        """Initialize the agent.
 
-        # Load configuration
-        config_file = self.get_parameter('config_file').value
+        Args:
+            ros_node: External ROS node for subscriptions/publishers.
+                      If None, this instance acts as its own node.
+            config_file: Path to YAML config file. When None, reads
+                         from the 'config_file' ROS parameter.
+        """
+        if ros_node is None:
+            # Standalone mode — this object IS the ROS node
+            super().__init__('orbibot_agent')
+            self.declare_parameter('config_file', '')
+            self.declare_parameter('default_provider', 'gemini')
+            config_file = self.get_parameter('config_file').value
+            bridge_node = self
+        else:
+            # Embedded mode — use the caller's node for ROS I/O
+            super().__init__('orbibot_agent_core')
+            bridge_node = ros_node
+
         self._config = self._load_config(config_file)
 
-        # Initialize core components
+        safety_cfg = self._config.get('safety', {})
         self._safety_manager = SafetyManager(
-            max_linear_vel=self._config.get('safety', {}).get('max_linear_vel'),
-            max_angular_vel=self._config.get('safety', {}).get('max_angular_vel'),
-            max_duration=self._config.get('safety', {}).get('max_duration'),
-            sensor_timeout=self._config.get('safety', {}).get('sensor_timeout'),
+            max_linear_vel=safety_cfg.get('max_linear_vel'),
+            max_angular_vel=safety_cfg.get('max_angular_vel'),
+            max_duration=safety_cfg.get('max_duration'),
+            sensor_timeout=safety_cfg.get('sensor_timeout'),
         )
 
-        self._ros_bridge = RosBridge(self)
+        self._ros_bridge = RosBridge(bridge_node)
         self._ros_bridge.set_safety_manager(self._safety_manager)
 
         self._tool_registry = ToolRegistry(self._ros_bridge, self._safety_manager)
 
-        # Initialize LLM providers
         self._providers: Dict[str, Any] = {}
         self._init_providers()
 
@@ -91,7 +110,7 @@ class AgentNode(Node):
         self._current_provider_name: Optional[str] = None
         self._system_prompt = self._load_system_prompt()
 
-        self.get_logger().info('OrbiBot Agent node initialized')
+        self.get_logger().info('OrbiBot Agent initialized')
 
     def _load_config(self, config_file: str) -> Dict:
         """Load configuration from file.
