@@ -1,6 +1,28 @@
 # Hardware Node Changelog
 
-## [Unreleased] — 2026-03-24
+## [Unreleased] — 2026-03-25
+
+### Refactoring
+
+- **Remove dead code from rosmaster_driver.py**
+  Removed: `FUNC_SET_MOTOR_PID_MULTILEVEL` (firmware removed), `FUNC_RESET_FLASH` +
+  `reset_flash_value()` (never called), `set_pid_multilevel()` (deprecated stub),
+  PID readback fields (`_pid_index`, `_kp1`, `_ki1`, `_kd1`) — parsed but never read.
+
+- **DRY PID methods** — Extracted `_send_pid()` helper. `set_pid_param()` and
+  `set_yaw_pid_param()` were identical except for function code. PID validation
+  now raises `ValueError` instead of silent `print()+return`.
+
+- **Use _send_command in set_car_motion** — Was duplicating packet building logic
+  (header/checksum/write). Now delegates to `_send_command()`.
+
+- **Fix constructor default** — `car_type=1` changed to `car_type=CARTYPE_ORBIBOT` (0x07).
+
+- **Clean up print() statements** — Moved informational prints behind `debug` flag,
+  removed debug-only prints from public methods.
+
+- **Comment cleanup** — Rewrote file header, replaced obvious comments with docstrings,
+  added units to getter methods.
 
 ### Improvements
 
