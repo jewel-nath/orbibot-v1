@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { useChat } from '@/hooks/useChat';
-import type { ChatMessage, ToolCallInfo, ChatMode } from '@/hooks/useChat';
+import type { ChatMessage, ToolCallInfo } from '@/hooks/useChat';
 import { cn } from '@/lib/utils';
 
 interface ChatPanelProps {
@@ -65,21 +65,21 @@ interface TestSummary {
 interface TestResult {
   pass?: boolean;
   verdict?: string;
-  error?: string;
   [key: string]: unknown;
 }
 
-type TestReport = Record<string, TestResult> & {
+interface TestReport {
   _summary?: TestSummary;
-  error?: string;
-};
+  _error?: string;
+  [key: string]: TestResult | TestSummary | string | undefined;
+}
 
 export function ChatPanel({ className }: ChatPanelProps) {
   const {
     messages, isLoading, error, connected,
     selectedProvider, mode,
     setSelectedProvider, setMode,
-    sendMessage, resetChat, clearMessages, checkConnection,
+    sendMessage, resetChat, checkConnection,
   } = useChat();
   const [input, setInput] = useState('');
   const [providers, setProviders] = useState<string[]>([]);
@@ -130,9 +130,9 @@ export function ChatPanel({ className }: ChatPanelProps) {
     try {
       const resp = await fetch(`${CHAT_API_BASE}/api/run_test_suite`, { method: 'POST' });
       const data = await resp.json();
-      setTestReport(data.status === 'ok' ? data.report : { error: data.message || 'Test suite failed' });
+      setTestReport(data.status === 'ok' ? data.report : { _error: data.message || 'Test suite failed' });
     } catch (e) {
-      setTestReport({ error: String(e) });
+      setTestReport({ _error: String(e) });
     } finally {
       setTestRunning(false);
     }
@@ -224,23 +224,26 @@ export function ChatPanel({ className }: ChatPanelProps) {
             </button>
           </div>
 
-          {testReport && !testReport.error && (
+          {testReport && !testReport._error && (
             <div className="space-y-1 max-h-40 overflow-y-auto">
               {Object.entries(testReport)
                 .filter(([key]) => !key.startsWith('_'))
-                .map(([name, result]) => (
-                  <div key={name} className="flex items-center justify-between text-xs border rounded px-2 py-1 bg-background">
-                    <span className="capitalize">{name.replace(/_/g, ' ')}</span>
-                    <div className="flex items-center gap-1">
-                      {result.pass
-                        ? <CheckCircle2 className="w-3 h-3 text-green-500" />
-                        : <XCircle className="w-3 h-3 text-red-500" />}
-                      <span className={result.pass ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
-                        {result.pass ? 'PASS' : 'FAIL'}
-                      </span>
+                .map(([name, rawResult]) => {
+                  const result = rawResult as TestResult;
+                  return (
+                    <div key={name} className="flex items-center justify-between text-xs border rounded px-2 py-1 bg-background">
+                      <span className="capitalize">{name.replace(/_/g, ' ')}</span>
+                      <div className="flex items-center gap-1">
+                        {result.pass
+                          ? <CheckCircle2 className="w-3 h-3 text-green-500" />
+                          : <XCircle className="w-3 h-3 text-red-500" />}
+                        <span className={result.pass ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                          {result.pass ? 'PASS' : 'FAIL'}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               {testReport._summary && (
                 <div className="flex items-center justify-between text-xs pt-1 border-t mt-1">
                   <span className="text-muted-foreground">
@@ -258,9 +261,9 @@ export function ChatPanel({ className }: ChatPanelProps) {
             </div>
           )}
 
-          {testReport?.error && (
+          {testReport?._error && (
             <div className="text-xs text-destructive p-2 bg-destructive/10 rounded">
-              Error: {String(testReport.error)}
+              Error: {String(testReport._error)}
             </div>
           )}
         </div>
