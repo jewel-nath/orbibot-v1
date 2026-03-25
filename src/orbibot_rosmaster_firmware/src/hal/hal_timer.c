@@ -171,8 +171,7 @@ static void hal_timer_encoder_init_tim2(void)
     // Clear update flag (we poll CNT directly, no interrupt needed)
     TIM_ClearFlag(TIM2, TIM_FLAG_Update);
 
-    // CRITICAL: Set counter to midpoint for bidirectional counting
-    TIM_SetCounter(TIM2, 0);
+    // Set counter to midpoint for bidirectional counting
     TIM2->CNT = ENCODER_MIDPOINT;
 
     // Enable timer
@@ -217,8 +216,6 @@ static void hal_timer_encoder_init_tim3(void)
     // Clear update flag (don't enable interrupt - we poll CNT directly)
     TIM_ClearFlag(TIM3, TIM_FLAG_Update);
 
-    // CRITICAL: Set counter to midpoint
-    TIM_SetCounter(TIM3, 0);
     TIM3->CNT = ENCODER_MIDPOINT;
 
     // Enable timer
@@ -263,8 +260,6 @@ static void hal_timer_encoder_init_tim4(void)
     // Clear update flag (don't enable interrupt - we poll CNT directly)
     TIM_ClearFlag(TIM4, TIM_FLAG_Update);
 
-    // CRITICAL: Set counter to midpoint
-    TIM_SetCounter(TIM4, 0);
     TIM4->CNT = ENCODER_MIDPOINT;
 
     // Enable timer
@@ -309,8 +304,6 @@ static void hal_timer_encoder_init_tim5(void)
     // Clear update flag (don't enable interrupt - we poll CNT directly)
     TIM_ClearFlag(TIM5, TIM_FLAG_Update);
 
-    // CRITICAL: Set counter to midpoint
-    TIM_SetCounter(TIM5, 0);
     TIM5->CNT = ENCODER_MIDPOINT;
 
     // Enable timer
@@ -383,9 +376,12 @@ void hal_timer_set_motor_pwm(uint8_t motor, int16_t pwm)
     }
 }
 
+/* Encoder timer mapping: motor index → hardware timer.
+ * M1=TIM2, M2=TIM4, M3=TIM5, M4=TIM3 (ROSMaster V3.0 wiring). */
+static TIM_TypeDef * const encoder_tim[4] = { TIM2, TIM4, TIM5, TIM3 };
+
 /* Previous counter values for atomic delta calculation.
- * By tracking the previous count and using 16-bit modular subtraction,
- * we avoid the non-atomic read-then-reset pattern entirely. */
+ * 16-bit modular subtraction avoids the non-atomic read-then-reset pattern. */
 static uint16_t encoder_prev_cnt[4] = {
     ENCODER_MIDPOINT, ENCODER_MIDPOINT, ENCODER_MIDPOINT, ENCODER_MIDPOINT
 };
@@ -393,18 +389,12 @@ static uint16_t encoder_prev_cnt[4] = {
 /**
  * @brief Read encoder delta (single read, no reset — fully atomic)
  *
- * Uses subtraction from previous count instead of midpoint-reset.
  * 16-bit unsigned subtraction handles hardware counter wrap correctly
  * as long as |delta| < 32768 per read (always true at 100Hz).
- *
- * @param encoder Encoder index (0-3)
- * @return Delta count since last read
  */
 int16_t hal_timer_read_encoder_delta(uint8_t encoder)
 {
     if (encoder >= 4) return 0;
-
-    static TIM_TypeDef * const encoder_tim[4] = { TIM2, TIM4, TIM5, TIM3 };
 
     uint16_t current = (uint16_t)encoder_tim[encoder]->CNT;
     int16_t delta = (int16_t)(current - encoder_prev_cnt[encoder]);
@@ -413,16 +403,11 @@ int16_t hal_timer_read_encoder_delta(uint8_t encoder)
 }
 
 /**
- * @brief Get raw encoder count (for compatibility)
- *
- * NOTE: For velocity calculation, use hal_timer_read_encoder_delta() instead.
- * This function returns raw counter value without reset.
+ * @brief Get raw encoder count relative to midpoint
  */
 int32_t hal_timer_get_encoder_count(uint8_t encoder)
 {
     if (encoder >= 4) return 0;
-
-    static TIM_TypeDef * const encoder_tim[4] = { TIM2, TIM4, TIM5, TIM3 };
     return (int32_t)((int16_t)encoder_tim[encoder]->CNT - ENCODER_MIDPOINT);
 }
 
@@ -432,9 +417,6 @@ int32_t hal_timer_get_encoder_count(uint8_t encoder)
 void hal_timer_reset_encoder(uint8_t encoder)
 {
     if (encoder >= 4) return;
-
-    static TIM_TypeDef * const encoder_tim[4] = { TIM2, TIM4, TIM5, TIM3 };
-
     encoder_tim[encoder]->CNT = ENCODER_MIDPOINT;
     encoder_prev_cnt[encoder] = ENCODER_MIDPOINT;
 }
