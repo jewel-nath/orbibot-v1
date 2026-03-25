@@ -3,7 +3,6 @@
  * @brief ADC Hardware Abstraction Layer Implementation
  *
  * Provides ADC functionality for battery voltage monitoring.
- * Provides ADC functionality for battery voltage monitoring.
  * Uses ADC1 Channel 14 (PC4) with voltage divider (~4.03 ratio).
  *
  * Battery voltage calculation:

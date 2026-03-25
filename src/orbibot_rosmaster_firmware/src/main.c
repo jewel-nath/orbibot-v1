@@ -273,7 +273,7 @@ static void driverInit(void)
     {
         BOOT_PRINTF("[OK] OLED initialized successfully\n");
         oled_clear();
-        oled_print(0, 0, "OrbiBot v1.0");
+        oled_print(0, 0, "OrbiBot v2.0");
         oled_print(0, 1, "Initializing...");
         oled_update();
     }
@@ -455,12 +455,6 @@ int main(void)
     return 0;
 }
 
-/**
- * @brief SysTick interrupt handler (called by FreeRTOS)
- *
- * This is called every 1ms by the FreeRTOS tick interrupt.
- * We use it to track system uptime.
- */
 /**
  * @brief SVC Handler - Required by FreeRTOS for task switching
  */

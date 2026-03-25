@@ -86,7 +86,7 @@ void oled_show_status(const char *line1, const char *line2)
  */
 void oled_show_init(void)
 {
-    oled_show_status("Initializing...", "OrbiBot v1.0");
+    oled_show_status("Initializing...", "OrbiBot v2.0");
 }
 
 /**
@@ -94,7 +94,7 @@ void oled_show_init(void)
  */
 void oled_show_ready(void)
 {
-    oled_show_status("OrbiBot v1.0", "Ready!");
+    oled_show_status("OrbiBot v2.0", "Ready!");
 }
 
 /**
