@@ -63,7 +63,7 @@
 │  │                    │                                             │ │   │
 │  │                    └─────────────────────────────────────────────┘ │   │
 │  │                                                                   ▼    │
-│  │                      /odometry/filtered (25Hz) + odom→base_footprint TF│
+│  │                      /odometry/filtered (20Hz) + odom→base_footprint TF│
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                    │                                         │
 │                                    ▼                                         │
@@ -79,7 +79,7 @@
 │                                    ▼                                         │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
 │  │                 Nav2 Navigation Stack                               │   │
-│  │   • Path planning (SMAC Planner)                                    │   │
+│  │   • Path planning (NavfnPlanner with A*)                             │   │
 │  │   • MPPI controller (Model Predictive Path Integral)                │   │
 │  │   • Costmaps (obstacle avoidance)                                   │   │
 │  │   • Behavior trees (NavigateToPose, NavigateThroughPoses)           │   │
@@ -305,7 +305,7 @@ screen /dev/motordriver 115200  # Ctrl+A K to quit
 ros2 topic hz /scan              # Should be ~10Hz
 ros2 topic hz /odom              # Should be ~20Hz
 ros2 topic hz /imu/data_filtered # Should be ~50Hz
-ros2 topic hz /odometry/filtered # Should be ~25Hz
+ros2 topic hz /odometry/filtered # Should be ~20Hz
 
 # Inspect data
 ros2 topic echo /odom --once
@@ -372,7 +372,7 @@ ros2 launch orbibot_bringup robot.launch.py 2>&1 | tee robot.log
 The EKF is configured with `odom0_config` positions=false. This prevents wheel encoder position drift from accumulating in the EKF state. Only velocities are fused, with IMU providing absolute yaw correction.
 
 ### Why Madgwick + EKF (not direct IMU fusion)?
-Madgwick filter runs at 50Hz on raw IMU data to produce drift-free orientation using magnetometer. EKF then fuses this with wheel odometry at 25Hz. This two-stage approach provides better yaw accuracy than EKF alone.
+Madgwick filter runs at 50Hz on raw IMU data to produce drift-free orientation using magnetometer. EKF then fuses this with wheel odometry at 20Hz. This two-stage approach provides better yaw accuracy than EKF alone.
 
 ### Why slam_toolbox (not gmapping)?
 slam_toolbox provides:

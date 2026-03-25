@@ -16,7 +16,7 @@ This file complements the root `CLAUDE.md` (workflow rules, coding standards, bu
 | `orbibot_slam` | ament_python | Working | slam_toolbox mapping + localization |
 | `orbibot_bringup` | ament_python | Working | System-level launch orchestration |
 | `orbibot_webgui` | ament_python | Active | Web-based GUI (in development) |
-| `orbibot_navigation` | ament_cmake | Planned | Nav2 params, launch, maps |
+| `orbibot_navigation` | ament_cmake | Working | Nav2 params, launch, maps |
 | `orbibot_exploration` | ament_python | Planned | Custom BFS frontier explorer |
 | `orbibot_agent` | ament_python | Working | Unified AI Agent (multi-LLM, MCP, CLI) |
 
@@ -35,7 +35,7 @@ This file complements the root `CLAUDE.md` (workflow rules, coding standards, bu
 
 - **Base frame**: Always use `base_footprint` (not `base_link`) in all configs
 - **TF chain**: `map → odom → base_footprint → base_link → sensor_links`
-- **Odom topic**: `/odometry/filtered` (EKF output) for Nav2, raw `/odom` from control_manager
+- **Odom topic**: `/odometry/filtered` (EKF output) for Nav2, raw `/odom` from hardware_node
 - **Launch messages**: `[PackageName] Description — key: value` format
 - **Single-package launches**: Each package only launches its own nodes. Cross-package orchestration lives in `orbibot_bringup`
 - **Maintainer**: Jewel Nath <jewel.nath@orbitax.com>
