@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-OrbiBot Simulation Mapping Launch
-SLAM mapping + Nav2 on top of the Gazebo simulation.
+OrbiBot Simulation — SLAM Mapping
+SLAM mapping + Nav2 on top of the running Gazebo simulation.
 
-Prerequisites (run first in a separate terminal):
+Prerequisites (run first):
     ros2 launch orbibot_gazebo sim.launch.py
 
 Usage:
-    ros2 launch orbibot_bringup sim_mapping.launch.py
+    ros2 launch orbibot_gazebo sim_mapping.launch.py
 
 Then drive with teleop:
     ros2 launch orbibot_teleop controller.launch.py use_sim_time:=true
@@ -31,23 +31,14 @@ def generate_launch_description():
     pkg_gazebo = get_package_share_directory('orbibot_gazebo')
     pkg_navigation = get_package_share_directory('orbibot_navigation')
 
-    # Use sim-specific slam params (use_sim_time: true)
     slam_params_sim = os.path.join(pkg_gazebo, 'config', 'slam_params_sim.yaml')
-
-    # Nav2 params — override use_sim_time via launch argument
-    nav_params_file = os.path.join(pkg_navigation, 'config', 'nav2_params.yaml')
 
     declare_nav_params_arg = DeclareLaunchArgument(
         'nav_params_file',
-        default_value=nav_params_file,
+        default_value=os.path.join(pkg_navigation, 'config', 'nav2_params.yaml'),
         description='Nav2 parameters file',
     )
 
-    log_startup = LogInfo(
-        msg='[Sim] SLAM mapping + Nav2 started in simulation mode (use_sim_time=true)',
-    )
-
-    # SLAM — use sim-specific params file (has use_sim_time: true)
     slam_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([
             PathJoinSubstitution([
@@ -61,7 +52,6 @@ def generate_launch_description():
         }.items(),
     )
 
-    # Nav2 — pass use_sim_time:=true as launch argument
     nav2_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([
             PathJoinSubstitution([
@@ -78,7 +68,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         declare_nav_params_arg,
-        log_startup,
+        LogInfo(msg='[Sim] SLAM mapping + Nav2 started (use_sim_time=true)'),
         slam_launch,
         nav2_launch,
     ])

@@ -19,6 +19,12 @@
   <depend>ros_gz_bridge</depend>
   <depend>ros_gz_interfaces</depend>
 
+  <!-- Simulation launch orchestration -->
+  <depend>orbibot_slam</depend>
+  <depend>orbibot_navigation</depend>
+  <depend>orbibot_exploration</depend>
+  <depend>nav2_bringup</depend>
+
   <!-- ROS packages used in bridge -->
   <depend>geometry_msgs</depend>
   <depend>nav_msgs</depend>
