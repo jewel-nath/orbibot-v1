@@ -28,6 +28,12 @@ from ament_index_python.packages import get_package_share_directory
 def generate_launch_description():
     slam_pkg_dir = get_package_share_directory('orbibot_slam')
 
+    use_sim_time_arg = DeclareLaunchArgument(
+        'use_sim_time',
+        default_value='false',
+        description='Use simulation clock (set true when running with Gazebo)',
+    )
+
     autostart_arg = DeclareLaunchArgument(
         'autostart',
         default_value='true',
@@ -52,6 +58,7 @@ def generate_launch_description():
         description='Log level for SLAM node'
     )
 
+    use_sim_time = LaunchConfiguration('use_sim_time')
     autostart = LaunchConfiguration('autostart')
     use_lifecycle_manager = LaunchConfiguration('use_lifecycle_manager')
     slam_params_file = LaunchConfiguration('slam_params_file')
@@ -65,7 +72,7 @@ def generate_launch_description():
         name='slam_toolbox',
         namespace='',
         output='screen',
-        parameters=[slam_params_file],
+        parameters=[slam_params_file, {'use_sim_time': use_sim_time}],
         arguments=['--ros-args', '--log-level', log_level],
     )
 
@@ -103,6 +110,7 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        use_sim_time_arg,
         autostart_arg,
         use_lifecycle_manager_arg,
         slam_params_file_arg,

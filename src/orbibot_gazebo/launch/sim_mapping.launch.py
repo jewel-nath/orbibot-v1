@@ -28,10 +28,7 @@ from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
-    pkg_gazebo = get_package_share_directory('orbibot_gazebo')
     pkg_navigation = get_package_share_directory('orbibot_navigation')
-
-    slam_params_sim = os.path.join(pkg_gazebo, 'config', 'slam_params_sim.yaml')
 
     declare_nav_params_arg = DeclareLaunchArgument(
         'nav_params_file',
@@ -48,7 +45,7 @@ def generate_launch_description():
             ])
         ]),
         launch_arguments={
-            'slam_params_file': slam_params_sim,
+            'use_sim_time': 'true',
         }.items(),
     )
 
