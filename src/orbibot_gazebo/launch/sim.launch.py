@@ -26,11 +26,12 @@ from launch.actions import (
     DeclareLaunchArgument,
     IncludeLaunchDescription,
     LogInfo,
+    SetEnvironmentVariable,
     TimerAction,
 )
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import Command, EnvironmentVariable, LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
@@ -39,6 +40,10 @@ from launch_ros.substitutions import FindPackageShare
 def generate_launch_description():
     pkg_gazebo = get_package_share_directory('orbibot_gazebo')
     pkg_description = get_package_share_directory('orbibot_description')
+
+    # GZ_SIM_RESOURCE_PATH: parent of orbibot_description share dir so Gazebo
+    # resolves  model://orbibot_description/meshes/*.stl  → package STL files.
+    gz_resource_path = os.path.dirname(pkg_description)
 
     # -----------------------------------------------------------------
     # Launch arguments
@@ -164,7 +169,14 @@ def generate_launch_description():
         output='screen',
     )
 
+    # Append gz_resource_path to GZ_SIM_RESOURCE_PATH (keep any existing paths)
+    set_gz_resource_path = SetEnvironmentVariable(
+        name='GZ_SIM_RESOURCE_PATH',
+        value=[gz_resource_path, ':', EnvironmentVariable('GZ_SIM_RESOURCE_PATH', default_value='')],
+    )
+
     return LaunchDescription([
+        set_gz_resource_path,
         declare_world_arg,
         declare_use_rviz_arg,
         declare_gz_headless_arg,
