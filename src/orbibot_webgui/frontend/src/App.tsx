@@ -12,11 +12,7 @@ import { PathProvider, usePath } from '@/contexts/PathContext';
 import { Header } from '@/components/layout/Header';
 import { Dashboard, DashboardLeft, DashboardCenter, DashboardRight } from '@/components/layout/Dashboard';
 import { MobileJoystick } from '@/features/control/MobileJoystick';
-import { SystemInfo } from '@/features/telemetry/SystemInfo';
-import { SafetyStatusWidget } from '@/features/telemetry/SafetyStatusWidget';
-import { Encoders } from '@/features/telemetry/Encoders';
-import { OdometryDisplay } from '@/features/telemetry/OdometryDisplay';
-import { IMUWidget } from '@/features/telemetry/IMUWidget';
+import { TelemetryPanel } from '@/features/telemetry/TelemetryPanel';
 import { UnifiedViewport } from '@/components/layout/UnifiedViewport';
 import { MissionControl } from '@/components/layout/MissionControl';
 import { DiagnosticsPage } from '@/pages/DiagnosticsPage';
@@ -74,11 +70,7 @@ function AppContent() {
         <ErrorBoundary>
           <Dashboard>
             <DashboardLeft>
-              <SafetyStatusWidget />
-              <SystemInfo compact />
-              <Encoders />
-              <OdometryDisplay />
-              <IMUWidget />
+              <TelemetryPanel />
             </DashboardLeft>
             <DashboardCenter>
               <UnifiedViewport />

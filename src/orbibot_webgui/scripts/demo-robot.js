@@ -213,10 +213,22 @@ wss.on('connection', function connection(ws) {
         }
     }, 2000);
 
-    // 6. IMU Data
+    // 6. IMU Data — slow yaw rotation + gentle roll/pitch noise
+    let imuYaw = 0;
     const imuInterval = setInterval(() => {
         if (subscriptions.has('/imu/data')) {
-            const t = Date.now() / 1000;
+            imuYaw += 0.02; // ~1.1 deg/s rotation for demo
+
+            const roll  = Math.sin(Date.now() / 4000) * 3.0;   // ±3° roll
+            const pitch = Math.cos(Date.now() / 5000) * 2.0;   // ±2° pitch
+
+            // Convert roll/pitch/yaw to quaternion
+            const cr = Math.cos(roll  * Math.PI / 360);
+            const sr = Math.sin(roll  * Math.PI / 360);
+            const cp = Math.cos(pitch * Math.PI / 360);
+            const sp = Math.sin(pitch * Math.PI / 360);
+            const cy2 = Math.cos(imuYaw / 2);
+            const sy2 = Math.sin(imuYaw / 2);
 
             const msg = {
                 op: 'publish',
@@ -228,18 +240,109 @@ wss.on('connection', function connection(ws) {
                         frame_id: 'imu_link'
                     },
                     orientation: {
-                        x: 0,
-                        y: 0,
-                        z: Math.sin(t * 0.5),
-                        w: Math.cos(t * 0.5)
+                        x: sr * cp * cy2 - cr * sp * sy2,
+                        y: cr * sp * cy2 + sr * cp * sy2,
+                        z: cr * cp * sy2 - sr * sp * cy2,
+                        w: cr * cp * cy2 + sr * sp * sy2,
                     },
-                    angular_velocity: { x: 0, y: 0, z: 0.5 },
-                    linear_acceleration: { x: 0, y: 0, z: 9.81 }
+                    angular_velocity: { x: 0.01, y: 0.01, z: 0.02 },
+                    linear_acceleration: { x: 0.05, y: 0.02, z: 9.81 }
                 }
             };
             ws.send(JSON.stringify(msg));
         }
     }, 100);
+
+    // 7. Safety Status
+    const safetyInterval = setInterval(() => {
+        if (subscriptions.has('/orbibot/safety_status')) {
+            const msg = {
+                op: 'publish',
+                topic: '/orbibot/safety_status',
+                type: 'orbibot_msgs/SafetyStatus',
+                msg: {
+                    header: {
+                        stamp: { sec: Math.floor(Date.now() / 1000), nanosec: (Date.now() % 1000) * 1000000 },
+                        frame_id: 'base_link'
+                    },
+                    emergency_stop: false,
+                    low_battery: false,
+                    hardware_fault: false,
+                    velocity_limit: false,
+                    temperature_limit: false,
+                    motors_disabled: false,
+                    cmd_timeout: false,
+                    fault_code: 0
+                }
+            };
+            ws.send(JSON.stringify(msg));
+        }
+    }, 1000);
+
+    // 8. Encoders — slowly incrementing counts (FL/BL/FR/BR = M1/M2/M3/M4)
+    let encoderCounts = [0, 0, 0, 0];
+    const encoderInterval = setInterval(() => {
+        if (subscriptions.has('/orbibot/encoders')) {
+            // Simulate gentle forward motion: all wheels increment at same rate
+            const tick = 3 + Math.round(Math.random() * 2);
+            encoderCounts = encoderCounts.map(c => c + tick);
+
+            const msg = {
+                op: 'publish',
+                topic: '/orbibot/encoders',
+                type: 'std_msgs/Int32MultiArray',
+                msg: {
+                    layout: { dim: [], data_offset: 0 },
+                    data: encoderCounts
+                }
+            };
+            ws.send(JSON.stringify(msg));
+        }
+    }, 200);
+
+    // 9. Odometry with gentle simulated motion (not just noise)
+    // Override the basic odom interval with one that includes velocity
+    let demoVx = 0;
+    let demoVy = 0;
+    let demoTime = 0;
+    const motionInterval = setInterval(() => {
+        if (subscriptions.has('/odometry/filtered')) {
+            demoTime += 0.05;
+            // Gentle figure-8-ish path
+            demoVx = Math.sin(demoTime * 0.4) * 0.25;
+            demoVy = Math.sin(demoTime * 0.2) * 0.10;
+            x += demoVx * 0.05;
+            y += demoVy * 0.05;
+
+            const msg = {
+                op: 'publish',
+                topic: '/odometry/filtered',
+                type: 'nav_msgs/Odometry',
+                msg: {
+                    header: {
+                        stamp: { sec: Math.floor(Date.now() / 1000), nanosec: (Date.now() % 1000) * 1000000 },
+                        frame_id: 'odom'
+                    },
+                    child_frame_id: 'base_footprint',
+                    pose: {
+                        pose: {
+                            position: { x: x, y: y, z: 0 },
+                            orientation: { x: 0, y: 0, z: Math.sin(imuYaw / 2), w: Math.cos(imuYaw / 2) }
+                        },
+                        covariance: new Array(36).fill(0)
+                    },
+                    twist: {
+                        twist: {
+                            linear:  { x: demoVx, y: demoVy, z: 0 },
+                            angular: { x: 0, y: 0, z: 0.02 }
+                        },
+                        covariance: new Array(36).fill(0)
+                    }
+                }
+            };
+            ws.send(JSON.stringify(msg));
+        }
+    }, 50);
 
     ws.on('close', function close() {
         console.log('Client disconnected');
@@ -249,5 +352,8 @@ wss.on('connection', function connection(ws) {
         clearInterval(scanInterval);
         clearInterval(mapInterval);
         clearInterval(imuInterval);
+        clearInterval(safetyInterval);
+        clearInterval(encoderInterval);
+        clearInterval(motionInterval);
     });
 });
