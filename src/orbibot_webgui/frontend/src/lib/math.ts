@@ -44,3 +44,12 @@ export function quaternionToEuler(q: Quaternion): EulerAngles {
     yaw: yaw * toDeg,
   };
 }
+
+/**
+ * Extract yaw (z-axis rotation) from quaternion in radians.
+ */
+export function quaternionToYaw(q: Quaternion): number {
+  const siny_cosp = 2 * (q.w * q.z + q.x * q.y);
+  const cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z);
+  return Math.atan2(siny_cosp, cosy_cosp);
+}

@@ -111,6 +111,37 @@ export interface LaserScan {
   intensities: number[];  // intensity values
 }
 
+// sensor_msgs/JointState
+export interface JointState {
+  header: Header;
+  name: string[];
+  position: number[];
+  velocity: number[];
+  effort: number[];
+}
+
+// sensor_msgs/MagneticField
+export interface MagneticField {
+  header: Header;
+  magnetic_field: Vector3;
+  magnetic_field_covariance: number[]; // 3x3 matrix as 9-element array
+}
+
+// diagnostic_msgs/DiagnosticStatus
+export interface DiagnosticStatus {
+  level: number; // 0=OK, 1=WARN, 2=ERROR, 3=STALE
+  name: string;
+  message: string;
+  hardware_id: string;
+  values: { key: string; value: string }[];
+}
+
+// diagnostic_msgs/DiagnosticArray
+export interface DiagnosticArray {
+  header: Header;
+  status: DiagnosticStatus[];
+}
+
 // ============================================================================
 // Custom OrbiBot Messages (orbibot_msgs)
 // ============================================================================

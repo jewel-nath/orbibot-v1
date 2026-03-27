@@ -26,6 +26,60 @@ wss.on('connection', function connection(ws) {
                 advertised.add(msg.topic);
             } else if (msg.op === 'publish') {
                 // console.log(`Client published to ${msg.topic}:`, msg.msg);
+            } else if (msg.op === 'call_service') {
+                // Handle service calls
+                if (msg.service === '/orbibot/get_firmware_version') {
+                    ws.send(JSON.stringify({
+                        op: 'service_response',
+                        id: msg.id,
+                        service: msg.service,
+                        values: { major: 2, minor: 1, version_string: 'v2.1.0-demo' },
+                        result: true,
+                    }));
+                } else if (msg.service === '/orbibot/reset_encoders') {
+                    encoderCounts = [0, 0, 0, 0];
+                    ws.send(JSON.stringify({
+                        op: 'service_response',
+                        id: msg.id,
+                        service: msg.service,
+                        values: { success: true, message: 'Encoders reset' },
+                        result: true,
+                    }));
+                } else if (msg.service === '/orbibot/reset_odometry') {
+                    x = 0; y = 0; theta = 0;
+                    ws.send(JSON.stringify({
+                        op: 'service_response',
+                        id: msg.id,
+                        service: msg.service,
+                        values: { success: true, message: 'Odometry reset' },
+                        result: true,
+                    }));
+                } else if (msg.service === '/orbibot/set_motor_enable') {
+                    ws.send(JSON.stringify({
+                        op: 'service_response',
+                        id: msg.id,
+                        service: msg.service,
+                        values: { success: true, message: 'Motors toggled' },
+                        result: true,
+                    }));
+                } else if (msg.service === '/orbibot/calibrate_imu') {
+                    ws.send(JSON.stringify({
+                        op: 'service_response',
+                        id: msg.id,
+                        service: msg.service,
+                        values: { success: true, message: 'IMU calibrated' },
+                        result: true,
+                    }));
+                } else {
+                    // Generic success for unknown services
+                    ws.send(JSON.stringify({
+                        op: 'service_response',
+                        id: msg.id,
+                        service: msg.service,
+                        values: { success: true },
+                        result: true,
+                    }));
+                }
             }
         } catch (e) {
             console.error('Error parsing message:', e);
@@ -344,6 +398,118 @@ wss.on('connection', function connection(ws) {
         }
     }, 50);
 
+    // 10. Joint States — per-wheel positions and velocities
+    let jointPositions = [0, 0, 0, 0];
+    const jointStatesInterval = setInterval(() => {
+        if (subscriptions.has('/joint_states')) {
+            const velocities = [
+                Math.sin(demoTime * 0.5) * 2.0 + (Math.random() - 0.5) * 0.3,
+                Math.sin(demoTime * 0.5) * 2.0 + (Math.random() - 0.5) * 0.3,
+                Math.sin(demoTime * 0.5) * 2.0 + (Math.random() - 0.5) * 0.3,
+                Math.sin(demoTime * 0.5) * 2.0 + (Math.random() - 0.5) * 0.3,
+            ];
+            jointPositions = jointPositions.map((p, i) => p + velocities[i] * 0.02);
+
+            const msg = {
+                op: 'publish',
+                topic: '/joint_states',
+                type: 'sensor_msgs/JointState',
+                msg: {
+                    header: {
+                        stamp: { sec: Math.floor(Date.now() / 1000), nanosec: (Date.now() % 1000) * 1000000 },
+                        frame_id: ''
+                    },
+                    name: ['front_left_wheel_joint', 'back_left_wheel_joint', 'front_right_wheel_joint', 'back_right_wheel_joint'],
+                    position: jointPositions,
+                    velocity: velocities,
+                    effort: [0, 0, 0, 0],
+                }
+            };
+            ws.send(JSON.stringify(msg));
+        }
+    }, 50);
+
+    // 11. Raw IMU Data — gyro + accel with noise
+    const imuRawInterval = setInterval(() => {
+        if (subscriptions.has('/imu/data_raw')) {
+            const msg = {
+                op: 'publish',
+                topic: '/imu/data_raw',
+                type: 'sensor_msgs/Imu',
+                msg: {
+                    header: {
+                        stamp: { sec: Math.floor(Date.now() / 1000), nanosec: (Date.now() % 1000) * 1000000 },
+                        frame_id: 'imu_link'
+                    },
+                    orientation: { x: 0, y: 0, z: 0, w: 1 },
+                    orientation_covariance: [-1, 0, 0, 0, 0, 0, 0, 0, 0],
+                    angular_velocity: {
+                        x: 0.005 + (Math.random() - 0.5) * 0.02,
+                        y: -0.003 + (Math.random() - 0.5) * 0.02,
+                        z: 0.02 + (Math.random() - 0.5) * 0.01,
+                    },
+                    angular_velocity_covariance: new Array(9).fill(0),
+                    linear_acceleration: {
+                        x: 0.05 + (Math.random() - 0.5) * 0.3,
+                        y: 0.02 + (Math.random() - 0.5) * 0.2,
+                        z: 9.81 + (Math.random() - 0.5) * 0.1,
+                    },
+                    linear_acceleration_covariance: new Array(9).fill(0),
+                }
+            };
+            ws.send(JSON.stringify(msg));
+        }
+    }, 50);
+
+    // 12. Magnetometer — offset circle pattern (simulating uncalibrated hard-iron)
+    let magAngle = 0;
+    const magInterval = setInterval(() => {
+        if (subscriptions.has('/imu/mag')) {
+            magAngle += 0.05;
+            const msg = {
+                op: 'publish',
+                topic: '/imu/mag',
+                type: 'sensor_msgs/MagneticField',
+                msg: {
+                    header: {
+                        stamp: { sec: Math.floor(Date.now() / 1000), nanosec: (Date.now() % 1000) * 1000000 },
+                        frame_id: 'imu_link'
+                    },
+                    magnetic_field: {
+                        x: 30 + 20 * Math.cos(magAngle) + (Math.random() - 0.5) * 3,
+                        y: -15 + 20 * Math.sin(magAngle) + (Math.random() - 0.5) * 3,
+                        z: 45 + (Math.random() - 0.5) * 2,
+                    },
+                    magnetic_field_covariance: new Array(9).fill(0),
+                }
+            };
+            ws.send(JSON.stringify(msg));
+        }
+    }, 100);
+
+    // 13. Diagnostics Array
+    const diagnosticsInterval = setInterval(() => {
+        if (subscriptions.has('/diagnostics')) {
+            const msg = {
+                op: 'publish',
+                topic: '/diagnostics',
+                type: 'diagnostic_msgs/DiagnosticArray',
+                msg: {
+                    header: {
+                        stamp: { sec: Math.floor(Date.now() / 1000), nanosec: (Date.now() % 1000) * 1000000 },
+                        frame_id: ''
+                    },
+                    status: [
+                        { level: 0, name: 'orbibot_hardware: Motors', message: 'OK', hardware_id: 'orbibot_hw', values: [{ key: 'motors_enabled', value: 'true' }] },
+                        { level: 0, name: 'orbibot_hardware: IMU', message: 'OK', hardware_id: 'orbibot_hw', values: [{ key: 'imu_rate', value: '50 Hz' }] },
+                        { level: 0, name: 'orbibot_hardware: Battery', message: 'OK', hardware_id: 'orbibot_hw', values: [{ key: 'voltage', value: '12.5V' }] },
+                    ],
+                }
+            };
+            ws.send(JSON.stringify(msg));
+        }
+    }, 1000);
+
     ws.on('close', function close() {
         console.log('Client disconnected');
         clearInterval(odomInterval);
@@ -355,5 +521,9 @@ wss.on('connection', function connection(ws) {
         clearInterval(safetyInterval);
         clearInterval(encoderInterval);
         clearInterval(motionInterval);
+        clearInterval(jointStatesInterval);
+        clearInterval(imuRawInterval);
+        clearInterval(magInterval);
+        clearInterval(diagnosticsInterval);
     });
 });
