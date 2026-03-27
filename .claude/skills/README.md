@@ -117,15 +117,56 @@ Skills in this folder are auto-discovered by Cursor. Each skill is a single `SKI
 | `robotics_testing` | Test pyramid, launch_testing, mock hardware, CI/CD |
 | `docker_ros2_development` | Docker, docker-compose, DDS in containers, GPU passthrough |
 
+### Simulation & AI
+
+| Skill | Purpose |
+|-------|---------|
+| `gazebo` | Gazebo Classic/Sim, SDF worlds, physics, sensor models, ROS2 integration |
+| `sim_to_real` | Domain transfer, reality gap, domain adaptation, system identification |
+| `ros2_control` | ros2_control hardware abstraction, controllers, transmissions, joint limits |
+| `edge_ml_deployment` | TensorRT, ONNX, quantization, edge inference on RPi/Jetson |
+| `learning_robotics` | Imitation learning, behavior cloning, DAgger, RL, VLA models |
+
+## Quick Reference
+
+| You want to…                    | Use skill(s) |
+|---------------------------------|--------------|
+| Add a ROS2 node / service       | `ros2_node_creation`, `ros2_service_action` |
+| Compose launch files             | `ros2_launch_config`, `robot_bringup` |
+| Work on Nav2 / costmaps          | `nav2`, `path_planning` |
+| Camera / LiDAR / perception     | `robot_perception`, `camera_vision`, `lidar_pointcloud` |
+| SLAM / EKF / localization        | `sensor_fusion_slam` |
+| Safety / watchdogs / security   | `safety_systems`, `robotics_security` |
+| Testing                         | `ros2_testing`, `robotics_testing` |
+| Web API / dashboard              | `ros2_web_integration` |
+| Docker for ROS2                 | `docker_ros2_development` |
+| STM32 / firmware / serial       | `microcontrollers`, `serial_can_protocols` |
+| Hardware control framework      | `ros2_control` |
+| Simulation / Gazebo             | `gazebo`, `sim_to_real` |
+| AI / ML on robot                | `edge_ml_deployment`, `learning_robotics` |
+
 ## Cross-references
 
 - **Testing:** `ros2_testing` (Clean Arch structure) ↔ `robotics_testing` (pyramid, HIL, sim, CI/CD).
 - **Perception:** `robot_perception` (umbrella) uses `camera_vision` and `lidar_pointcloud` for modality-specific details.
 - **Safety vs security:** `safety_systems` = physical/functional safety; `robotics_security` = cyber hardening and SROS2.
+- **Simulation:** `gazebo` (sim setup) → `sim_to_real` (deploy to real hardware).
+- **AI pipeline:** `learning_robotics` (training) → `edge_ml_deployment` (inference on RPi).
+
+## Guides
+
+Multi-skill workflow guides are in `.claude/guides/`:
+
+| Guide | Description |
+|-------|-------------|
+| `hardware-integration.md` | End-to-end: wiring → first ROS2 topic |
+| `robot-bringup.md` | First power-on checklist for a new robot |
+| `sensor-calibration.md` | Complete calibration workflow (camera, LiDAR, IMU) |
+| `sim-to-real-pipeline.md` | Full sim-to-real transfer workflow |
 
 ## Source
 
 - ROS 2–focused skills (ros2_*) and rules live in this repo.
-- Robotics content came from `skills/robotics-agent-skills` (engineer-curated) and `skills/Agentic-Robotics`; copies were refactored here with consistent naming.
+- Robotics content sourced from `references/agentic-robotics` and refactored here with consistent snake_case naming.
 
-**From robotics-agent-skills, not added:** `ros1` (OrbiBot is ROS 2 only), `ros2` (broad ROS2 skill; we use focused ros2_* skills instead). If you need a single “ROS2 overview” skill, consider adding `skills/robotics-agent-skills/skills/ros2/SKILL.md` as `ros2_development` or similar.
+**Not added (not relevant to OrbiBot):** `moveit2`, `grasping-force-control` (no arm), `isaac-sim`, `mujoco` (too heavy for RPi dev), `ros1` (OrbiBot is ROS 2 only).

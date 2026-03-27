@@ -13,10 +13,10 @@
 
 ## Environment
 
-| Action             | Command                     | Description                  |
-| ------------------ | --------------------------- | ---------------------------- | ------------------------------- |
-| **Source Overlay** | `source install/setup.bash` | Source the workspace overlay |
-| **Check Env**      | `printenv                   | grep ROS`                    | Check ROS environment variables |
+| Action             | Command                       | Description                     |
+| ------------------ | ----------------------------- | ------------------------------- |
+| **Source Overlay** | `source install/setup.bash`   | Source the workspace overlay    |
+| **Check Env**      | `printenv \| grep ROS`        | Check ROS environment variables |
 
 ## Introspection (ros2)
 

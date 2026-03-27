@@ -132,6 +132,23 @@ Skills in `.claude/skills/` are auto-discovered. All names use **snake_case**. S
 | `ros2_web_integration` | FastAPI/Flask bridges, WebSocket, MJPEG, REST APIs |
 | `robotics_testing` | Test pyramid, launch_testing, mock hardware, CI/CD |
 | `docker_ros2_development` | Docker, docker-compose, DDS in containers, GPU passthrough |
+| **Simulation & AI** | |
+| `gazebo` | Gazebo Classic/Sim, SDF worlds, physics, sensor models, ROS2 integration |
+| `sim_to_real` | Domain transfer, reality gap, domain adaptation, system identification |
+| `ros2_control` | ros2_control hardware abstraction, controllers, transmissions, joint limits |
+| `edge_ml_deployment` | TensorRT, ONNX, quantization, edge inference on RPi/Jetson |
+| `learning_robotics` | Imitation learning, behavior cloning, DAgger, RL, VLA models |
+
+## Workflow Guides
+
+Multi-skill workflow guides are in `.claude/guides/`:
+
+| Guide | Description |
+|-------|-------------|
+| `hardware-integration.md` | End-to-end: wiring → first ROS2 topic (4-8h checklist) |
+| `robot-bringup.md` | First power-on checklist for a new robot platform |
+| `sensor-calibration.md` | Complete calibration workflow (camera, LiDAR, IMU) |
+| `sim-to-real-pipeline.md` | Full simulation → physical robot transfer workflow |
 
 ## Deprecated Packages
 
