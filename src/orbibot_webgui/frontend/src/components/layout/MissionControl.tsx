@@ -30,21 +30,21 @@ export function MissionControl() {
                     </TabsList>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-3">
-                    <TabsContent value="patrol" className="m-0 h-full">
+                <div className="flex-1 overflow-hidden">
+                    <TabsContent value="patrol" className="m-0 h-full overflow-y-auto p-3">
                         <WaypointManager className="h-full border-none shadow-none" />
                     </TabsContent>
 
-                    <TabsContent value="explore" className="m-0 h-full">
+                    <TabsContent value="explore" className="m-0 h-full overflow-y-auto p-3">
                         <ExplorationPanel />
                     </TabsContent>
 
-                    <TabsContent value="controller" className="m-0 h-full">
+                    <TabsContent value="controller" className="m-0 h-full overflow-y-auto p-3">
                         <MecanumController className="border-none shadow-none p-0" />
                     </TabsContent>
 
-                    <TabsContent value="chat" className="m-0 h-full">
-                        <ChatPanel />
+                    <TabsContent value="chat" className="m-0 h-full overflow-hidden p-3">
+                        <ChatPanel className="h-full" />
                     </TabsContent>
                 </div>
             </Tabs>

@@ -35,6 +35,7 @@ export interface UseChatReturn {
   sendMessage: (text: string) => Promise<void>;
   resetChat: () => Promise<void>;
   clearMessages: () => void;
+  cancel: () => void;
   checkConnection: () => Promise<boolean>;
 }
 
@@ -151,11 +152,24 @@ export function useChat(): UseChatReturn {
     setError(null);
   }, []);
 
+  const cancel = useCallback(() => {
+    abortRef.current?.abort();
+    setIsLoading(false);
+    // Clear liveTools on the last assistant message if it was streaming
+    setMessages(prev => {
+      const last = prev[prev.length - 1];
+      if (last?.role === 'assistant' && last.liveTools !== undefined) {
+        return [...prev.slice(0, -1), { ...last, liveTools: undefined }];
+      }
+      return prev;
+    });
+  }, []);
+
   return {
     messages, isLoading, error, connected,
     selectedProvider,
     setSelectedProvider,
-    sendMessage, resetChat, clearMessages, checkConnection,
+    sendMessage, resetChat, clearMessages, cancel, checkConnection,
   };
 }
 

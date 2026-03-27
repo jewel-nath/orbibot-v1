@@ -54,18 +54,23 @@ SettingsProvider        — persists all config to localStorage
 ### ROS → Browser (telemetry)
 
 ```
-/orbibot/system_status        ──► Battery gauge, motor status
+/orbibot/system_status          ──► Battery gauge, motor status
 /orbibot/system_status_enriched ──► CPU, RAM, temperature, disk
-/orbibot/safety_status        ──► E-stop, fault, cmd-timeout flags
-/orbibot/encoders             ──► Encoder counts per wheel (FL/BL/FR/BR)
-/odom  or  /odometry/filtered ──► Odometry display
-/imu/data                     ──► Orientation, angular velocity
-/scan                         ──► LiDAR visualisation
-/map                          ──► SLAM occupancy grid
-/plan                         ──► Nav2 planned path overlay
+/orbibot/safety_status          ──► E-stop, fault, cmd-timeout flags
+/orbibot/encoders               ──► Encoder counts per wheel (FL/BL/FR/BR)
+/odom                           ──► Raw wheel odometry
+/odometry/filtered              ──► EKF-fused odometry
+/imu/data                       ──► IMU orientation + angular velocity (filtered)
+/imu/data_raw                   ──► Raw IMU (gyro + accel)
+/imu/mag                        ──► Magnetometer field
+/joint_states                   ──► Per-wheel velocity (rad/s), position (rad)
+/scan                           ──► LiDAR 2D scan
+/map                            ──► SLAM occupancy grid
+/plan                           ──► Nav2 planned path overlay
 /navigate_to_pose/_action/status ──► Goal tracking (navigating/succeeded/failed)
-/orbibot/exploration/status   ──► Exploration state
-/orbibot/exploration/frontiers ──► Live frontier markers
+/orbibot/exploration/status     ──► Exploration state
+/orbibot/exploration/frontiers  ──► Live frontier markers
+/diagnostics                    ──► ROS diagnostic array (IMU/Motors/LiDAR)
 ```
 
 ### Browser → ROS (commands)
@@ -77,7 +82,21 @@ SettingsProvider        — persists all config to localStorage
 /orbibot/pid_params           ◄── Motor PID gains (Apply)
 /orbibot/pid_save             ◄── Motor PID to flash (Flash)
 /orbibot/yaw_pid_params       ◄── Yaw PID gains
+/orbibot/yaw_pid_save         ◄── Yaw PID to flash
+/orbibot/beep                 ◄── Buzzer test (200 ms pulse)
 /orbibot/exploration/command  ◄── start / pause / stop
+```
+
+### Services called (frontend)
+
+```
+/orbibot/get_firmware_version  ◄── Read STM32 firmware version string
+/orbibot/set_motor_enable      ◄── Enable / disable motors
+/orbibot/calibrate_imu         ◄── Magnetometer calibration
+/orbibot/reset_encoders        ◄── Zero encoder counts
+/orbibot/reset_odometry        ◄── Zero odometry pose
+/navigate_to_pose/_action/cancel_goal ◄── Cancel Nav2 goal
+/map_saver/save_map            ◄── Save SLAM map to disk
 ```
 
 ### WebRTC pipeline
@@ -140,15 +159,25 @@ User types message → useChat hook
 - Natural language robot control via `orbibot_agent`
 - SSE streaming with live tool-call badges
 - Provider selector: Gemini, Claude, Kimi, Ollama
-- RobotTester mode: scripted hardware test suite with pass/fail display
-- Quick-action buttons (battery, position, IMU, status)
+- Quick-action buttons (battery, position, IMU, status, health, diagnostics)
 - Markdown rendering (tables, code blocks, lists)
+- Cancel generation mid-stream
+- Timestamps on each message
+- Multi-line input (Shift+Enter for newline, Enter to send)
+- Online/offline indicator with retry
 
 ### Diagnostics page (`/diagnostics`)
-- Robot Status summary
-- PID Tuning (motor + yaw PID sliders)
-- PID Response Graph (record Vx/Vy/Wz response vs target for 8 s)
-- Magnetometer calibration (calls `/orbibot/calibrate_imu`)
+
+Tab-based comprehensive testing, analysis, calibration, and tuning workbench:
+
+| Tab | Contents |
+|-----|----------|
+| **Overview** | Safety status, firmware version, motor enable/buzzer test, battery voltage chart (5 min), connection health table (topic Hz + staleness) |
+| **Motors** | Per-motor encoder counts, velocity (rad/s), position; 4-channel wheel velocity time-series; commanded vs actual Vx/Vy charts |
+| **Odometry** | XY path trace (raw dashed / filtered solid), 3-channel Vx/Vy/Wz comparison chart |
+| **IMU** | Attitude indicator, compass rose, 3-channel gyro + accel time-series (30 s), magnetometer XY scatter with circle-fit overlay, IMU calibration |
+| **PID Tuning** | Motor PID sliders (Apply / Flash), yaw PID sliders, PID response graph (8 s record) |
+| **Tools** | LiDAR scan view + statistics, data export recorder (CSV), 3-step wheel calibration wizard |
 
 ---
 
@@ -211,11 +240,14 @@ ros2 launch orbibot_agent chat_server.launch.py  # AI chat (optional)
 
 ### Step 3 — Start the frontend
 
-**Development:**
+**Development (with mock data):**
 ```bash
 cd src/orbibot_webgui/frontend
 npm run dev
 # Open http://localhost:5173
+
+# Optional: run demo robot for mock ROS data
+node scripts/demo-robot.js
 ```
 
 **Production:**
@@ -275,9 +307,13 @@ The launch file currently hard-codes these values; pass them as arguments to ove
 
 | Topic | Type | Used for |
 |-------|------|---------|
-| `/odom` | `nav_msgs/Odometry` | Odometry display |
-| `/scan` | `sensor_msgs/LaserScan` | LiDAR view |
-| `/imu/data` | `sensor_msgs/Imu` | IMU widget |
+| `/odom` | `nav_msgs/Odometry` | Raw odometry, path trace |
+| `/odometry/filtered` | `nav_msgs/Odometry` | Filtered path trace, comparison charts |
+| `/scan` | `sensor_msgs/LaserScan` | LiDAR view + diagnostics stats |
+| `/imu/data` | `sensor_msgs/Imu` | IMU widget, attitude indicator |
+| `/imu/data_raw` | `sensor_msgs/Imu` | Gyro/accel time-series (diagnostics) |
+| `/imu/mag` | `sensor_msgs/MagneticField` | Magnetometer scatter plot |
+| `/joint_states` | `sensor_msgs/JointState` | Per-wheel velocity + position |
 | `/map` | `nav_msgs/OccupancyGrid` | SLAM map |
 | `/orbibot/system_status` | `orbibot_msgs/SystemStatus` | Battery, motor status |
 | `/orbibot/system_status_enriched` | `orbibot_msgs/SystemStatus` | CPU, RAM, temp, disk |
@@ -288,6 +324,7 @@ The launch file currently hard-codes these values; pass them as arguments to ove
 | `/orbibot/emergency_stop` | `std_msgs/Bool` | E-stop monitor |
 | `/orbibot/exploration/frontiers` | `visualization_msgs/MarkerArray` | Frontier count |
 | `/orbibot/exploration/status` | `std_msgs/String` | Exploration state |
+| `/diagnostics` | `diagnostic_msgs/DiagnosticArray` | System diagnostics |
 
 ### Published topics (frontend via rosbridge)
 
@@ -299,13 +336,19 @@ The launch file currently hard-codes these values; pass them as arguments to ove
 | `/orbibot/pid_params` | `std_msgs/Float32MultiArray` | Motor PID `[kp, ki, kd]` |
 | `/orbibot/pid_save` | `std_msgs/Float32MultiArray` | Save motor PID to flash |
 | `/orbibot/yaw_pid_params` | `std_msgs/Float32MultiArray` | Yaw PID `[kp, ki, kd]` |
+| `/orbibot/yaw_pid_save` | `std_msgs/Float32MultiArray` | Save yaw PID to flash |
+| `/orbibot/beep` | `std_msgs/UInt16` | Buzzer test (duration ms) |
 | `/orbibot/exploration/command` | `std_msgs/String` | `start` / `pause` / `stop` |
 
 ### Services called
 
 | Service | Type | Used for |
 |---------|------|---------|
+| `/orbibot/get_firmware_version` | `orbibot_msgs/GetFirmwareVersion` | Display firmware version |
+| `/orbibot/set_motor_enable` | `orbibot_msgs/SetMotorEnable` | Motor enable/disable toggle |
 | `/orbibot/calibrate_imu` | `orbibot_msgs/CalibrateIMU` | Magnetometer calibration |
+| `/orbibot/reset_encoders` | `orbibot_msgs/ResetEncoders` | Zero encoder counts |
+| `/orbibot/reset_odometry` | `orbibot_msgs/ResetOdometry` | Zero odometry pose |
 | `/navigate_to_pose/_action/cancel_goal` | `action_msgs/CancelGoal` | Cancel navigation |
 | `/map_saver/save_map` | `nav2_msgs/SaveMap` | Save SLAM map |
 
@@ -327,6 +370,8 @@ orbibot_webgui/
 │   └── webgui.launch.py        # Starts rosbridge + WebRTC server
 ├── config/
 │   └── webgui_params.yaml      # Port and topic defaults
+├── scripts/
+│   └── demo-robot.js           # Mock ROS data publisher for local dev
 ├── webgui-changelog.md
 ├── webgui-issue.md
 └── frontend/src/
@@ -334,7 +379,7 @@ orbibot_webgui/
     ├── App.tsx                  # Provider stack
     ├── lib/
     │   ├── constants.ts         # Topics, message types, robot params, UI defaults
-    │   ├── math.ts              # Shared math (quaternionToEuler)
+    │   ├── math.ts              # quaternionToEuler, quaternionToYaw
     │   ├── logger.ts            # Dev-only logger (silent in production)
     │   ├── utils.ts             # cn() class-name helper
     │   └── webrtc/              # WebRTC signaling helpers
@@ -351,14 +396,22 @@ orbibot_webgui/
     │   ├── useBattery.ts        # Battery status
     │   ├── useEncoders.ts       # Encoder counts
     │   ├── useIMU.ts            # IMU data (orientation, angular velocity)
+    │   ├── useRawIMU.ts         # Raw IMU (gyro + accel)
+    │   ├── useMagnetometer.ts   # Magnetometer field
+    │   ├── useJointStates.ts    # Per-wheel velocity + position from /joint_states
+    │   ├── useCmdVelMonitor.ts  # Read-only /cmd_vel subscriber
     │   ├── useLidarScan.ts      # LaserScan data
     │   ├── useMap.ts            # OccupancyGrid data
     │   ├── useOdometry.ts       # Odometry data
+    │   ├── useOdometryPath.ts   # Accumulated XY path (raw + filtered, ring buffer)
+    │   ├── useTimeSeriesBuffer.ts # Single-channel time-series ring buffer
+    │   ├── useMultiChannelTimeSeries.ts # N-channel time-series ring buffer
     │   ├── useSystemStatus.ts   # System/enriched status
     │   ├── useSafetyStatus.ts   # Safety status
     │   ├── useMotorControl.ts   # Motor enable + PID
+    │   ├── useDataRecorder.ts   # Record topics to memory, export CSV
     │   ├── useWebRTC.ts         # WebRTC peer connection
-    │   ├── useChat.ts           # AI chat (SSE streaming, provider, tester mode)
+    │   ├── useChat.ts           # AI chat (SSE streaming, provider, cancel)
     │   └── ...                  # Navigation, patrol, keyboard, touch hooks
     ├── components/
     │   ├── layout/              # Dashboard, Header, MissionControl, UnifiedViewport
@@ -367,10 +420,24 @@ orbibot_webgui/
     │   └── visualization/       # MapView, LidarView
     ├── features/
     │   ├── control/             # MecanumController, DirectionButton, VirtualJoystick
-    │   ├── telemetry/           # Battery, Encoders, IMUWidget, OdometryDisplay, PIDTuningPanel, etc.
+    │   ├── telemetry/           # Battery, Encoders, IMU, Odometry, PIDTuningPanel, etc.
+    │   ├── diagnostics/         # Diagnostics page panels + charts
+    │   │   ├── charts/          # TimeSeriesChart, ScatterPlot (reusable D3 components)
+    │   │   ├── BatteryChart.tsx
+    │   │   ├── ConnectionHealthPanel.tsx
+    │   │   ├── DataExportPanel.tsx
+    │   │   ├── DiagnosticsSection.tsx
+    │   │   ├── FirmwareInfoPanel.tsx
+    │   │   ├── IMUDetailPanel.tsx
+    │   │   ├── LidarDiagnosticsPanel.tsx
+    │   │   ├── MagnetometerPanel.tsx
+    │   │   ├── MotorDetailPanel.tsx
+    │   │   ├── OdometryComparisonChart.tsx
+    │   │   ├── OdometryPathTrace.tsx
+    │   │   └── WheelCalibrationWizard.tsx
     │   └── video/               # CameraFeed
     ├── pages/
-    │   └── DiagnosticsPage.tsx
+    │   └── DiagnosticsPage.tsx  # 6-tab diagnostics workbench
     └── types/
         ├── ros.ts               # TypeScript interfaces for ROS message types
         └── interaction.ts       # InteractionMode, Waypoint, GoalStatus, etc.
@@ -417,6 +484,14 @@ Use `usePublisher` from `hooks/usePublisher.ts`:
 const pub = usePublisher({ topic: '/my/topic', messageType: 'std_msgs/String' });
 pub.publish({ data: 'hello' });
 ```
+
+### Adding a new diagnostics panel
+
+1. Create a component in `features/diagnostics/`.
+2. For time-series data, use `TimeSeriesChart` from `features/diagnostics/charts/`.
+3. For 2D scatter/path plots, use `ScatterPlot` from `features/diagnostics/charts/`.
+4. Wrap with `DiagnosticsSection` for consistent heading + border.
+5. Import and place in `DiagnosticsPage.tsx` under the appropriate tab.
 
 ### Adding a new UI panel
 
@@ -477,6 +552,8 @@ Press `?` at any time to open the shortcuts dialog.
 | High video latency | Network congestion or WiFi | Use wired Ethernet; reduce camera resolution |
 | Can't reach GUI from phone | Wrong IP in settings | Change WebSocket URL to `ws://robot_ip:9090` |
 | `cv_bridge not available` | Package missing | `sudo apt install ros-jazzy-cv-bridge` |
+| Diagnostics charts show "No data" | Topics not publishing or wrong topic name | Run `node scripts/demo-robot.js` to test with mock data |
+| Joint states tab empty | `/joint_states` not publishing | Ensure robot hardware node is running at 50 Hz |
 
 ---
 
@@ -497,9 +574,10 @@ See [webgui-issue.md](./webgui-issue.md).
 - [aiortc](https://github.com/aiortc/aiortc)
 - [Nav2](https://docs.nav2.org/)
 - [shadcn/ui](https://ui.shadcn.com/)
+- [D3.js](https://d3js.org/)
 - [sonner](https://sonner.emilkowal.ski/)
 
 ---
 
 **Maintainer:** Jewel Nath \<jewel.nath@orbitax.com\>
-**Last updated:** 2026-03-25
+**Last updated:** 2026-03-27
