@@ -49,3 +49,16 @@ Remaining issues, technical debt, and improvement ideas after the 2026-03 refact
 - [x] Clean up all Phase N comments and redundant docstrings
 - [x] Fix chat_cli Rich import shadowing builtin
 - [x] Update setup.py maintainer
+
+## Completed (2026-03 Chatbot Restructuring)
+
+- [x] Remove artificial dual-mode system (chat vs robot_tester) — unified system prompt in `config/system_prompt.txt`
+- [x] Remove `testing_tools.py` (8 compound tools) — LLM composes tests from primitives
+- [x] Add `diagnostics_tools.py` — `run_health_check`, `record_timeseries`, `get_ros_diagnostics`
+- [x] Add `analysis_tools.py` — `compare_values`, `compute_statistics`
+- [x] Move `TestSuiteRunner` ownership to `run_health_check` tool (no longer a separate HTTP endpoint)
+- [x] Remove `/api/run_test_suite` endpoint from chat_server
+- [x] Remove `mode` parameter from chat API and AgentNode
+- [x] Fix `test_suite_runner.py` encoder test bug (`linear_x` → `vx` parameter name)
+- [x] Simplify frontend `useChat.ts` — removed `ChatMode`, `mode` state, `setMode`
+- [x] Simplify frontend `ChatPanel.tsx` — removed mode toggle, test runner UI, NAV_ACTIONS; expanded quick actions (6 items including Health Check + Diagnostics)

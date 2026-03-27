@@ -4,7 +4,6 @@ Endpoints:
   POST /api/chat           — blocking JSON response
   POST /api/chat/stream    — Server-Sent Events stream
   POST /api/reset          — reset chat session
-  POST /api/run_test_suite — LLM-free hardware tests
   GET  /api/health         — health check
   GET  /api/providers      — list available providers
 """
@@ -24,7 +23,6 @@ from aiohttp import web
 import aiohttp_cors
 
 from ..agent_node import AgentNode
-from ..core.test_suite_runner import TestSuiteRunner
 from ..env_loader import load_dotenv_local
 
 logger = logging.getLogger(__name__)
@@ -53,8 +51,6 @@ class ChatServerNode(Node):
             thread_name_prefix='orbibot_chat',
         )
 
-        self._test_suite_runner = TestSuiteRunner(self._agent.tool_registry)
-
         # Chat lock for concurrent requests
         self._chat_lock = asyncio.Lock()
 
@@ -64,7 +60,6 @@ class ChatServerNode(Node):
         self,
         message: str,
         provider: Optional[str] = None,
-        mode: str = 'chat',
         client_history: Optional[List[Dict]] = None,
     ) -> Dict[str, Any]:
         """Process message synchronously (runs in thread pool).
@@ -72,13 +67,11 @@ class ChatServerNode(Node):
         Args:
             message: User message
             provider: Optional provider override
-            mode: 'chat' or 'robot_tester'
             client_history: Optional list of previous messages from client
 
         Returns:
             Response dictionary
         """
-        # Override provider if requested
         if provider and provider != self._agent.current_provider_name:
             if not self._agent.set_provider(provider):
                 available = self._agent.get_available_providers()
@@ -90,7 +83,7 @@ class ChatServerNode(Node):
         if client_history and self._agent.current_provider:
             self._agent.current_provider.inject_history(client_history)
 
-        response = self._agent.process_message(message, mode=mode)
+        response = self._agent.process_message(message)
 
         return {
             'reply': response.get('text', 'No response'),
@@ -106,7 +99,6 @@ class ChatServerNode(Node):
 
         message = body.get('message', '').strip()
         provider = body.get('provider', None)
-        mode = body.get('mode', 'chat')
         client_history = body.get('messages', None)
 
         if not message:
@@ -118,7 +110,7 @@ class ChatServerNode(Node):
                 result = await loop.run_in_executor(
                     self._chat_executor,
                     self._process_message_sync,
-                    message, provider, mode, client_history
+                    message, provider, client_history
                 )
             except Exception as exc:
                 logger.error(f'Chat request failed: {exc}')
@@ -138,7 +130,6 @@ class ChatServerNode(Node):
 
         message = body.get('message', '').strip()
         provider = body.get('provider', None)
-        mode = body.get('mode', 'chat')
         client_history = body.get('messages', None)
 
         if not message:
@@ -165,15 +156,13 @@ class ChatServerNode(Node):
         def run_stream() -> None:
             """Run process_message_stream in thread pool and push events to queue."""
             try:
-                # Set provider if requested
                 if provider and provider != self._agent.current_provider_name:
                     self._agent.set_provider(provider)
 
-                # Inject client history
                 if client_history and self._agent.current_provider:
                     self._agent.current_provider.inject_history(client_history)
 
-                for event in self._agent.process_message_stream(message, mode=mode):
+                for event in self._agent.process_message_stream(message):
                     loop.call_soon_threadsafe(queue.put_nowait, event)
             except Exception as e:
                 loop.call_soon_threadsafe(
@@ -220,36 +209,6 @@ class ChatServerNode(Node):
             'current': self._agent.current_provider_name,
         })
 
-    async def handle_run_test_suite(self, request: web.Request) -> web.Response:
-        """Run LLM-free hardware tests. Body: {'tests': [...]} or {} for all."""
-        try:
-            body = await request.json()
-        except Exception:
-            body = {}
-
-        selected_tests = body.get('tests', None)
-
-        loop = asyncio.get_event_loop()
-        try:
-            if selected_tests:
-                report = await loop.run_in_executor(
-                    self._chat_executor,
-                    self._test_suite_runner.run_selected,
-                    selected_tests,
-                )
-            else:
-                report = await loop.run_in_executor(
-                    self._chat_executor,
-                    self._test_suite_runner.run_all,
-                )
-            return web.json_response({'status': 'ok', 'report': report})
-        except Exception as exc:
-            logger.error(f'Test suite failed: {exc}')
-            return web.json_response(
-                {'status': 'error', 'message': str(exc)},
-                status=500
-            )
-
     def build_app(self) -> web.Application:
         """Build aiohttp app with all routes."""
         app = web.Application()
@@ -268,7 +227,6 @@ class ChatServerNode(Node):
         cors.add(app.router.add_post('/api/chat', self.handle_chat))
         cors.add(app.router.add_post('/api/chat/stream', self.handle_chat_stream))
         cors.add(app.router.add_post('/api/reset', self.handle_reset))
-        cors.add(app.router.add_post('/api/run_test_suite', self.handle_run_test_suite))
         cors.add(app.router.add_get('/api/health', self.handle_health))
         cors.add(app.router.add_get('/api/providers', self.handle_providers))
 

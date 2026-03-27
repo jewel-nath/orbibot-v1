@@ -1,6 +1,6 @@
 # OrbiBot Agent
 
-AI agent for OrbiBot — a Mecanum-wheeled ROS 2 mobile robot (Raspberry Pi 5 + Yahboom ROSMaster V3.0). Supports multiple LLM providers (Gemini, Claude, Kimi, Ollama) and exposes 65 robot tools through three interfaces: HTTP API, terminal CLI, and MCP server.
+AI agent for OrbiBot — a Mecanum-wheeled ROS 2 mobile robot (Raspberry Pi 5 + Yahboom ROSMaster V3.0). Supports multiple LLM providers (Gemini, Claude, Kimi, Ollama) and exposes 62 robot tools through three interfaces: HTTP API, terminal CLI, and MCP server.
 
 ## What This Package Does
 
@@ -18,7 +18,7 @@ AgentNode  ─── LLM Provider (Gemini / Claude / Kimi / Ollama)
   |          tool call decisions
   |                  |
   v                  v
-ToolRegistry (65 tools)
+ToolRegistry (62 tools)
   |
   v
 RosBridge (native rclpy)  ───>  ROS 2 topics, services, actions
@@ -36,13 +36,13 @@ SafetyManager (velocity/duration limits, e-stop)
 | **AgentNode** | Orchestrator — manages providers, tools, and message processing |
 | **RosBridge** | Native rclpy bridge to ROS 2 (pub/sub, services, actions) |
 | **SafetyManager** | Enforces velocity limits (0.5 m/s), duration caps (10s), e-stop |
-| **ToolRegistry** | Registers 65 tools with JSON schemas for LLM function calling |
+| **ToolRegistry** | Registers 62 tools with JSON schemas for LLM function calling |
 | **LLM Providers** | Pluggable backends — each handles chat history and streaming |
 
 ### Data Flow
 
 1. User sends message via any interface
-2. AgentNode selects the LLM provider (based on mode and config)
+2. AgentNode activates the configured LLM provider
 3. LLM returns text and/or tool calls
 4. ToolRegistry executes each tool through RosBridge
 5. Results are sent back to the LLM for the next round (up to 10 iterations)
@@ -60,7 +60,7 @@ SafetyManager (velocity/duration limits, e-stop)
 
 ### How the Agent Talks to the Robot
 
-RosBridge (`core/ros_bridge.py`) creates subscriptions and publishers on the host ROS node. It does **not** use rosbridge_suite or WebSocket — it's direct rclpy.
+RosBridge (`core/ros_bridge/`) creates subscriptions and publishers on the host ROS node. It does **not** use rosbridge_suite or WebSocket — it's direct rclpy.
 
 **Subscribed topics:** `/odom`, `/imu/data`, `/imu/data_raw`, `/imu/mag`, `/scan`, `/orbibot/system_status`, `/orbibot/encoders`, `/joint_states`, etc.
 
@@ -141,17 +141,17 @@ llm_providers:
     base_url: "http://localhost:11434/v1"
 
 default_provider: "gemini"
-
-robot_tester:
-  provider: "anthropic"       # Stronger model for testing
-  model: "claude-3-5-sonnet-20241022"
 ```
+
+### System Prompt (`config/system_prompt.txt`)
+
+Edit this file to customize the LLM's behavior and knowledge. The unified prompt covers all capabilities: motion, sensors, testing, diagnostics, analysis, SLAM, and navigation. Loaded automatically at startup.
 
 ## Key Modules
 
 ### `agent_node.py` — Orchestrator
 
-Central class that ties everything together. Manages provider switching, system prompts (chat vs. robot_tester mode), and the tool-call loop. Supports both blocking (`process_message`) and streaming (`process_message_stream`) execution.
+Central class that ties everything together. Manages provider switching, loads the unified system prompt, and runs the tool-call loop. Supports both blocking (`process_message`) and streaming (`process_message_stream`) execution.
 
 ### `core/ros_bridge/` — ROS 2 Communication
 
@@ -173,6 +173,10 @@ Import as `from orbibot_agent.core.ros_bridge import RosBridge` — the facade c
 
 Validates and clamps velocity/duration before any motion command. Manages emergency stop state. All motion goes through safety validation.
 
+### `core/test_suite_runner.py` — Deterministic Tests
+
+Runs fixed, reproducible hardware test sequences using the tool registry directly (no LLM). Used by the `run_health_check` tool. Tests: battery, IMU, encoders, motors, magnetometer.
+
 ### `tools/` — Tool Definitions
 
 Split into 7 focused modules:
@@ -183,11 +187,12 @@ Split into 7 focused modules:
 | `motion_tools.py` | move, stop, motor enable, firmware reset (4) |
 | `sensor_tools.py` | battery, IMU, encoders, odometry, LiDAR (15) |
 | `firmware_tools.py` | PID set/save, beep, calibration, reset (9) |
-| `testing_tools.py` | PID test, motor, IMU, encoder, mag, battery (8) |
 | `ros_tools.py` | topics, services, actions, generic publish (11) |
 | `navigation_tools.py` | SLAM, Nav2, AMCL, exploration (18) |
+| `diagnostics_tools.py` | run_health_check, record_timeseries, get_ros_diagnostics (3) |
+| `analysis_tools.py` | compare_values, compute_statistics (2) |
 
-Each module exports `register(registry, ros_bridge, safety_manager)`. All 65 tools use OpenAI function-calling JSON schemas.
+Each module exports `register(registry, ros_bridge, safety_manager)`. All tools use OpenAI function-calling JSON schemas.
 
 ### `llm_providers/` — LLM Backends
 
@@ -214,7 +219,6 @@ All providers implement streaming (`send_message_stream`, `send_tool_results_str
 | `/api/chat` | POST | Blocking chat — returns `{reply, tool_calls}` |
 | `/api/chat/stream` | POST | SSE stream — yields `text_chunk`, `tool_start`, `tool_result`, `done` events |
 | `/api/reset` | POST | Reset chat session |
-| `/api/run_test_suite` | POST | LLM-free hardware tests — `{tests: [...]}` or `{}` for all |
 | `/api/health` | GET | Status + available providers |
 | `/api/providers` | GET | List providers + current |
 
@@ -223,19 +227,11 @@ All providers implement streaming (`send_message_stream`, `send_tool_results_str
 {
   "message": "What's the battery level?",
   "provider": "anthropic",
-  "mode": "chat",
   "messages": []
 }
 ```
 
-All fields except `message` are optional.
-
-## Modes
-
-| Mode | System Prompt | Use Case |
-|------|--------------|----------|
-| `chat` (default) | General robot assistant | Normal interaction |
-| `robot_tester` | Systematic test engineer with pass/fail reporting | Hardware validation |
+All fields except `message` are optional. `messages` is a list of `{role, content}` for context recovery.
 
 ## How to Run
 
@@ -298,7 +294,7 @@ orbibot_agent/
     env_loader.py                  # .env.local loader
     core/
       safety_manager.py            # Velocity/duration safety
-      test_suite_runner.py         # LLM-free hardware tests
+      test_suite_runner.py         # LLM-free hardware tests (used by run_health_check)
       ros_bridge/                  # ROS 2 bridge (mixin architecture)
         __init__.py                #   Facade — composes all mixins
         base.py                    #   Shared state, wait_for_message
@@ -320,9 +316,10 @@ orbibot_agent/
       motion_tools.py              # 4 motion tools
       sensor_tools.py              # 15 sensor/GET tools
       firmware_tools.py            # 9 firmware command tools
-      testing_tools.py             # 8 hardware test tools
       ros_tools.py                 # 11 ROS interface tools
       navigation_tools.py          # 18 nav/SLAM/exploration tools
+      diagnostics_tools.py         # 3 diagnostics tools (health check, timeseries, ROS diagnostics)
+      analysis_tools.py            # 2 analysis tools (compare, statistics)
     interfaces/
       chat_server.py               # HTTP + SSE server
       chat_cli.py                  # Terminal CLI
@@ -332,7 +329,7 @@ orbibot_agent/
     mcp_server.launch.py
   config/
     agent_params.yaml
-    robot_tester_prompt.txt
+    system_prompt.txt              # Unified system prompt (edit to customize LLM behavior)
 ```
 
 ## Limitations

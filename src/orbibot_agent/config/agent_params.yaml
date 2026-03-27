@@ -29,13 +29,6 @@ llm_providers:
 # Default provider to use
 default_provider: "gemini"
 
-# RobotTester mode — uses a stronger model and a dedicated system prompt
-# for systematic, pass/fail hardware and navigation testing.
-robot_tester:
-  provider: "anthropic"
-  model: "claude-3-5-sonnet-20241022"
-  prompt_file: ""    # leave empty to use built-in prompt; or set absolute path to robot_tester_prompt.txt
-
 # Chat server settings
 chat_server:
   max_workers: 2     # dedicated thread pool size for chat requests

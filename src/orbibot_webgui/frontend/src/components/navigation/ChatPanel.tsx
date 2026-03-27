@@ -15,13 +15,12 @@ import {
   Wrench,
   ChevronDown,
   ChevronRight,
-  Zap,
   Battery,
   Compass,
   MapPin,
-  Play,
-  CheckCircle2,
-  XCircle,
+  Zap,
+  Activity,
+  Stethoscope,
   WifiOff,
   RefreshCw,
 } from 'lucide-react';
@@ -40,52 +39,21 @@ const QUICK_ACTIONS = [
   { label: 'Where?', icon: MapPin, message: 'Where are you right now?' },
   { label: 'IMU', icon: Compass, message: 'Show me the IMU data' },
   { label: 'Status', icon: Zap, message: "What's the system status?" },
+  { label: 'Health Check', icon: Activity, message: 'Run a full health check' },
+  { label: 'Diagnostics', icon: Stethoscope, message: 'Check ROS diagnostics and report any issues' },
 ];
-
-const NAV_ACTIONS = [
-  { label: 'Forward', msg: 'Move forward 0.3 m' },
-  { label: 'Backward', msg: 'Move backward 0.3 m' },
-  { label: 'Left', msg: 'Strafe left 0.3 m' },
-  { label: 'Right', msg: 'Strafe right 0.3 m' },
-  { label: 'Spin L', msg: 'Spin left 90 degrees' },
-  { label: 'Spin R', msg: 'Spin right 90 degrees' },
-  { label: 'Stop', msg: 'Stop the robot immediately' },
-  { label: 'Nav Status', msg: 'What is the navigation status?' },
-  { label: 'Battery', msg: "What's the battery level?" },
-];
-
-interface TestSummary {
-  total: number;
-  passed: number;
-  failed: number;
-  all_pass: boolean;
-}
-
-interface TestResult {
-  pass?: boolean;
-  verdict?: string;
-  [key: string]: unknown;
-}
-
-interface TestReport {
-  _summary?: TestSummary;
-  _error?: string;
-  [key: string]: TestResult | TestSummary | string | undefined;
-}
 
 export function ChatPanel({ className }: ChatPanelProps) {
   const { settings } = useSettings();
   const chatApiBase = settings.chatApiUrl;
   const {
     messages, isLoading, error, connected,
-    selectedProvider, mode,
-    setSelectedProvider, setMode,
+    selectedProvider,
+    setSelectedProvider,
     sendMessage, resetChat, checkConnection,
   } = useChat();
   const [input, setInput] = useState('');
   const [providers, setProviders] = useState<string[]>([]);
-  const [testReport, setTestReport] = useState<TestReport | null>(null);
-  const [testRunning, setTestRunning] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -114,41 +82,6 @@ export function ChatPanel({ className }: ChatPanelProps) {
     if (isLoading) return;
     sendMessage(message);
   };
-
-  const handleNavAction = (msg: string) => {
-    if (isLoading) return;
-    sendMessage(msg, 'robot_tester');
-  };
-
-  const toggleTesterMode = () => {
-    setMode(mode === 'robot_tester' ? 'chat' : 'robot_tester');
-    setTestReport(null);
-  };
-
-  const runTestSuite = async () => {
-    setTestRunning(true);
-    setTestReport(null);
-    try {
-      const resp = await fetch(`${chatApiBase}/api/run_test_suite`, { method: 'POST' });
-      const data = await resp.json();
-      setTestReport(data.status === 'ok' ? data.report : { _error: data.message || 'Test suite failed' });
-    } catch (e) {
-      setTestReport({ _error: String(e) });
-    } finally {
-      setTestRunning(false);
-    }
-  };
-
-  const reviewWithAI = () => {
-    if (!testReport) return;
-    sendMessage(
-      `Review this test report:\n\`\`\`json\n${JSON.stringify(testReport, null, 2)}\n\`\`\``,
-      mode,
-    );
-  };
-
-  const isTesterMode = mode === 'robot_tester';
-  const hasStreamingMessage = messages.some(m => m.role === 'assistant' && m.liveTools !== undefined);
 
   return (
     <div className={cn('flex flex-col h-full', className)}>
@@ -186,19 +119,6 @@ export function ChatPanel({ className }: ChatPanelProps) {
             ))}
           </select>
 
-          {/* Mode toggle */}
-          <button
-            onClick={toggleTesterMode}
-            disabled={isLoading}
-            className={cn(
-              'px-2 py-0.5 rounded text-xs font-medium transition-colors disabled:opacity-50',
-              isTesterMode ? 'bg-amber-500 text-white' : 'border hover:bg-muted',
-            )}
-            title={isTesterMode ? 'Switch to Chat mode' : 'Switch to RobotTester mode'}
-          >
-            {isTesterMode ? 'Tester' : 'Chat'}
-          </button>
-
           <button
             onClick={resetChat}
             disabled={isLoading}
@@ -210,104 +130,22 @@ export function ChatPanel({ className }: ChatPanelProps) {
         </div>
       </div>
 
-      {/* Tester: Test suite runner */}
-      {isTesterMode && (
-        <div className="mb-3 p-2 border rounded-lg bg-muted/30">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-medium text-muted-foreground">Hardware Test Suite</span>
+      {/* Quick actions — always visible */}
+      <div className="mb-3">
+        <div className="grid grid-cols-3 gap-1">
+          {QUICK_ACTIONS.map(action => (
             <button
-              onClick={runTestSuite}
-              disabled={testRunning}
-              className="flex items-center gap-1 text-xs px-2 py-1 rounded border transition-colors hover:bg-muted disabled:opacity-50"
+              key={action.label}
+              onClick={() => handleQuickAction(action.message)}
+              disabled={isLoading || !connected}
+              className="flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs border hover:bg-muted/50 transition-colors disabled:opacity-50"
             >
-              {testRunning ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
-              {testRunning ? 'Running...' : 'Run Tests'}
+              <action.icon className="w-3 h-3 text-primary flex-shrink-0" />
+              <span className="truncate">{action.label}</span>
             </button>
-          </div>
-
-          {testReport && !testReport._error && (
-            <div className="space-y-1 max-h-40 overflow-y-auto">
-              {Object.entries(testReport)
-                .filter(([key]) => !key.startsWith('_'))
-                .map(([name, rawResult]) => {
-                  const result = rawResult as TestResult;
-                  return (
-                    <div key={name} className="flex items-center justify-between text-xs border rounded px-2 py-1 bg-background">
-                      <span className="capitalize">{name.replace(/_/g, ' ')}</span>
-                      <div className="flex items-center gap-1">
-                        {result.pass
-                          ? <CheckCircle2 className="w-3 h-3 text-green-500" />
-                          : <XCircle className="w-3 h-3 text-red-500" />}
-                        <span className={result.pass ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
-                          {result.pass ? 'PASS' : 'FAIL'}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              {testReport._summary && (
-                <div className="flex items-center justify-between text-xs pt-1 border-t mt-1">
-                  <span className="text-muted-foreground">
-                    {testReport._summary.passed}/{testReport._summary.total} passed
-                  </span>
-                  <button
-                    onClick={reviewWithAI}
-                    disabled={isLoading}
-                    className="text-xs text-primary hover:underline disabled:opacity-50"
-                  >
-                    Review with AI
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {testReport?._error && (
-            <div className="text-xs text-destructive p-2 bg-destructive/10 rounded">
-              Error: {String(testReport._error)}
-            </div>
-          )}
+          ))}
         </div>
-      )}
-
-      {/* Tester: Nav action buttons */}
-      {isTesterMode && (
-        <div className="mb-3">
-          <p className="text-xs text-muted-foreground mb-1.5">Quick nav actions</p>
-          <div className="grid grid-cols-3 gap-1">
-            {NAV_ACTIONS.map(action => (
-              <button
-                key={action.label}
-                onClick={() => handleNavAction(action.msg)}
-                disabled={isLoading}
-                className="text-xs border rounded px-1.5 py-1.5 transition-colors hover:bg-muted disabled:opacity-50"
-              >
-                {action.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Quick actions — shown when empty in chat mode */}
-      {messages.length === 0 && !isTesterMode && (
-        <div className="mb-3">
-          <p className="text-xs text-muted-foreground mb-2">Quick actions</p>
-          <div className="grid grid-cols-2 gap-1.5">
-            {QUICK_ACTIONS.map(action => (
-              <button
-                key={action.label}
-                onClick={() => handleQuickAction(action.message)}
-                disabled={isLoading || !connected}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs border hover:bg-muted/50 transition-colors disabled:opacity-50"
-              >
-                <action.icon className="w-3 h-3 text-primary" />
-                {action.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      </div>
 
       {/* Error banner */}
       {error && (
@@ -325,7 +163,7 @@ export function ChatPanel({ className }: ChatPanelProps) {
           <MessageBubble key={msg.id} message={msg} />
         ))}
 
-        {isLoading && !hasStreamingMessage && (
+        {isLoading && !messages.some(m => m.role === 'assistant' && m.liveTools !== undefined) && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground px-2 py-1">
             <Loader2 className="w-3 h-3 animate-spin" />
             <span>Thinking...</span>
@@ -342,11 +180,7 @@ export function ChatPanel({ className }: ChatPanelProps) {
           type="text"
           value={input}
           onChange={e => setInput(e.target.value)}
-          placeholder={
-            !connected ? 'Chat server offline...'
-            : isTesterMode ? 'Enter test command...'
-            : 'Ask OrbiBot...'
-          }
+          placeholder={!connected ? 'Chat server offline...' : 'Ask OrbiBot anything...'}
           disabled={isLoading || !connected}
           className={cn(
             'flex-1 px-3 py-2 rounded-lg text-sm',

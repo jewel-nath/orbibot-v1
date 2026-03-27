@@ -23,36 +23,15 @@ from .llm_providers.ollama_provider import OllamaProvider
 
 logger = logging.getLogger(__name__)
 
-# Built-in RobotTester system prompt (used when no prompt_file is configured)
-_ROBOT_TESTER_PROMPT = """You are OrbiBot RobotTester — a systematic hardware and software test engineer for the OrbiBot Mecanum-wheeled mobile robot.
+# Default system prompt path (relative to this package's config directory)
+_DEFAULT_PROMPT_FILE = os.path.join(
+    os.path.dirname(__file__), '..', 'config', 'system_prompt.txt'
+)
 
-BEHAVIOUR RULES:
-1. Always state your test plan BEFORE calling any tools.
-   Format: "Test plan: (1) <step>, (2) <step>, ..."
-
-2. After EACH tool call, immediately report:
-   - What was measured or what happened
-   - PASS or FAIL with the specific reason
-   - Expected vs actual values where applicable
-
-3. For MOTOR/ENCODER tests: get_encoder_counts (baseline) → move_robot → get_encoder_counts (after) → compare delta.
-
-4. For PID TUNING: get_firmware_state → run_pid_test → interpret MAE/overshoot → suggest new PID → set_motor_pid → run_pid_test again → compare.
-
-5. For IMU/MAGNETOMETER: get_imu_data → check for NaN/extreme values. get_magnetometer_data → check heading consistency.
-
-6. For BATTERY: get_battery_status → PASS if voltage > 10.5 V, FAIL otherwise.
-
-7. For SLAM/NAV: slam_get_map_info → set_initial_pose → navigate_to_pose → report final pose vs target.
-
-8. For FULL HARDWARE TEST: run_full_hardware_test → interpret each sub-result → list failures → suggest fixes.
-
-9. END every test session with a SUMMARY TABLE:
-   | Test | Result | Expected | Actual | Notes |
-   |------|--------|----------|--------|-------|
-
-STYLE: Be concise. Use bullet points. Never skip PASS/FAIL. Suggest fixes for failures.
-SAFETY: Max linear 0.2 m/s for tests. Max duration 5 s per move. Call stop_robot on unexpected behaviour.
+# Built-in fallback prompt if system_prompt.txt is missing
+_FALLBACK_PROMPT = """You are OrbiBot, an AI assistant for a Mecanum-wheeled ROS 2 mobile robot.
+You can control the robot, read sensors, run tests, and diagnose problems through natural conversation.
+Always explain what you are doing before calling tools. If a command is unsafe or unclear, ask for clarification.
 """
 
 
@@ -139,11 +118,6 @@ class AgentNode(Node):
                     'base_url': 'http://localhost:11434/v1',
                 },
             },
-            'robot_tester': {
-                'provider': 'anthropic',
-                'model': 'claude-3-5-sonnet-20241022',
-                'prompt_file': '',
-            },
             'chat_server': {
                 'max_workers': 2,
             },
@@ -181,95 +155,20 @@ class AgentNode(Node):
         self.get_logger().info(f'Initialized {len(self._providers)} LLM providers')
 
     def _load_system_prompt(self) -> str:
-        """Build the default chat system prompt."""
-        return """You are OrbiBot, a helpful AI assistant for a Mecanum-wheeled ROS 2 mobile robot (Raspberry Pi 5 + Yahboom ROSMaster V3.0).
-
-You can control the robot using natural language commands. Available capabilities:
-
-MOTION
-- Move the robot (forward, backward, turn, strafe with mecanum drive)
-- stop_robot for emergency stop
-
-SENSORS & SYSTEM
-- Battery, IMU, magnetometer, encoder counts, joint states, odometry, LiDAR scan
-- System enriched (CPU, RAM, temperature), safety status, full firmware snapshot
-- Firmware version query
-
-FIRMWARE CONFIGURATION (SET)
-- Motor PID parameters (set + save persistently)
-- Yaw PID parameters (set + save persistently)
-- Magnetometer calibration (calibrate + set hard-iron offsets)
-- Motor enable/disable, buzzer beep, odometry and encoder reset
-
-HARDWARE TESTING
-- Individual tests: motor, IMU, encoder, magnetometer, battery, beep
-- Full hardware test suite (run_full_hardware_test)
-
-SLAM MAPPING
-- slam_save_map — save pose graph + pgm/yaml to disk
-- slam_serialize_map — save pose graph only for localization reload
-- slam_get_map_info — map size, resolution, explored percentage
-
-NAVIGATION (Nav2)
-- set_initial_pose — tell AMCL where the robot is on the map
-- amcl_reinitialize — scatter AMCL particles globally when robot is completely lost
-- navigate_to_pose — send robot to a target x,y,yaw
-- navigate_through_poses — sequence of poses in one action
-- follow_waypoints — patrol route through ordered waypoints
-- nav_cancel — cancel all active navigation goals
-- nav_clear_costmaps — clear local, global, or both costmaps
-- nav_spin — in-place spin recovery action
-- nav_backup — short reverse recovery action
-- nav_get_plan — get current planned path info
-
-AUTONOMOUS EXPLORATION
-- exploration_start / stop / pause / resume
-- get_exploration_status — current state (idle/exploring/navigating/complete/stopped)
-- get_exploration_frontiers — unexplored frontier regions and their positions
-
-ROS 2 INTERFACE
-- ros2_topic_publish — publish to any topic (one-shot, for interfaces without dedicated tools)
-- ros2_service_call — call any service with arbitrary fields
-- ros2_send_action_goal — send any action goal
-- ros2_action_request_result — poll active goal status
-- list_topics, list_services, list_active_nodes, get_node_info
-
-SAFETY CONSTRAINTS
-- Maximum linear velocity: 0.5 m/s
-- Maximum angular velocity: 2.0 rad/s
-- Maximum movement duration: 10 seconds
-
-Always explain what you are doing before calling tools. If a command is unsafe or unclear, ask for clarification before acting.
-"""
-
-    def _get_system_prompt(self, mode: str = 'chat') -> str:
-        """Return system prompt for 'chat' or 'robot_tester' mode."""
-        if mode == 'robot_tester':
-            # Try to load from file first
-            prompt_file = self._config.get('robot_tester', {}).get('prompt_file', '')
-            if prompt_file and os.path.exists(prompt_file):
-                try:
-                    with open(prompt_file, 'r') as f:
-                        return f.read()
-                except Exception as e:
-                    logger.warning(f'Failed to load robot_tester prompt file: {e}')
-            # Fall back to built-in prompt
-            return _ROBOT_TESTER_PROMPT
-        return self._system_prompt
-
-    def _get_provider_name_for_mode(self, mode: str) -> str:
-        """Return provider name: robot_tester overrides default if configured."""
-        if mode == 'robot_tester':
-            tester_cfg = self._config.get('robot_tester', {})
-            provider = tester_cfg.get('provider', '')
-            if provider and provider in self._providers:
-                return provider
-        return self._config.get('default_provider', 'gemini')
+        """Load system prompt from config/system_prompt.txt, fallback to built-in."""
+        prompt_path = os.path.normpath(_DEFAULT_PROMPT_FILE)
+        if os.path.exists(prompt_path):
+            try:
+                with open(prompt_path, 'r') as f:
+                    return f.read()
+            except Exception as e:
+                self.get_logger().warning(f'Failed to load system_prompt.txt: {e}')
+        return _FALLBACK_PROMPT
 
     def get_available_providers(self) -> List[str]:
         return [name for name, provider in self._providers.items() if provider.is_available()]
 
-    def set_provider(self, provider_name: str, system_prompt: Optional[str] = None) -> bool:
+    def set_provider(self, provider_name: str) -> bool:
         """Activate a provider by name. Returns True on success."""
         if provider_name not in self._providers:
             self.get_logger().error(f'Unknown provider: {provider_name}')
@@ -282,37 +181,32 @@ Always explain what you are doing before calling tools. If a command is unsafe o
 
         self._current_provider = provider
         self._current_provider_name = provider_name
-        prompt = system_prompt if system_prompt is not None else self._system_prompt
-        self._current_provider.start_chat(prompt)
+        self._current_provider.start_chat(self._system_prompt)
         self._current_provider.set_tools(self._tool_registry.get_tool_schemas())
 
         self.get_logger().info(f'Switched to provider: {provider_name}')
         return True
 
-    def process_message(self, message: str, mode: str = 'chat') -> Dict[str, Any]:
+    def process_message(self, message: str) -> Dict[str, Any]:
         """Process a user message.
 
         Args:
             message: User message
-            mode: 'chat' (default) or 'robot_tester'
 
         Returns:
             Response dictionary with 'text' and 'tool_calls'
         """
-        provider_name = self._get_provider_name_for_mode(mode)
-        system_prompt = self._get_system_prompt(mode)
+        provider_name = self._config.get('default_provider', 'gemini')
 
-        # Switch provider or re-init if mode changed
+        # Switch provider or re-init if needed
         if not self._current_provider or self._current_provider_name != provider_name:
-            if not self.set_provider(provider_name, system_prompt):
+            if not self.set_provider(provider_name):
                 return {
                     'text': f'Error: No LLM provider available. Tried {provider_name}',
                     'tool_calls': []
                 }
         else:
-            # Same provider but may need different system prompt for mode
-            # Re-start chat with new prompt if mode differs from last call
-            self._current_provider.start_chat(system_prompt)
+            self._current_provider.start_chat(self._system_prompt)
             self._current_provider.set_tools(self._tool_registry.get_tool_schemas())
 
         # Send message to LLM
@@ -333,7 +227,6 @@ Always explain what you are doing before calling tools. If a command is unsafe o
 
                 self.get_logger().info(f'Executing tool: {tool_name}')
 
-                # Execute tool
                 result = self._tool_registry.execute_tool(tool_name, tool_args)
                 tool_results.append({
                     'name': tool_name,
@@ -341,7 +234,6 @@ Always explain what you are doing before calling tools. If a command is unsafe o
                     'tool_use_id': tool_use_id,
                 })
 
-            # Send results back to LLM
             response = self._current_provider.send_tool_results(tool_results)
 
         return response
@@ -349,12 +241,8 @@ Always explain what you are doing before calling tools. If a command is unsafe o
     def process_message_stream(
         self,
         message: str,
-        mode: str = 'chat',
     ) -> Generator[Dict[str, Any], None, None]:
         """Process a user message and yield SSE event dicts as the agent works.
-
-        This is the streaming version of process_message(). It yields events
-        that the chat server can forward to the client as Server-Sent Events.
 
         Event types yielded:
           {'event': 'text_chunk', 'content': '...'}
@@ -365,21 +253,19 @@ Always explain what you are doing before calling tools. If a command is unsafe o
 
         Args:
             message: User message
-            mode: 'chat' or 'robot_tester'
 
         Yields:
             SSE event dicts
         """
-        provider_name = self._get_provider_name_for_mode(mode)
-        system_prompt = self._get_system_prompt(mode)
+        provider_name = self._config.get('default_provider', 'gemini')
 
         # Switch provider or re-init if needed
         if not self._current_provider or self._current_provider_name != provider_name:
-            if not self.set_provider(provider_name, system_prompt):
+            if not self.set_provider(provider_name):
                 yield {'event': 'error', 'message': f'No LLM provider available. Tried {provider_name}'}
                 return
         else:
-            self._current_provider.start_chat(system_prompt)
+            self._current_provider.start_chat(self._system_prompt)
             self._current_provider.set_tools(self._tool_registry.get_tool_schemas())
 
         all_tool_calls = []
@@ -434,7 +320,7 @@ Always explain what you are doing before calling tools. If a command is unsafe o
             logger.error(f'process_message_stream failed: {e}')
             yield {'event': 'error', 'message': str(e)}
 
-    # -- Public properties (avoid direct _private access from interfaces) --
+    # -- Public properties --
 
     @property
     def current_provider_name(self) -> Optional[str]:

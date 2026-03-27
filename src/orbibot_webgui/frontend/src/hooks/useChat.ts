@@ -2,8 +2,8 @@
  * useChat — React hook for OrbiBot AI chat panel.
  *
  * Talks to the chat_server HTTP API (default port 8082).
- * Supports SSE streaming, provider selection, RobotTester mode,
- * client-side conversation history, and fallback to blocking requests.
+ * Supports SSE streaming, provider selection, client-side conversation history,
+ * and fallback to blocking requests.
  */
 
 import { useState, useCallback, useRef } from 'react';
@@ -25,18 +25,14 @@ export interface ToolCallInfo {
   result: Record<string, unknown>;
 }
 
-export type ChatMode = 'chat' | 'robot_tester';
-
 export interface UseChatReturn {
   messages: ChatMessage[];
   isLoading: boolean;
   error: string | null;
   connected: boolean;
   selectedProvider: string | null;
-  mode: ChatMode;
   setSelectedProvider: (p: string | null) => void;
-  setMode: (m: ChatMode) => void;
-  sendMessage: (text: string, modeOverride?: ChatMode) => Promise<void>;
+  sendMessage: (text: string) => Promise<void>;
   resetChat: () => Promise<void>;
   clearMessages: () => void;
   checkConnection: () => Promise<boolean>;
@@ -57,7 +53,6 @@ export function useChat(): UseChatReturn {
   const [error, setError] = useState<string | null>(null);
   const [connected, setConnected] = useState(true);
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
-  const [mode, setMode] = useState<ChatMode>('chat');
 
   const abortRef = useRef<AbortController | null>(null);
   // Keep a ref to messages so streaming helpers can read current state
@@ -79,11 +74,9 @@ export function useChat(): UseChatReturn {
     }
   }, [baseUrl]);
 
-  const sendMessage = useCallback(async (text: string, modeOverride?: ChatMode) => {
+  const sendMessage = useCallback(async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed) return;
-
-    const activeMode = modeOverride ?? mode;
 
     // Add user message immediately
     const userMsg: ChatMessage = {
@@ -109,7 +102,7 @@ export function useChat(): UseChatReturn {
     // Try SSE streaming first, fall back to blocking
     try {
       await sendMessageStream(
-        trimmed, activeMode, selectedProvider, controller, setMessages, history, baseUrl,
+        trimmed, selectedProvider, controller, setMessages, history, baseUrl,
       );
       setConnected(true);
     } catch (err: unknown) {
@@ -120,7 +113,7 @@ export function useChat(): UseChatReturn {
 
       try {
         await sendMessageBlocking(
-          trimmed, activeMode, selectedProvider, controller, setMessages, history, baseUrl,
+          trimmed, selectedProvider, controller, setMessages, history, baseUrl,
         );
         setConnected(true);
       } catch (fallbackErr: unknown) {
@@ -141,7 +134,7 @@ export function useChat(): UseChatReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [mode, selectedProvider, baseUrl]);
+  }, [selectedProvider, baseUrl]);
 
   const resetChat = useCallback(async () => {
     try {
@@ -160,8 +153,8 @@ export function useChat(): UseChatReturn {
 
   return {
     messages, isLoading, error, connected,
-    selectedProvider, mode,
-    setSelectedProvider, setMode,
+    selectedProvider,
+    setSelectedProvider,
     sendMessage, resetChat, clearMessages, checkConnection,
   };
 }
@@ -172,7 +165,6 @@ export function useChat(): UseChatReturn {
 
 async function sendMessageStream(
   message: string,
-  mode: ChatMode,
   provider: string | null,
   controller: AbortController,
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>,
@@ -185,7 +177,6 @@ async function sendMessageStream(
     body: JSON.stringify({
       message,
       provider: provider ?? undefined,
-      mode,
       messages: history,
     }),
     signal: controller.signal,
@@ -289,7 +280,6 @@ async function sendMessageStream(
 
 async function sendMessageBlocking(
   message: string,
-  mode: ChatMode,
   provider: string | null,
   controller: AbortController,
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>,
@@ -302,7 +292,6 @@ async function sendMessageBlocking(
     body: JSON.stringify({
       message,
       provider: provider ?? undefined,
-      mode,
       messages: history,
     }),
     signal: controller.signal,

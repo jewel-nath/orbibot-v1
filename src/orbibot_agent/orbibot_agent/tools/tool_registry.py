@@ -14,9 +14,10 @@ from . import (
     motion_tools,
     sensor_tools,
     firmware_tools,
-    testing_tools,
     ros_tools,
     navigation_tools,
+    diagnostics_tools,
+    analysis_tools,
 )
 
 logger = logging.getLogger(__name__)
@@ -43,9 +44,10 @@ class ToolRegistry:
             motion_tools,
             sensor_tools,
             firmware_tools,
-            testing_tools,
             ros_tools,
             navigation_tools,
+            diagnostics_tools,
+            analysis_tools,
         ]
         for mod in modules:
             mod.register(self, self._ros_bridge, self._safety_manager)

@@ -208,9 +208,9 @@ class TestSuiteRunner:
 
         # Move forward 0.2 m/s for 1 second
         move_result = self._call('move_robot', {
-            'linear_x': 0.2,
-            'linear_y': 0.0,
-            'angular_z': 0.0,
+            'vx': 0.2,
+            'vy': 0.0,
+            'wz': 0.0,
             'duration': 1.0,
         })
 
