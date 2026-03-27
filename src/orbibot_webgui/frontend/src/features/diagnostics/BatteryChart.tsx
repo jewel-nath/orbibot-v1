@@ -8,7 +8,8 @@ import { TimeSeriesChart } from './charts/TimeSeriesChart';
 import { BATTERY_PARAMS } from '@/lib/constants';
 
 export function BatteryChart() {
-  const { voltage } = useBattery();
+  const battery = useBattery();
+  const voltage = battery?.voltage ?? null;
   const history = useTimeSeriesBuffer(voltage, { maxAge: 300, sampleInterval: 1000 });
 
   const channels = [

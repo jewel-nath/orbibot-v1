@@ -10,7 +10,6 @@ import { usePublisher } from '@/hooks/usePublisher';
 import { ROS_TOPICS, ROS_MESSAGE_TYPES } from '@/lib/constants';
 import { Button } from '@/components/ui/button';
 import { Cpu, Power, Volume2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 export function FirmwareInfoPanel() {
   const { ros, connectionState } = useRosContext();

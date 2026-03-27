@@ -12,7 +12,6 @@ import { DiagnosticsSection } from './DiagnosticsSection';
 import { RobotSilhouette } from '@/features/telemetry/components/RobotSilhouette';
 import { MOTOR_MAPPING } from '@/lib/constants';
 import { Cog, Activity } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 const MOTOR_COLORS = ['#6DB4FF', '#22C55E', '#F59E0B', '#EF4444'];
 
@@ -41,11 +40,13 @@ export function MotorDetailPanel() {
   };
   const cmdVsActualHistory = useMultiChannelTimeSeries(cmdVsActual, { maxAge: 30, sampleInterval: 100 });
 
-  // Build wheel speeds for silhouette (normalized 0-1)
-  const wheelSpeeds = MOTOR_MAPPING.map((_, i) => {
-    const vel = joints?.[i]?.velocityRadS ?? 0;
-    return Math.min(Math.abs(vel) / 5, 1); // Normalize to 0-1
-  });
+  // Build WheelData for silhouette
+  const silhouetteWheels = MOTOR_MAPPING.map((motor, i) => ({
+    id: motor.id,
+    label: motor.abbreviation,
+    encoderCount: encoders?.data?.[i] ?? 0,
+    enabled: true,
+  }));
 
   return (
     <div className="space-y-4">
@@ -53,7 +54,7 @@ export function MotorDetailPanel() {
       <DiagnosticsSection title="Motor Status" icon={Cog}>
         <div className="grid grid-cols-1 lg:grid-cols-[auto_1fr] gap-4">
           <div className="flex items-center justify-center">
-            <RobotSilhouette speeds={wheelSpeeds} size={160} />
+            <RobotSilhouette wheels={silhouetteWheels} width={160} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             {MOTOR_MAPPING.map((motor, i) => {

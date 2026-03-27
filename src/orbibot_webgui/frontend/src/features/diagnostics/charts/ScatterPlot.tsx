@@ -5,7 +5,7 @@
  * Features: aspect ratio lock, pan/zoom, paths with optional dashing, grid lines.
  */
 
-import { useRef, useEffect, useState, useCallback } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import * as d3 from 'd3';
 import { cn } from '@/lib/utils';
 

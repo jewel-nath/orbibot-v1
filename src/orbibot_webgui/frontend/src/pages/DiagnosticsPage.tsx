@@ -20,7 +20,6 @@ import {
 import { SafetyStatusWidget } from '@/features/telemetry/SafetyStatusWidget';
 import { SystemInfo } from '@/features/telemetry/SystemInfo';
 import { OdometryDisplay } from '@/features/telemetry/OdometryDisplay';
-import { IMUWidget } from '@/features/telemetry/IMUWidget';
 import { PIDTuningPanel } from '@/features/telemetry/PIDTuningPanel';
 import { PIDResponseGraph } from '@/features/telemetry/PIDResponseGraph';
 import { ImuCalibrationSection } from '@/features/telemetry/ImuCalibrationSection';
