@@ -2,7 +2,10 @@
  * @file battery_monitor.h
  * @brief Battery Monitor Interface
  *
- * Provides battery voltage monitoring with low/critical threshold detection.
+ * Reads battery voltage via ADC1_CH14, applies an EMA filter, and returns
+ * the smoothed value in volts. Threshold comparisons live in the caller
+ * (task_monitoring.c) against the BATTERY_VOLTAGE_* constants from
+ * orbibot_config.h.
  *
  * @author Jewel Nath
  * @date 2025-11-30
@@ -14,27 +17,14 @@
 #include <stdint.h>
 
 /**
- * @brief Initialize battery monitor
+ * @brief Initialize battery monitor (no-op; ADC init is done in hal_adc_init)
  * @return 0 on success
  */
 int battery_monitor_init(void);
 
 /**
- * @brief Get current battery voltage
- * @return Battery voltage in volts (filtered)
+ * @brief Get current battery voltage in volts (EMA-filtered)
  */
 float battery_get_voltage(void);
-
-/**
- * @brief Check if battery voltage is low
- * @return 1 if voltage is below BATTERY_VOLTAGE_LOW, 0 otherwise
- */
-int battery_is_low(void);
-
-/**
- * @brief Check if battery voltage is critical
- * @return 1 if voltage is below BATTERY_VOLTAGE_CRITICAL, 0 otherwise
- */
-int battery_is_critical(void);
 
 #endif /* BATTERY_MONITOR_H */

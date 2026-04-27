@@ -395,57 +395,12 @@ int16_t hal_timer_read_encoder_delta(uint8_t encoder)
 }
 
 /**
- * @brief Get raw encoder count relative to midpoint
- */
-int32_t hal_timer_get_encoder_count(uint8_t encoder)
-{
-    if (encoder >= 4) return 0;
-    return (int32_t)((int16_t)encoder_tim[encoder]->CNT - ENCODER_MIDPOINT);
-}
-
-/**
- * @brief Reset encoder count to midpoint
+ * @brief Reset encoder CNT to midpoint (used by the `FUNC_RESET_ENCODERS`
+ *        protocol command)
  */
 void hal_timer_reset_encoder(uint8_t encoder)
 {
     if (encoder >= 4) return;
     encoder_tim[encoder]->CNT = ENCODER_MIDPOINT;
     encoder_prev_cnt[encoder] = ENCODER_MIDPOINT;
-}
-
-/**
- * @brief Stop all motors with brake or freewheel
- *
- * Stop modes:
- * - brake=1: Both PWM pins HIGH (short-circuit braking)
- * - brake=0: Both PWM pins LOW (motor coasts/freewheels)
- */
-void hal_timer_motor_stop(uint8_t brake)
-{
-    if (brake)
-    {
-        // Active braking: set both PWM pins HIGH
-        // This creates a short-circuit that resists motor rotation
-        TIM8->CCR1 = MOTOR_MAX_PWM;  // M1A
-        TIM8->CCR2 = MOTOR_MAX_PWM;  // M1B
-        TIM8->CCR3 = MOTOR_MAX_PWM;  // M2A
-        TIM8->CCR4 = MOTOR_MAX_PWM;  // M2B
-        TIM1->CCR4 = MOTOR_MAX_PWM;  // M3A
-        TIM1->CCR1 = MOTOR_MAX_PWM;  // M3B
-        TIM1->CCR2 = MOTOR_MAX_PWM;  // M4A
-        TIM1->CCR3 = MOTOR_MAX_PWM;  // M4B
-    }
-    else
-    {
-        // Freewheel: set both PWM pins LOW
-        // Motor coasts to a stop
-        TIM8->CCR1 = 0;  // M1A
-        TIM8->CCR2 = 0;  // M1B
-        TIM8->CCR3 = 0;  // M2A
-        TIM8->CCR4 = 0;  // M2B
-        TIM1->CCR4 = 0;  // M3A
-        TIM1->CCR1 = 0;  // M3B
-        TIM1->CCR2 = 0;  // M4A
-        TIM1->CCR3 = 0;  // M4B
-    }
 }

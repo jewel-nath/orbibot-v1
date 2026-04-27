@@ -118,27 +118,6 @@ int hal_gpio_init(void)
 }
 
 /**
- * @brief Set LED state
- */
-void hal_gpio_set_led(uint8_t led_num, uint8_t state)
-{
-    if (led_num == 0)
-    {
-        if (state)
-            GPIO_SetBits(LED1_PORT, LED1_PIN);
-        else
-            GPIO_ResetBits(LED1_PORT, LED1_PIN);
-    }
-    else if (led_num == 1)
-    {
-        if (state)
-            GPIO_SetBits(LED2_PORT, LED2_PIN);
-        else
-            GPIO_ResetBits(LED2_PORT, LED2_PIN);
-    }
-}
-
-/**
  * @brief Toggle LED state
  */
 void hal_gpio_toggle_led(uint8_t led_num)
@@ -157,47 +136,4 @@ void hal_gpio_toggle_led(uint8_t led_num)
         else
             GPIO_SetBits(LED2_PORT, LED2_PIN);
     }
-}
-
-
-/**
- * @brief Set buzzer state
- * @param state 1 = ON, 0 = OFF
- */
-void hal_gpio_set_buzzer(uint8_t state)
-{
-    if (state)
-    {
-        BUZZER_ON();
-    }
-    else
-    {
-        BUZZER_OFF();
-    }
-}
-
-/**
- * @brief Beep buzzer for specified duration
- * @param duration_ms Duration in milliseconds (blocking)
- */
-void hal_gpio_beep(uint16_t duration_ms)
-{
-    BUZZER_ON();
-
-    // Simple delay (blocking) - for startup beep
-    for (volatile uint32_t i = 0; i < (duration_ms * 7200); i++)
-    {
-        __NOP();
-    }
-
-    BUZZER_OFF();
-}
-
-/**
- * @brief Read KEY1 button state
- * @return 1 if pressed, 0 if released
- */
-uint8_t hal_gpio_read_key1(void)
-{
-    return KEY1_PRESSED() ? 1 : 0;
 }

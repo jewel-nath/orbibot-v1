@@ -35,7 +35,9 @@
  * Protocol Configuration
  */
 #define ENABLE_CHECKSUM         1       // Enable checksum validation
-#define AUTO_SEND_TIMEOUT       40      // Auto-report cycle time (ms)
+
+/* Auto-report cycle is set by AUTO_SEND_CYCLE inside task_communication.c
+ * (1ms tick × 20 counts = 20ms → 50Hz per report type). */
 
 /* ========================================================================
  * FUNCTION CODES (ROSMaster Protocol)
@@ -60,9 +62,8 @@
 
 /**
  * Motion Control Functions (0x10-0x1F)
+ * Only FUNC_MOTION (0x12) through FUNC_SET_MAG_CAL (0x16) are dispatched.
  */
-#define FUNC_MOTOR              0x10    // Direct motor PWM control
-#define FUNC_CAR_RUN            0x11    // Directional control (forward, back, etc.)
 #define FUNC_MOTION             0x12    // 3D velocity control (Vx, Vy, Vz)
 #define FUNC_SET_MOTOR_PID      0x13    // Set motor PID parameters
 #define FUNC_SET_YAW_PID        0x14    // Set yaw PID parameters
@@ -71,24 +72,23 @@
 
 /**
  * Request Functions (0x50-0x5F)
+ * Both 0x50+0x51 (legacy) and direct 0x51 (Python-driver convention) work.
  */
-#define FUNC_REQUEST_DATA       0x50    // Request specific data
-#define FUNC_VERSION            0x51    // Get firmware version
-#define FUNC_NOW_YAW            0x52    // Get current yaw
+#define FUNC_REQUEST_DATA       0x50    // Legacy request wrapper (takes sub-byte)
+#define FUNC_VERSION            0x51    // Get firmware version — direct or via 0x50
 
-/**
- * Extended Functions (0x60+)
- */
-#define FUNC_RESET_FLASH        0xA0    // Reset flash settings
-#define FUNC_TEST_MODE          0xA1    // Test mode
-#define FUNC_TEST_CLEAR_YAW     0xA2    // Clear yaw test
-
-/* Reserved ROSMaster protocol codes — not implemented in this firmware.
- * Kept as reference for protocol compatibility if hardware is added.
+/* ---------------------------------------------------------------------
+ * Reserved ROSMaster protocol codes — NOT dispatched by this firmware.
+ * Kept as comment-only reference so a 3rd-party host sending them just
+ * falls through to the `default` case in protocol_parse_command() and
+ * increments g_unknown_cmd_count without side effects.
+ *
  *   0x03  PWM_SERVO          (single servo)
  *   0x04  PWM_SERVO_ALL      (all 4 servos)
  *   0x05  RGB                (RGB LED)
  *   0x06  RGB_EFFECT         (RGB effects)
+ *   0x10  MOTOR              (direct motor PWM — Yahboom reference only)
+ *   0x11  CAR_RUN            (directional control)
  *   0x17  CAR_TYPE           (mecanum/ackerman select)
  *   0x20  UART_SERVO         (serial bus servo)
  *   0x21  UART_SERVO_ID      (servo ID assignment)
@@ -97,9 +97,13 @@
  *   0x24  ARM_OFFSET         (arm calibration)
  *   0x30  AKM_DEF_ANGLE      (Ackerman default)
  *   0x31  AKM_STEER_ANGLE    (Ackerman steering)
+ *   0x52  NOW_YAW            (query current yaw)
  *   0x60  CAN_RX_BEEP        (CAN bus)
  *   0x70  OLED_FLAG          (OLED display)
- */
+ *   0xA0  RESET_FLASH        (flash reset)
+ *   0xA1  TEST_MODE          (factory test)
+ *   0xA2  TEST_CLEAR_YAW     (test mode — clear yaw)
+ * --------------------------------------------------------------------- */
 
 /**
  * Verification Values
@@ -289,30 +293,6 @@ void protocol_start_double_beep(void);
 static inline uint8_t protocol_is_command_ready(void)
 {
     return g_cmd_flag || g_cmd_flag2;
-}
-
-/**
- * @brief Clear command ready flag
- */
-static inline void protocol_clear_command_flag(void)
-{
-    g_cmd_flag = 0;
-}
-
-/**
- * @brief Enable auto-reporting
- */
-static inline void protocol_enable_auto_report(void)
-{
-    g_auto_report_enabled = 1;
-}
-
-/**
- * @brief Disable auto-reporting
- */
-static inline void protocol_disable_auto_report(void)
-{
-    g_auto_report_enabled = 0;
 }
 
 /**

@@ -52,17 +52,3 @@ void motor_set_speed(uint8_t motor, int16_t speed)
     int16_t compensated_speed = motor_apply_deadzone(speed);
     hal_timer_set_motor_pwm(motor, compensated_speed);
 }
-
-void motor_stop_all(void)
-{
-    for (uint8_t i = 0; i < 4; i++)
-    {
-        hal_timer_set_motor_pwm(i, 0);
-    }
-}
-
-void motor_stop(uint8_t brake)
-{
-    // Call HAL function for brake/freewheel stop
-    hal_timer_motor_stop(brake);
-}

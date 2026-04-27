@@ -24,7 +24,6 @@ void pid_init(pid_controller_t *pid, float kp, float ki, float kd, float max_out
     pid->ki = ki;
     pid->kd = kd;
     pid->max_output = max_output;
-    pid->deadzone = 0.0f;
 
     pid_reset(pid);
 }

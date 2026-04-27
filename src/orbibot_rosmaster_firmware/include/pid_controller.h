@@ -39,7 +39,6 @@ typedef struct {
     float integral;     // Integral accumulator
 
     float max_output;   // Output limit
-    float deadzone;     // Output deadzone (ignore pulse)
 } pid_controller_t;
 
 /**

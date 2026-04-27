@@ -156,14 +156,6 @@ void hal_spi_write_byte(uint8_t data)
 }
 
 /**
- * @brief Write multiple bytes to SPI (TX only, discard RX)
- */
-void hal_spi_write_bytes(const uint8_t *data, uint16_t length)
-{
-    hal_spi_transfer_bytes(data, NULL, length);
-}
-
-/**
  * @brief Read a single byte from SPI (send 0x00, capture RX)
  */
 uint8_t hal_spi_read_byte(void)
@@ -177,41 +169,4 @@ uint8_t hal_spi_read_byte(void)
 void hal_spi_read_bytes(uint8_t *data, uint16_t length)
 {
     hal_spi_transfer_bytes(NULL, data, length);
-}
-
-/**
- * @brief Set SPI clock speed
- */
-int hal_spi_set_speed(uint16_t prescaler)
-{
-    uint16_t spi_prescaler;
-
-    // Convert prescaler value to SPI register value
-    switch (prescaler)
-    {
-        case 2:   spi_prescaler = SPI_BaudRatePrescaler_2; break;
-        case 4:   spi_prescaler = SPI_BaudRatePrescaler_4; break;
-        case 8:   spi_prescaler = SPI_BaudRatePrescaler_8; break;
-        case 16:  spi_prescaler = SPI_BaudRatePrescaler_16; break;
-        case 32:  spi_prescaler = SPI_BaudRatePrescaler_32; break;
-        case 64:  spi_prescaler = SPI_BaudRatePrescaler_64; break;
-        case 128: spi_prescaler = SPI_BaudRatePrescaler_128; break;
-        case 256: spi_prescaler = SPI_BaudRatePrescaler_256; break;
-        default:
-            return -1;  // Invalid prescaler
-    }
-
-    // Disable SPI before changing configuration
-    SPI_Cmd(SPI2, DISABLE);
-
-    // Modify prescaler bits (CR1 bits 5:3)
-    uint16_t cr1 = SPI2->CR1;
-    cr1 &= ~(0x38);  // Clear bits 5:3
-    cr1 |= spi_prescaler;
-    SPI2->CR1 = cr1;
-
-    // Re-enable SPI
-    SPI_Cmd(SPI2, ENABLE);
-
-    return 0;
 }

@@ -64,14 +64,6 @@ int16_t encoder_read_delta(uint8_t encoder)
     return delta;
 }
 
-void encoder_get_all(int32_t *counts)
-{
-    for (int i = 0; i < 4; i++)
-    {
-        counts[i] = encoder_accumulated[i];
-    }
-}
-
 void encoder_reset_all(void)
 {
     for (int i = 0; i < 4; i++)
@@ -85,11 +77,4 @@ int32_t encoder_get_count(uint8_t encoder)
 {
     if (encoder >= 4) return 0;
     return encoder_accumulated[encoder];
-}
-
-void encoder_reset(uint8_t encoder)
-{
-    if (encoder >= 4) return;
-    encoder_accumulated[encoder] = 0;
-    hal_timer_reset_encoder(encoder);
 }

@@ -18,23 +18,15 @@
 // Enable DMA for USART1 TX
 #define ENABLE_USART1_DMA       1
 
-// Use RX buffer size from orbibot_config.h
-#define USART_RX_BUFFER_SIZE    SERIAL_RX_BUFFER_SIZE
-
 // DMA TX buffer size (must be large enough for largest packet ~30 bytes)
 #define USART_DMA_TX_BUFFER_SIZE    128
-
-// Circular RX buffer
-static volatile uint8_t rx_buffer[USART_RX_BUFFER_SIZE];
-static volatile uint16_t rx_head = 0;
-static volatile uint16_t rx_tail = 0;
 
 #if ENABLE_USART1_DMA
 // DMA TX buffer
 static uint8_t dma_tx_buffer[USART_DMA_TX_BUFFER_SIZE];
 #endif
 
-// Error tracking
+// Error tracking (accumulated in ISR, readable via hal_usart_get_errors)
 static volatile uint32_t usart_errors = 0;
 
 #if ENABLE_USART1_DMA
@@ -81,7 +73,7 @@ static void usart1_dma_init(void)
  * - USART1: PA9 (TX), PA10 (RX)
  * - 8 data bits, 1 stop bit, no parity
  * - Hardware flow control disabled
- * - RX interrupt enabled for buffering
+ * - RX interrupt forwards each byte to protocol_receive_byte()
  * - DMA enabled for TX (non-blocking transmission)
  */
 int hal_usart_init(uint32_t baudrate)
@@ -135,9 +127,6 @@ int hal_usart_init(uint32_t baudrate)
     usart1_dma_init();
 #endif
 
-    // Clear buffers
-    rx_head = 0;
-    rx_tail = 0;
     usart_errors = 0;
 
     return 0;
@@ -206,58 +195,6 @@ void hal_usart_send_bytes(const uint8_t *data, uint16_t length)
 }
 
 /**
- * @brief Send a null-terminated string via USART
- */
-void hal_usart_send_string(const char *str)
-{
-    while (*str)
-    {
-        hal_usart_send_byte(*str++);
-    }
-}
-
-/**
- * @brief Check if data is available in RX buffer
- */
-uint16_t hal_usart_available(void)
-{
-    return (uint16_t)(USART_RX_BUFFER_SIZE + rx_head - rx_tail) % USART_RX_BUFFER_SIZE;
-}
-
-/**
- * @brief Read a single byte from RX buffer
- */
-uint8_t hal_usart_read_byte(uint8_t *data)
-{
-    if (rx_head == rx_tail)
-    {
-        return 0;  // Buffer empty
-    }
-
-    *data = rx_buffer[rx_tail];
-    rx_tail = (rx_tail + 1) % USART_RX_BUFFER_SIZE;
-
-    return 1;
-}
-
-/**
- * @brief Read multiple bytes from RX buffer
- */
-uint16_t hal_usart_read_bytes(uint8_t *data, uint16_t max_length)
-{
-    uint16_t count = 0;
-
-    while (count < max_length && rx_head != rx_tail)
-    {
-        data[count] = rx_buffer[rx_tail];
-        rx_tail = (rx_tail + 1) % USART_RX_BUFFER_SIZE;
-        count++;
-    }
-
-    return count;
-}
-
-/**
  * @brief Flush TX buffer (wait for all data to be sent)
  */
 void hal_usart_flush_tx(void)
@@ -281,15 +218,6 @@ void hal_usart_flush_tx(void)
 }
 
 /**
- * @brief Clear RX buffer
- */
-void hal_usart_flush_rx(void)
-{
-    rx_head = 0;
-    rx_tail = 0;
-}
-
-/**
  * @brief Get USART error status
  */
 uint32_t hal_usart_get_errors(void)
@@ -310,20 +238,7 @@ void USART1_IRQHandler(void)
     if (USART_GetITStatus(USART1, USART_IT_RXNE) != RESET)
     {
         uint8_t data = USART_ReceiveData(USART1);
-
         protocol_receive_byte(data);
-
-        // Store in circular buffer (available via hal_usart_read_byte for debug)
-        uint16_t next_head = (rx_head + 1) % USART_RX_BUFFER_SIZE;
-        if (next_head != rx_tail)
-        {
-            rx_buffer[rx_head] = data;
-            rx_head = next_head;
-        }
-        else
-        {
-            usart_errors |= (1 << 0);  // Bit 0: RX buffer overflow
-        }
     }
 
     // Clear hardware errors by reading DR (STM32 requirement)

@@ -128,18 +128,3 @@ int flash_storage_save(void)
                (unsigned)sizeof(flash_data_t));
     return 0;
 }
-
-int flash_storage_is_valid(void)
-{
-    if (!flash_loaded)
-    {
-        const uint8_t *flash_ptr = (const uint8_t *)FLASH_STORAGE_PAGE_ADDR;
-        memcpy(&flash_cache, flash_ptr, sizeof(flash_data_t));
-        flash_loaded = 1;
-    }
-
-    if (flash_cache.magic != FLASH_STORAGE_MAGIC)
-        return 0;
-
-    return (flash_cache.checksum == calculate_checksum(&flash_cache)) ? 1 : 0;
-}

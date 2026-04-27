@@ -28,31 +28,16 @@ int hal_timer_init(void);
 void hal_timer_set_motor_pwm(uint8_t motor, int16_t pwm);
 
 /**
- * @brief Read encoder delta and reset to midpoint
+ * @brief Read encoder delta since the previous call (atomic, no reset)
  * @param encoder Encoder number (0-3)
- * @return Delta count since last read
+ * @return Signed delta; 16-bit modular subtraction handles CNT wrap.
  */
 int16_t hal_timer_read_encoder_delta(uint8_t encoder);
 
 /**
- * @brief Get encoder count
- * @param encoder Encoder number (0-3)
- * @return Encoder count
- */
-int32_t hal_timer_get_encoder_count(uint8_t encoder);
-
-/**
- * @brief Reset encoder count
+ * @brief Reset encoder CNT register to midpoint (used by 0x08 protocol cmd)
  * @param encoder Encoder number (0-3)
  */
 void hal_timer_reset_encoder(uint8_t encoder);
-
-/**
- * @brief Stop all motors with brake or freewheel
- * @param brake 1 = active brake (both pins HIGH), 0 = freewheel (both pins LOW)
- *
- * Stop modes control H-bridge behavior for motor control
- */
-void hal_timer_motor_stop(uint8_t brake);
 
 #endif // HAL_TIMER_H

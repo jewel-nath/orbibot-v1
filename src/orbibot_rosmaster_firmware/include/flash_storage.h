@@ -60,10 +60,4 @@ int flash_storage_load(void);
  */
 int flash_storage_save(void);
 
-/**
- * @brief Check if flash contains valid stored data
- * @return 1 if valid, 0 if empty/corrupt
- */
-int flash_storage_is_valid(void);
-
 #endif // FLASH_STORAGE_H
