@@ -9,7 +9,7 @@
  * - Transmits auto-report data (motion, IMU, encoders)
  *
  * Uses ROSMaster compatible protocol for ROS 2 integration.
- * Reports 5 data types at 20Hz each (100 packets/sec total).
+ * Reports 5 data types at 50Hz each (250 packets/sec total).
  */
 
 #include "task_communication.h"

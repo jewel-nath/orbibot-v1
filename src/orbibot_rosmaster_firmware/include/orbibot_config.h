@@ -126,16 +126,20 @@
  * Battery: 4S LiFePO4 (12.8V nominal, 14.6V fully charged)
  * Chemistry: Lithium Iron Phosphate (LiFePO4)
  * Capacity: 15Ah (15,500mAh)
- * - Nominal: 12.8V (3.2V per cell)
- * - Fully charged: 14.6V (3.65V per cell)
- * - Low voltage: 11.6V (2.9V per cell - ~20% remaining)
- * - Critical: 10.0V (2.5V per cell - BMS cutoff, stop immediately)
+ *
+ * Thresholds below MUST match hardware_params.yaml (safety.battery_low_threshold
+ * and safety.battery_critical_voltage). Changing one side without the other
+ * creates inconsistent behavior between firmware lockout and ROS 2 diagnostics.
+ * - Nominal:        12.8V (3.2V per cell)
+ * - Fully charged:  14.6V (3.65V per cell)
+ * - Low warning:    11.0V (≈2.75V per cell — matches yaml battery_low_threshold)
+ * - Critical stop:  10.5V (≈2.63V per cell — matches yaml battery_critical_voltage)
  */
 #define BATTERY_CELLS               4
 #define BATTERY_VOLTAGE_NOMINAL     12.8f       // Volts
 #define BATTERY_VOLTAGE_FULL        14.6f       // Volts
-#define BATTERY_VOLTAGE_LOW         11.0f       // Warning threshold (~20%)
-#define BATTERY_VOLTAGE_CRITICAL    10.5f       // Emergency stop threshold (matches ROS2 config)
+#define BATTERY_VOLTAGE_LOW         11.0f       // Warning threshold (matches ROS2 yaml)
+#define BATTERY_VOLTAGE_CRITICAL    10.5f       // Emergency stop threshold (matches ROS2 yaml)
 
 /**
  * ADC Configuration for Battery Monitoring
@@ -249,11 +253,13 @@
  * Serial Communication (USART1 via Micro-USB)
  * - Connection: Raspberry Pi 5
  * - Protocol: Custom binary with checksums
+ *
+ * Note: RX is consumed byte-by-byte directly in the USART ISR into the
+ * protocol state machine (no separate RX buffer). TX uses the DMA buffer
+ * sized in hal_usart.c (USART_DMA_TX_BUFFER_SIZE).
  */
 #define USART_BAUDRATE              115200
 #define USART_PORT                  1           // USART1
-#define SERIAL_RX_BUFFER_SIZE       256
-#define SERIAL_TX_BUFFER_SIZE       256
 
 /* ========================================================================
  * OPTIONAL FEATURES
@@ -261,9 +267,12 @@
 
 /**
  * OLED Display (SSD1306, 0.91", I2C 0x3C)
- * Shows robot status, battery, velocity
+ *
+ * Most OrbiBot builds do not have a physical OLED connected. The driver
+ * is ~3KB flash plus a ~1.9KB font table. Set to 0 by default so only
+ * boards with a soldered OLED pay the cost. Enable explicitly for those.
  */
-#define ENABLE_OLED_DISPLAY         1           // Enabled for debugging
+#define ENABLE_OLED_DISPLAY         0           // 0 = no display; 1 = SSD1306 fitted
 
 /**
  * Debug Output

@@ -160,7 +160,7 @@ src/orbibot_rosmaster_firmware/
 |----------|------|------|----------------|
 | 10 | `task_control` | 100Hz | Encoder read, PID, mecanum kinematics, odometry accumulation |
 | 8 | `task_imu` | 50Hz | ICM-20948 read; accel→roll/pitch; gyro+mag→yaw (complementary filter) |
-| 7 | `task_communication` | 1ms tick | USART RX command parse; 5-type auto-report at 20Hz each |
+| 7 | `task_communication` | 1ms tick | USART RX command parse; 5-type auto-report at 50Hz each |
 | 5 | `task_monitoring` | 1Hz | Watchdog feed, battery voltage, buzzer, LED heartbeat |
 
 ### Control Flow
@@ -183,15 +183,18 @@ ROS 2 → /cmd_vel
               USART DMA TX → ROS 2 hardware_node
 ```
 
-### Auto-Report Schedule (task_communication, 50ms cycle)
+### Auto-Report Schedule (task_communication, 20ms cycle = 50Hz per type)
+
+Task ticks every 1ms; AUTO_SEND_CYCLE = 20 ticks = 20ms cycle. Within each
+cycle, five report types are emitted 4ms apart.
 
 ```
- 0ms  ─ report_count=1  → REPORT_SPEED   (0x0A) — Vx/Vy/Vz + battery
-10ms  ─ report_count=5  → REPORT_ICM_RAW (0x0E) — calibrated gyro/accel + raw mag
-20ms  ─ report_count=9  → REPORT_IMU_ATT (0x0C) — roll/pitch/yaw
-30ms  ─ report_count=13 → REPORT_ENCODER (0x0D) — 4 encoder counts
-40ms  ─ report_count=17 → REPORT_ODOM    (0x15) — x/y/theta/vx/vy/omega
-20ms  ─ cycle repeats   (all types at 50Hz = 250 packets/sec)
+ 1ms ─ report_count=1  → REPORT_SPEED   (0x0A) — Vx/Vy/Vz + battery
+ 5ms ─ report_count=5  → REPORT_ICM_RAW (0x0E) — gyro/accel milli-units + raw mag
+ 9ms ─ report_count=9  → REPORT_IMU_ATT (0x0C) — roll/pitch/yaw
+13ms ─ report_count=13 → REPORT_ENCODER (0x0D) — 4 encoder counts
+17ms ─ report_count=17 → REPORT_ODOM    (0x15) — x/y/theta/vx/vy/omega
+20ms ─ cycle repeats   (all 5 types at 50Hz = 250 packets/sec total)
 ```
 
 ---
@@ -216,7 +219,7 @@ ROS 2 → /cmd_vel
 **Incoming (host → firmware):**
 | Code | Name | Description |
 |------|------|-------------|
-| `0x01` | AUTO_REPORT | Enable/disable 20Hz data streaming |
+| `0x01` | AUTO_REPORT | Enable/disable 50Hz auto-report streams |
 | `0x02` | BEEP | Buzzer: 0=off, 1=continuous, ≥10=duration ms |
 | `0x09` | RESET_ODOM | Reset firmware x/y/theta position to zero |
 | `0x0F` | RESET_STATE | Reset protocol state machine |
@@ -225,9 +228,10 @@ ROS 2 → /cmd_vel
 | `0x14` | SET_YAW_PID | Yaw gains (Kp/Ki/Kd int16 × 1000) + save byte |
 | `0x16` | SET_MAG_CAL | Hard-iron offsets (int16 × 100 µT per axis) |
 | `0x08` | RESET_ENCODERS | Reset encoder counts to zero (odometry unchanged) |
-| `0x50`+`0x51` | VERSION | Send REQUEST_DATA (0x50) with sub-byte 0x51 |
+| `0x51` | VERSION | Direct request — firmware replies with `[major, minor]` |
+| `0x50`+`0x51` | VERSION (legacy) | REQUEST_DATA (0x50) with sub-byte 0x51 — same response |
 
-**Outgoing (firmware → host), auto-reported at 20Hz each (50ms cycle, interleaved 10ms):**
+**Outgoing (firmware → host), auto-reported at 50Hz each (20ms cycle, interleaved 4ms):**
 | Code | Name | Description |
 |------|------|-------------|
 | `0x0A` | REPORT_SPEED | Vx, Vy, Vz (int16 mm/s) + battery (uint8 × 0.1V) |

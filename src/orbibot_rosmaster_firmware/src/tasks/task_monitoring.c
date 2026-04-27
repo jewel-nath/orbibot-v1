@@ -72,8 +72,12 @@ void task_monitoring(void *params)
             alive_snapshot[i] = current;
         }
 
+#if ENABLE_WATCHDOG
         if (all_alive)
             hal_watchdog_feed();
+#else
+        (void)all_alive;  /* suppress unused-variable when watchdog disabled */
+#endif
 
         // Note: protocol_update_buzzer() is now called from task_communication at 1ms
         // cadence for accurate buzzer timing. No need to call it here.

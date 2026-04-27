@@ -301,9 +301,9 @@ static void protocolInit(void)
  *
  * Creates all application tasks with appropriate priorities:
  * - Priority 10: Control task (motor PID, highest priority)
- * - Priority 9: Communication task (serial RX/TX)
- * - Priority 8: IMU task (sensor data acquisition)
- * - Priority 5: Monitoring task (battery, diagnostics)
+ * - Priority 8:  IMU task (sensor data acquisition)
+ * - Priority 7:  Communication task (serial RX/TX)
+ * - Priority 5:  Monitoring task (battery, diagnostics)
  */
 static void createTasks(void)
 {
@@ -443,7 +443,9 @@ int main(void)
      * Feeding here confirms that all initialization completed successfully and
      * resets the 5s window so MonitorTask's first feed (at ~1s) is safe.
      * The task-based feeding still protects against hangs during operation. */
+#if ENABLE_WATCHDOG
     hal_watchdog_feed();
+#endif
 
     // Start FreeRTOS scheduler (never returns)
     vTaskStartScheduler();
