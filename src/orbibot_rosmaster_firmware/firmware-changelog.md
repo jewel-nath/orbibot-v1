@@ -1,6 +1,101 @@
 # Firmware Changelog
 
-## [Unreleased] — 2026-03-25
+## [Unreleased] — 2026-04-19
+
+### Bug Fixes
+
+- **Contract: direct `FUNC_VERSION` (0x51)** (`protocol.c`)
+  `rosmaster_driver.request_firmware_version()` sends `0x51` as the function
+  code directly, but the firmware dispatch switch only had the legacy
+  `FUNC_REQUEST_DATA (0x50)` + sub-byte `0x51` path. Direct `0x51` fell
+  through to `default` and bumped `g_unknown_cmd_count` silently — the
+  `/orbibot/get_firmware_version` service therefore always returned
+  `"unknown"`. Added a `case FUNC_VERSION:` that replies with `[major, minor]`.
+  Legacy path retained for protocol compatibility. Verified live on 2026-04-19.
+
+### Refactoring / Dead-code Removal
+
+- **Unused circular RX buffer** (`hal_usart.c`, `hal_usart.h`)
+  Removed `rx_buffer[256]`, `rx_head`, `rx_tail`, the ISR circular-buffer
+  write branch, and the four unused read/flush APIs (`hal_usart_available`,
+  `hal_usart_read_byte`, `hal_usart_read_bytes`, `hal_usart_flush_rx`).
+  Saves 256 B RAM plus one store per RX byte in the ISR. Also dropped
+  `SERIAL_RX_BUFFER_SIZE` / `SERIAL_TX_BUFFER_SIZE` macros from
+  `orbibot_config.h` (no longer referenced anywhere).
+
+- **Dead buzzer wrappers** (`hal_gpio.c`, `hal_gpio.h`)
+  Removed `hal_gpio_set_buzzer()` (callers already use `BUZZER_ON/OFF` macros)
+  and `hal_gpio_beep()` (no callers; non-blocking audio lives in
+  `protocol_start_double_beep()`).
+
+- **Dead RX counter** (`protocol.c`)
+  Removed `g_rx_byte_count` — incremented on every RX byte but never read.
+  Also removed the stale `// FUNC_SET_MOTOR_PID_MULTILEVEL removed` comment.
+
+- **Dead `AUTO_SEND_TIMEOUT` macro** (`protocol.h`)
+  `AUTO_SEND_TIMEOUT` had no callers; the real cycle value lives as
+  `AUTO_SEND_CYCLE` inside `task_communication.c`. Replaced with a pointer
+  comment to avoid future confusion.
+
+- **Dead inline wrappers** (`protocol.h`)
+  Removed `protocol_clear_command_flag()`, `protocol_enable_auto_report()`,
+  `protocol_disable_auto_report()` — three `static inline` helpers with no
+  callers. Kept `protocol_is_command_ready()` and
+  `protocol_is_auto_report_enabled()` which are used in `task_communication.c`.
+
+- **Unimplemented FUNC codes** (`protocol.h`)
+  Moved `FUNC_MOTOR (0x10)`, `FUNC_CAR_RUN (0x11)`, `FUNC_NOW_YAW (0x52)`,
+  `FUNC_RESET_FLASH (0xA0)`, `FUNC_TEST_MODE (0xA1)`, `FUNC_TEST_CLEAR_YAW
+  (0xA2)` from the active `#define` section into the existing
+  "Reserved / not implemented" comment block, so readers aren't misled
+  about what the firmware actually supports.
+
+### Configuration
+
+- **OLED display disabled by default** (`orbibot_config.h`)
+  Set `ENABLE_OLED_DISPLAY = 0`. Most OrbiBot builds don't have a physical
+  SSD1306 soldered; the driver costs ~3 KB flash including the font table.
+  Enable explicitly (`=1`) on boards that have the display fitted.
+
+- **Battery threshold comment fix** (`orbibot_config.h`)
+  Docstring block said "Low voltage: 11.6 V, Critical: 10.0 V" but the
+  actual `#define`s were `11.0f` and `10.5f` (which correctly match
+  `hardware_params.yaml`). Rewrote the comment to reflect real values and
+  reminded maintainers that the firmware and ROS 2 YAML must stay in sync.
+
+- **Watchdog calls gated on `ENABLE_WATCHDOG`** (`main.c`, `task_monitoring.c`)
+  `hal_watchdog_feed()` was called unconditionally but `hal_watchdog_init()`
+  was under `#if ENABLE_WATCHDOG`. Now both wrapped consistently so an
+  `ENABLE_WATCHDOG=0` development build has no IWDG code path at all.
+
+### Documentation
+
+- **Auto-report rate / task priority corrections** (`firmware-architecture.md`,
+  `src/tasks/task_communication.c`, `src/main.c`)
+  Architecture doc and several docstrings claimed "20 Hz each, 50 ms cycle"
+  and `CommTask priority 9`. Actual code does 50 Hz per type, 20 ms cycle,
+  priority 7. Corrected all three. Also refreshed the function-code table
+  to show both the direct `0x51` and legacy `0x50+0x51` version paths.
+
+### Live Verification (2026-04-19)
+
+All of the above was flashed to the real STM32 on the robot and exercised
+with wheels elevated. Contract fix returns `major=2, minor=0`; all five
+auto-report types stream at 54 Hz each (270 pkt/s aggregate); mecanum
+forward/backward/lateral/rotate sign patterns match the documented inverse
+kinematics; command timeout auto-stops motors at t ≈ 2.12 s; buzzer works;
+unknown function code 0x77 is silently dropped without stalling the stream.
+See `test-report.md` for the full snapshot.
+
+Hardware observation (not a firmware defect): **M4 (Back-Right)** reports
+~12–15 % fewer encoder ticks than M1–M3 across every motion type. PID
+compensates so chassis velocity is still accurate, but the per-wheel count
+mismatch suggests extra friction on the M4 drivetrain. Run
+`test_motor_max_speed.py` per-wheel when convenient.
+
+---
+
+## [2.0.2] — 2026-03-25
 
 ### Refactoring
 
