@@ -20,8 +20,10 @@
 /* ADC reference voltage */
 #define ADC_VREF            3.3f
 
-/* ADC resolution (12-bit) */
-#define ADC_MAX_VALUE       4096.0f
+/* ADC full-scale count (12-bit: 0..4095 → 4095 = 3.3 V).
+ * Must match ADC_MAX_VALUE in hal_adc.c — both sides use 4095 now.
+ * Dividing by 4096 would give a ~0.024 % low voltage reading. */
+#define ADC_MAX_VALUE       4095.0f
 
 /* Number of samples to average per read */
 #define ADC_SAMPLE_COUNT    4
@@ -103,22 +105,4 @@ float battery_get_voltage(void)
     }
 
     return ema_voltage;
-}
-
-/**
- * @brief Check if battery voltage is low
- * @return 1 if voltage is below BATTERY_VOLTAGE_LOW threshold, 0 otherwise
- */
-int battery_is_low(void)
-{
-    return (battery_get_voltage() < BATTERY_VOLTAGE_LOW) ? 1 : 0;
-}
-
-/**
- * @brief Check if battery voltage is critical
- * @return 1 if voltage is below BATTERY_VOLTAGE_CRITICAL threshold, 0 otherwise
- */
-int battery_is_critical(void)
-{
-    return (battery_get_voltage() < BATTERY_VOLTAGE_CRITICAL) ? 1 : 0;
 }

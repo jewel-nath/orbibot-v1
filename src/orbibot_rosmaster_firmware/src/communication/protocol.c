@@ -85,9 +85,6 @@ void protocol_init(void)
  * BYTE RECEPTION (Call from USART ISR)
  * ======================================================================== */
 
-// Debug counter - increments for every byte received
-volatile uint32_t g_rx_byte_count = 0;
-
 /* Staging area for header bytes — avoids writing to g_rx_buffer
  * while the primary buffer might still be processed by the task. */
 static uint8_t g_rx_staged_header = 0;
@@ -95,8 +92,6 @@ static uint8_t g_rx_staged_device = 0;
 
 void protocol_receive_byte(uint8_t byte)
 {
-    g_rx_byte_count++;
-
     switch (g_rx_state)
     {
         case RX_STATE_WAIT_HEADER:
@@ -345,15 +340,27 @@ int8_t protocol_parse_command(void)
             break;
 
         case FUNC_REQUEST_DATA:
-            // Handle data request (e.g., version query)
+            // Legacy two-byte request: 0x50 + sub-byte 0x51 for version.
+            // Kept for protocol compatibility; direct FUNC_VERSION (below) is
+            // what rosmaster_driver.py actually sends.
             {
                 uint8_t request_type = rx_buf[4];
                 if (request_type == FUNC_VERSION)
                 {
-                    // Send firmware version using actual version from firmware_version.h
                     uint8_t version_data[2] = {FIRMWARE_VERSION_MAJOR, FIRMWARE_VERSION_MINOR};
                     protocol_send_packet(FUNC_VERSION, version_data, 2);
                 }
+            }
+            break;
+
+        case FUNC_VERSION:
+            // Direct version query — rosmaster_driver.request_firmware_version()
+            // sends func=0x51 with no payload (Yahboom convention). Without this
+            // case the driver call fell through to the unknown-command counter
+            // and no version was ever returned.
+            {
+                uint8_t version_data[2] = {FIRMWARE_VERSION_MAJOR, FIRMWARE_VERSION_MINOR};
+                protocol_send_packet(FUNC_VERSION, version_data, 2);
             }
             break;
 
@@ -394,8 +401,6 @@ int8_t protocol_parse_command(void)
         case FUNC_SET_YAW_PID:
             protocol_handle_set_yaw_pid(&rx_buf[4]);
             break;
-
-        // FUNC_SET_MOTOR_PID_MULTILEVEL removed - using single PID only
 
         case FUNC_SET_MAG_CAL:
             protocol_handle_set_mag_cal(&rx_buf[4]);

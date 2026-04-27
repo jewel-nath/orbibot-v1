@@ -117,9 +117,6 @@ static int16_t last_mag_x = 0;
 static int16_t last_mag_y = 0;
 static int16_t last_mag_z = 0;
 
-// Current configuration
-static imu_config_t current_config;
-
 /**
  * @brief Select IMU register bank
  * @param bank Bank number (0-3)
@@ -248,17 +245,23 @@ static void mag_i2c_setup_read(uint8_t reg, uint8_t len)
     imu_select_bank(0);
 }
 
+/* AK09916 WHO_AM_I register value (read from WIA2 = 0x01) */
+#define AK09916_WIA2_VALUE          0x09
+
 /**
  * @brief Initialize AK09916 magnetometer via ICM-20948 I2C master
  *
  * Sequence follows LGDXRobot2 pattern:
  * 1. Reset I2C master
  * 2. Enable I2C master mode
- * 3. Reset AK09916
- * 4. Set continuous measurement mode (100Hz)
- * 5. Setup continuous SLV0 read (9 bytes: ST1 + XYZ data + ST2)
+ * 3. Verify AK09916 WHO_AM_I (WIA2 should read 0x09)
+ * 4. Reset AK09916
+ * 5. Set continuous measurement mode (100Hz)
+ * 6. Setup continuous SLV0 read (9 bytes: ST1 + XYZ data + ST2)
  *
- * @return 0 on success, -1 on failure
+ * @return 0 on success, -1 on failure (WHO_AM_I mismatch => chip absent/dead).
+ *         Caller leaves attitude filter in gyro-only mode — mag fields remain
+ *         zero in all subsequent reports instead of feeding garbage into yaw.
  */
 static int mag_init(void)
 {
@@ -292,6 +295,21 @@ static int mag_init(void)
     imu_write_register(ICM20948_I2C_MST_ODR_CONFIG, 0x03);
     imu_select_bank(0);
     imu_delay_ms(10);
+
+    // Verify AK09916 WHO_AM_I (WIA2 at reg 0x01 should read 0x09).
+    // Uses SLV0 for a one-byte read; reconfigured to 9-byte continuous
+    // read once WHO_AM_I passes.
+    mag_i2c_setup_read(AK09916_WIA2, 1);
+    imu_delay_ms(20);  // allow one I2C master cycle (ODR=100Hz)
+    uint8_t wia2 = imu_read_register(ICM20948_EXT_SLV_SENS_DATA_00);
+    if (wia2 != AK09916_WIA2_VALUE)
+    {
+        BOOT_PRINTF("[IMU]   AK09916 WHO_AM_I = 0x%02X (expected 0x09) "
+                    "— magnetometer NOT initialized\r\n", wia2);
+        mag_initialized = 0;
+        return -1;
+    }
+    BOOT_PRINTF("[IMU]   AK09916 WHO_AM_I = 0x09 OK\r\n");
 
     // Reset AK09916 magnetometer
     mag_i2c_write(AK09916_CNTL3, 0x01);
@@ -456,12 +474,6 @@ robot_err_t imu_driver_init(void)
     }
 #endif
 
-    current_config.accel_range = 0;  /* ±2g   (FS_SEL=0) */
-    current_config.gyro_range = 1;   /* ±500dps (FS_SEL=1) */
-    current_config.accel_dlpf = 6;
-    current_config.gyro_dlpf = 6;
-    current_config.sample_rate = 0;
-
     BOOT_PRINTF("[IMU] Step 8: initializing AK09916 magnetometer...\r\n");
     if (mag_init() != 0)
     {
@@ -552,72 +564,6 @@ robot_err_t imu_read_raw(imu_raw_data_t *data)
     return ROBOT_OK;
 }
 
-/**
- * @brief Read calibrated sensor data from IMU
- */
-robot_err_t imu_read_calibrated(imu_data_t *data)
-{
-    imu_raw_data_t raw_data;
-
-    if (data == NULL)
-    {
-        return ROBOT_ERR_PARAM;
-    }
-
-    if (imu_read_raw(&raw_data) != ROBOT_OK)
-    {
-        return ROBOT_ERR_HW;
-    }
-
-    // Convert accelerometer to m/s² and apply X/Y bias correction
-    // Z is NOT corrected — Madgwick requires gravity vector (~9.81 m/s²)
-    data->accel_x = (raw_data.accel_x * accel_scale) - accel_offset_x;
-    data->accel_y = (raw_data.accel_y * accel_scale) - accel_offset_y;
-    data->accel_z = raw_data.accel_z * accel_scale;
-
-    // Convert gyroscope to rad/s and apply calibration offsets
-    data->gyro_x = (raw_data.gyro_x * gyro_scale) - gyro_offset_x;
-    data->gyro_y = (raw_data.gyro_y * gyro_scale) - gyro_offset_y;
-    data->gyro_z = (raw_data.gyro_z * gyro_scale) - gyro_offset_z;
-
-    // Convert magnetometer to µT and apply hard/soft iron calibration
-    if (mag_cal.calibrated)
-    {
-        // Raw to µT
-        float raw_mx = raw_data.mag_x * mag_scale;
-        float raw_my = raw_data.mag_y * mag_scale;
-        float raw_mz = raw_data.mag_z * mag_scale;
-
-        // Hard iron correction (subtract bias offset)
-        float hx = raw_mx - mag_cal.hard_iron_offset[0];
-        float hy = raw_my - mag_cal.hard_iron_offset[1];
-        float hz = raw_mz - mag_cal.hard_iron_offset[2];
-
-        // Soft iron correction (3x3 matrix multiply)
-        data->mag_x = mag_cal.soft_iron_matrix[0] * hx +
-                       mag_cal.soft_iron_matrix[1] * hy +
-                       mag_cal.soft_iron_matrix[2] * hz;
-        data->mag_y = mag_cal.soft_iron_matrix[3] * hx +
-                       mag_cal.soft_iron_matrix[4] * hy +
-                       mag_cal.soft_iron_matrix[5] * hz;
-        data->mag_z = mag_cal.soft_iron_matrix[6] * hx +
-                       mag_cal.soft_iron_matrix[7] * hy +
-                       mag_cal.soft_iron_matrix[8] * hz;
-    }
-    else
-    {
-        // No calibration — convert raw to µT only
-        data->mag_x = raw_data.mag_x * mag_scale;
-        data->mag_y = raw_data.mag_y * mag_scale;
-        data->mag_z = raw_data.mag_z * mag_scale;
-    }
-
-    // Convert temperature to °C
-    data->temperature = ((float)raw_data.temperature / 333.87f) + 21.0f;
-
-    return ROBOT_OK;
-}
-
 robot_err_t imu_read_both(imu_raw_data_t *raw, imu_data_t *cal)
 {
     imu_raw_data_t raw_data;
@@ -657,78 +603,6 @@ robot_err_t imu_read_both(imu_raw_data_t *raw, imu_data_t *cal)
         cal->temperature = ((float)raw_data.temperature / 333.87f) + 21.0f;
     }
     return ROBOT_OK;
-}
-
-/**
- * @brief Read accelerometer only
- */
-int imu_read_accel(float *accel_x, float *accel_y, float *accel_z)
-{
-    imu_data_t data;
-
-    if (imu_read_calibrated(&data) != 0)
-    {
-        return -1;
-    }
-
-    if (accel_x) *accel_x = data.accel_x;
-    if (accel_y) *accel_y = data.accel_y;
-    if (accel_z) *accel_z = data.accel_z;
-
-    return 0;
-}
-
-/**
- * @brief Read gyroscope only
- */
-int imu_read_gyro(float *gyro_x, float *gyro_y, float *gyro_z)
-{
-    imu_data_t data;
-
-    if (imu_read_calibrated(&data) != 0)
-    {
-        return -1;
-    }
-
-    if (gyro_x) *gyro_x = data.gyro_x;
-    if (gyro_y) *gyro_y = data.gyro_y;
-    if (gyro_z) *gyro_z = data.gyro_z;
-
-    return 0;
-}
-
-/**
- * @brief Read magnetometer only
- */
-int imu_read_mag(float *mag_x, float *mag_y, float *mag_z)
-{
-    imu_data_t data;
-
-    if (imu_read_calibrated(&data) != 0)
-    {
-        return -1;
-    }
-
-    if (mag_x) *mag_x = data.mag_x;
-    if (mag_y) *mag_y = data.mag_y;
-    if (mag_z) *mag_z = data.mag_z;
-
-    return 0;
-}
-
-/**
- * @brief Read die temperature
- */
-float imu_read_temperature(void)
-{
-    imu_data_t data;
-
-    if (imu_read_calibrated(&data) != 0)
-    {
-        return 0.0f;
-    }
-
-    return data.temperature;
 }
 
 /**
@@ -826,87 +700,6 @@ int imu_calibrate(void)
     return 0;
 }
 
-/**
- * @brief Reset IMU to default configuration
- */
-int imu_reset(void)
-{
-    return imu_driver_init();
-}
-
-/**
- * @brief Check if IMU is responding
- */
-int imu_is_alive(void)
-{
-    uint8_t who_am_i;
-
-    imu_select_bank(0);
-    who_am_i = imu_read_register(ICM20948_WHO_AM_I);
-
-    return (who_am_i == ICM20948_WHO_AM_I_VALUE) ? 1 : 0;
-}
-
-/**
- * @brief Perform IMU self-test
- */
-int imu_self_test(void)
-{
-    // Check if device responds
-    if (!imu_is_alive())
-    {
-        return -1;
-    }
-
-    // Try reading sensor data
-    imu_raw_data_t raw_data;
-    if (imu_read_raw(&raw_data) != 0)
-    {
-        return -1;
-    }
-
-    // Sanity check: accelerometer Z-axis should read ~1g (gravity) on flat surface.
-    // ±2g range: 1g = 32768/2 = 16384 counts. Valid flat range: 12000–20000 (±25%).
-    if (raw_data.accel_z < 12000 || raw_data.accel_z > 20000)
-    {
-        BOOT_PRINTF("[IMU] WARNING: Z-axis gravity check FAILED (got %d, expected ~16384). "
-                    "Check IMU orientation or mounting.\r\n", (int)raw_data.accel_z);
-        return -1;
-    }
-
-    return 0;
-}
-
-/**
- * @brief Set IMU configuration (placeholder for future enhancement)
- */
-int imu_set_config(const imu_config_t *config)
-{
-    if (config == NULL)
-    {
-        return -1;
-    }
-
-    // This can be expanded to dynamically configure ranges and DLPF
-    // For now, we use fixed configuration from init
-
-    return 0;
-}
-
-/**
- * @brief Get current IMU configuration
- */
-int imu_get_config(imu_config_t *config)
-{
-    if (config == NULL)
-    {
-        return -1;
-    }
-
-    *config = current_config;
-    return 0;
-}
-
 /* ========================================================================
  * MAGNETOMETER CALIBRATION FUNCTIONS
  * ======================================================================== */
@@ -944,141 +737,9 @@ void imu_get_noise_variance(float accel_var[3], float gyro_var[3])
 }
 
 /* ========================================================================
- * PROTOCOL-COMPATIBLE WRAPPER FUNCTIONS
+ * ATTITUDE ACCESSOR (simple forwarder to task_imu cache)
  * ======================================================================== */
 
-/**
- * @brief Get raw gyroscope data as int16 array
- */
-void imu_get_gyro_raw(int16_t gyro[3])
-{
-    imu_raw_data_t data;
-    if (imu_read_raw(&data) == 0)
-    {
-        gyro[0] = data.gyro_x;
-        gyro[1] = data.gyro_y;
-        gyro[2] = data.gyro_z;
-    }
-    else
-    {
-        gyro[0] = 0;
-        gyro[1] = 0;
-        gyro[2] = 0;
-    }
-}
-
-/**
- * @brief Get raw accelerometer data as int16 array
- */
-void imu_get_accel_raw(int16_t accel[3])
-{
-    imu_raw_data_t data;
-    if (imu_read_raw(&data) == 0)
-    {
-        accel[0] = data.accel_x;
-        accel[1] = data.accel_y;
-        accel[2] = data.accel_z;
-    }
-    else
-    {
-        accel[0] = 0;
-        accel[1] = 0;
-        accel[2] = 0;
-    }
-}
-
-/**
- * @brief Get calibrated magnetometer data as int16 array
- *
- * Returns mag values in µT × 1000 to match ICM20948_MAG_RATIO on ROS2 side.
- * The ROS2 driver divides by 1000 to get µT.
- */
-void imu_get_mag_raw(int16_t mag[3])
-{
-    imu_data_t data;
-    if (imu_read_calibrated(&data) == 0)
-    {
-        // Scale calibrated µT values × 1000 for protocol transport
-        mag[0] = (int16_t)(data.mag_x * 1000.0f);
-        mag[1] = (int16_t)(data.mag_y * 1000.0f);
-        mag[2] = (int16_t)(data.mag_z * 1000.0f);
-    }
-    else
-    {
-        mag[0] = 0;
-        mag[1] = 0;
-        mag[2] = 0;
-    }
-}
-
-/**
- * @brief Get all IMU data efficiently in a single SPI transaction
- *
- * Gyro/accel returned as raw ADC counts (ROS2 applies scaling).
- * Mag returned as calibrated µT × 1000 (ROS2 divides by 1000).
- *
- * Previously called imu_read_raw() then imu_read_calibrated() which
- * internally called imu_read_raw() again — two SPI reads from different
- * time points. Now reads once and applies mag calibration inline.
- */
-void imu_get_all_raw(int16_t gyro[3], int16_t accel[3], int16_t mag[3])
-{
-    imu_raw_data_t raw;
-    if (imu_read_raw(&raw) != 0)
-    {
-        gyro[0] = gyro[1] = gyro[2] = 0;
-        accel[0] = accel[1] = accel[2] = 0;
-        mag[0] = mag[1] = mag[2] = 0;
-        return;
-    }
-
-    gyro[0] = raw.gyro_x;
-    gyro[1] = raw.gyro_y;
-    gyro[2] = raw.gyro_z;
-    accel[0] = raw.accel_x;
-    accel[1] = raw.accel_y;
-    accel[2] = raw.accel_z;
-
-    // Apply mag calibration inline (no second SPI read)
-    float raw_mx = raw.mag_x * mag_scale;
-    float raw_my = raw.mag_y * mag_scale;
-    float raw_mz = raw.mag_z * mag_scale;
-
-    if (mag_cal.calibrated)
-    {
-        float hx = raw_mx - mag_cal.hard_iron_offset[0];
-        float hy = raw_my - mag_cal.hard_iron_offset[1];
-        float hz = raw_mz - mag_cal.hard_iron_offset[2];
-
-        float cx = mag_cal.soft_iron_matrix[0] * hx +
-                   mag_cal.soft_iron_matrix[1] * hy +
-                   mag_cal.soft_iron_matrix[2] * hz;
-        float cy = mag_cal.soft_iron_matrix[3] * hx +
-                   mag_cal.soft_iron_matrix[4] * hy +
-                   mag_cal.soft_iron_matrix[5] * hz;
-        float cz = mag_cal.soft_iron_matrix[6] * hx +
-                   mag_cal.soft_iron_matrix[7] * hy +
-                   mag_cal.soft_iron_matrix[8] * hz;
-
-        mag[0] = (int16_t)(cx * 1000.0f);
-        mag[1] = (int16_t)(cy * 1000.0f);
-        mag[2] = (int16_t)(cz * 1000.0f);
-    }
-    else
-    {
-        mag[0] = (int16_t)(raw_mx * 1000.0f);
-        mag[1] = (int16_t)(raw_my * 1000.0f);
-        mag[2] = (int16_t)(raw_mz * 1000.0f);
-    }
-}
-
-/**
- * @brief Get attitude angles (roll, pitch, yaw)
- *
- * Gets attitude from IMU task which performs gyro integration for yaw.
- * Roll and pitch are calculated from accelerometer.
- * Yaw is integrated from gyroscope Z-axis.
- */
 void imu_get_attitude(float *roll, float *pitch, float *yaw)
 {
     imu_task_get_attitude(roll, pitch, yaw);
