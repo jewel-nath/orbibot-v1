@@ -1,5 +1,28 @@
 # Firmware Changelog
 
+## [Unreleased] — 2026-04-28
+
+### Bug Fixes
+
+- **Protocol command-handler payload-length validation** (`protocol.c`) — DD-1
+  Prior dispatcher accepted any checksum-valid 5-byte packet `[HEAD, 0xFC,
+  LEN=3, FUNC, CKSUM]` and dispatched to handlers that read past the actual
+  payload into stale RAM. Live test (`tests/test_malformed_packets.py`)
+  confirmed worst-case behaviour:
+  - Truncated `FUNC_MOTION (0x12)` → robot commanded at vx ≈ 1029 mm/s
+    (saturated speed) from stale RAM.
+  - Truncated `FUNC_SET_MOTOR_PID (0x13)` → spurious motion (vx ≈ 993 mm/s).
+  - Truncated `FUNC_SET_MAG_CAL (0x16)` → unconditional `flash_storage_save()`
+    with garbage hard-iron offsets, blocking long enough to miss watchdog
+    feeding → IWDG reset at 5 s.
+
+  Fix: added file-local `protocol_min_rx_len(func_code)` lookup + a single
+  length gate at the top of `protocol_parse_command()`. Truncated packets
+  are now rejected, increment `g_unknown_cmd_count`, and never reach the
+  handler. Re-running the test post-fix shows all five at-risk function
+  codes silently dropped, no rogue motion, no stream interruption. See
+  `test-report.md` §9.1 for measurements.
+
 ## [Unreleased] — 2026-04-19
 
 ### Bug Fixes

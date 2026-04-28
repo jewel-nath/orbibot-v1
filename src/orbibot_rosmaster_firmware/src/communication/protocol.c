@@ -271,6 +271,35 @@ void protocol_send_packet(uint8_t func_code, const uint8_t *data, uint8_t data_l
  * COMMAND PARSER
  * ======================================================================== */
 
+/* Minimum total packet length (= LEN field + 2 = 5 + payload bytes) required
+ * by each function code's handler. Returning 0 for codes that read no payload
+ * (or for unknown codes — they fall through to the diagnostic counter).
+ *
+ * Why this exists: prior to 2026-04-28 a 5-byte packet [HEAD,DEV,LEN=3,FUNC,
+ * CKSUM] with valid checksum and FUNC=0x12/0x13/0x14/0x16/0x01/0x02 dispatched
+ * to handlers that read past the actual payload into stale RAM. Verified live
+ * (`tests/test_malformed_packets.py`): a truncated FUNC_MOTION caused the
+ * robot to be commanded at vx=1.03 m/s; a truncated FUNC_SET_MAG_CAL triggered
+ * an unconditional flash save with garbage offsets and watchdog-reset the MCU. */
+static uint8_t protocol_min_rx_len(uint8_t func_code)
+{
+    switch (func_code)
+    {
+        case FUNC_AUTO_REPORT:   return 6;   /* 1 data byte */
+        case FUNC_BEEP:          return 7;   /* 2 data bytes */
+        case FUNC_MOTION:        return 12;  /* 1 car_type + 3 × int16 */
+        case FUNC_SET_MOTOR_PID: return 12;  /* 3 × int16 gains + state */
+        case FUNC_SET_YAW_PID:   return 12;  /* 3 × int16 gains + state */
+        case FUNC_SET_MAG_CAL:   return 11;  /* 3 × int16 hard-iron offsets */
+        case FUNC_REQUEST_DATA:  return 6;   /* 1 sub-byte (e.g. 0x51) */
+        case FUNC_VERSION:
+        case FUNC_RESET_ODOM:
+        case FUNC_RESET_ENCODERS:
+        case FUNC_RESET_STATE:   return 5;   /* no payload */
+        default:                 return 0;   /* unknown — handled in default case */
+    }
+}
+
 int8_t protocol_parse_command(void)
 {
     // Double-buffer: check which buffer has a command ready
@@ -315,6 +344,20 @@ int8_t protocol_parse_command(void)
 
     // Debug: print received command
     DEBUG_VERBOSE("CMD: func=0x%02X len=%d buf=%d\n", func_code, rx_len, buffer_id);
+
+    // Reject truncated packets BEFORE handlers read past actual payload (DD-1 fix).
+    {
+        uint8_t min_len = protocol_min_rx_len(func_code);
+        if (min_len != 0 && rx_len < min_len)
+        {
+            DEBUG_ERROR("Short cmd: func=0x%02X len=%d need=%d\n",
+                        func_code, rx_len, min_len);
+            g_unknown_cmd_count++;
+            if (buffer_id == 0) g_cmd_flag = 0;
+            else                g_cmd_flag2 = 0;
+            return -1;
+        }
+    }
 
     // Dispatch to handler (using selected buffer)
     switch (func_code)

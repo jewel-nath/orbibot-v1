@@ -254,12 +254,107 @@ reset odometry four times and never spin a motor.
 `MOTION` commands with the mecanum isolation pattern, or drop it entirely —
 the live mecanum table in §6 already proves per-wheel direction.
 
+## 9. Deep-Dive Audit Live Verification — 2026-04-28
+
+**Auditor:** Claude (Opus 4.7) under Jewel Nath's direction.
+**Scope:** Live-verify findings in `firmware-issue-deepdive.md` that are
+testable on the bench. Robot wheels off the ground, battery 12.5 V.
+
+### 9.1 DD-1 — Truncated-payload command handling (CRITICAL)
+
+**Test script:** `tests/test_malformed_packets.py`.
+
+**Method:** Build five `[HEAD, 0xFC, LEN=3, FUNC, CKSUM]` packets — total
+5 bytes, no payload, valid checksum — for each at-risk function code.
+Send 20 of each in 100 ms windows, sample REPORT_SPEED for 1.5 s after
+each blast for rogue motion or stream interruption.
+
+**Pre-fix run (commit before 2026-04-28 protocol.c edit):**
+
+| Function | rx_len | After-blast effect |
+|----------|-------:|--------------------|
+| `FUNC_AUTO_REPORT (0x01)` | 5 | OK — handler reads `data[0]` only |
+| **`FUNC_MOTION (0x12)`** | 5 | **🔴 vx=1029 mm/s commanded** from stale RAM |
+| **`FUNC_SET_MOTOR_PID (0x13)`** | 5 | **🔴 vx=993 mm/s spike** (stale MOTION payload re-driven via PID-state coincidence) |
+| `FUNC_SET_YAW_PID (0x14)` | 5 | OK — yaw gains overwritten with junk but no direct motion |
+| **`FUNC_SET_MAG_CAL (0x16)`** | 5 | **🔴 stream silent ≥3.5 s, IWDG reset at 5 s** — handler's unconditional `flash_storage_save()` ran with garbage hard-iron offsets |
+
+**Fix applied:** `protocol.c` — added `protocol_min_rx_len()` lookup
+table + length-gate at the top of `protocol_parse_command()`. Truncated
+packets now increment `g_unknown_cmd_count` and are dropped before the
+handler runs.
+
+**Post-fix run (2026-04-28):**
+
+```
+Step 1: Baseline — 50.0 Hz on all 5 report types
+Step 2: Blast 20× FUNC_AUTO_REPORT  (0x01) → speed=53.2 Hz, motion=(0,0,0)  OK
+Step 2: Blast 20× FUNC_MOTION       (0x12) → speed=53.2 Hz, motion=(0,0,0)  OK
+Step 2: Blast 20× FUNC_SET_MOTOR_PID(0x13) → speed=53.9 Hz, motion=(0,0,0)  OK
+Step 2: Blast 20× FUNC_SET_YAW_PID  (0x14) → speed=53.2 Hz, motion=(0,0,0)  OK
+Step 2: Blast 20× FUNC_SET_MAG_CAL  (0x16) → speed=53.9 Hz, motion=(0,0,0)  OK
+Step 3: Final 2 s — speed=49.9 Hz vs baseline 50.0
+```
+
+**Verdict:** ✅ DD-1 closed by the protocol-side length gate. All five
+truncated-payload classes are now silently dropped with no stream
+disruption and no motion side effect.
+
+### 9.2 Per-motor max speed (FW-ISSUE-4 baseline)
+
+**Test script:** `tests/test_motor_max_speed.py` at `--speed 1.0 --duration 5`.
+Robot is forward-driven at the firmware velocity ceiling (`MAX_LINEAR_VELOCITY_MPS`
+= 1.0 m/s). The PID loop saturates each wheel against the chassis-velocity
+limit, not the motor-saturation limit, so this measures *velocity-clamped*
+behaviour rather than raw motor RPM.
+
+| Motor | Avg (mm/s) | Avg (rad/s) | Max (mm/s) | Std | Samples |
+|-------|-----------:|------------:|-----------:|----:|--------:|
+| M1 (FL) | 1001.7 | 20.03 | 1050.6 | 28.7 | 250 |
+| M2 (BL) | 1002.0 | 20.04 | 1059.9 | 29.1 | 248 |
+| M3 (FR) | 1002.5 | 20.05 | 1050.7 | 28.0 | 248 |
+| M4 (BR) | 1002.4 | 20.05 | 1060.0 | 28.9 | 249 |
+
+**Inter-motor variation:** **0.1 %** in steady-state averages
+(fastest 1003 mm/s, slowest 1002 mm/s).
+
+**Findings:**
+1. **No per-motor weakness at steady state.** The 12–15 % M4 lag noted
+   in §6 was transient stiction during the first few hundred ms; once
+   PID converges, all 4 motors hold the commanded chassis velocity to
+   within 0.5 mm/s of each other.
+2. **`MAX_WHEEL_SPEED_MMS = 3500` is loose.** Worst-case combined
+   wheel speed at the firmware limits — `vx + vy + (lx+ly)·ω = 1.0 +
+   0.5 + 0.222·2 = 1.94 m/s` — fits comfortably in a 2000 mm/s threshold.
+   Recommend tightening to 2200 mm/s (10 % margin over worst-case).
+   This makes the encoder-anomaly rejection in `task_control.c` more
+   useful as a noise filter (current 3500 only triggers on EMI-grade
+   spurious encoder pulses).
+3. The peak-instantaneous spikes (~1060 mm/s) are PID overshoot during
+   the 200 ms ramp-up window, not steady-state. Don't size
+   `MAX_WHEEL_SPEED_MMS` against them.
+
+### 9.3 Mag-calibration round-trip — DEFERRED
+
+`protocol_handle_set_mag_cal()` calls `flash_storage_save()`
+unconditionally — no `SAVE_VERIFY` (0x5F) gate like PID has, no RAM-only
+mode. A round-trip test would consume one flash erase cycle for no test
+value. Recommended Phase 3 follow-up:
+
+1. Add a `state` byte to the SET_MAG_CAL payload (matches PID convention)
+   so callers can distinguish "live calibrate" from "calibrate + persist".
+2. Then run round-trip in RAM-only mode and verify `imu_data.mag_*` is
+   correctly hard-iron corrected.
+
+This isn't a bug — it's a design-consistency gap with the PID handler
+(which does have the gate). Logged as **DD-11** in `firmware-issue-deepdive.md`.
+
+---
+
 ## 10. Not Yet Covered
 
-- Per-motor max speed measurement (`test_motor_max_speed.py` — can tighten
-  `MAX_WHEEL_SPEED_MMS`; see FW-ISSUE-4).
 - Flash-save persistence of PID gains across reboot.
-- Mag-calibration round-trip to flash.
+- Mag-calibration round-trip (deferred until SET_MAG_CAL has a state-byte gate; see §9.3).
 - Sustained / thermal duty.
 - Rosbridge / ROS 2 end-to-end (hardware_node ↔ firmware).
 
