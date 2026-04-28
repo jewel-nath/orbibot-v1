@@ -1,6 +1,6 @@
 /**
  * @file flash_storage.h
- * @brief Flash Persistence for PID and Magnetometer Calibration
+ * @brief Flash Persistence for PID Calibration
  * @author Jewel Nath
  * @date 2025-12-01
  *
@@ -9,6 +9,12 @@
  *
  * Data survives power cycles. Written on explicit save command.
  * Read once at startup, cached in RAM.
+ *
+ * Schema history:
+ *   - 0xA5 (until 2026-04-28) — included mag_calibration_t
+ *   - 0xA6 (2026-04-28+)      — mag removed; old saved data (magic 0xA5)
+ *                               is treated as "no stored data" and defaults
+ *                               are used.
  */
 
 #ifndef FLASH_STORAGE_H
@@ -16,11 +22,10 @@
 
 #include <stdint.h>
 #include "pid_controller.h"
-#include "imu_driver.h"
 
 // STM32F103RCT6: 256KB flash, 2KB pages. Use last page.
 #define FLASH_STORAGE_PAGE_ADDR     0x0803F800U
-#define FLASH_STORAGE_MAGIC         0xA5
+#define FLASH_STORAGE_MAGIC         0xA6
 
 /**
  * @brief Flash storage data structure
@@ -35,10 +40,7 @@ typedef struct {
     // Single PID gains (3 floats)
     pid_gains_t pid_gains;                          // 12 bytes
 
-    uint8_t reserved[36];                           // Reserved for future use (was multi-level PID)
-
-    // Magnetometer calibration
-    mag_calibration_t mag_cal;                      // 3+9 floats + 1 byte = 49 bytes
+    uint8_t reserved[36];                           // Reserved for future use
 
     uint8_t checksum;                               // Additive sum checksum over all preceding bytes
 } flash_data_t;

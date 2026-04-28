@@ -13,7 +13,6 @@
 
 #include "flash_storage.h"
 #include "task_control.h"
-#include "imu_driver.h"
 #include "orbibot_config.h"
 #include "stm32f10x_flash.h"
 #include <string.h>
@@ -70,13 +69,7 @@ int flash_storage_load(void)
         flash_cache.pid_gains.kd
     );
 
-    // Apply mag calibration
-    if (flash_cache.mag_cal.calibrated)
-    {
-        imu_set_mag_calibration(&flash_cache.mag_cal);
-    }
-
-    DEBUG_INFO("Flash: loaded PID + mag calibration\n");
+    DEBUG_INFO("Flash: loaded PID gains\n");
     return 0;
 }
 
@@ -85,9 +78,6 @@ int flash_storage_save(void)
     // Collect current PID gains (single PID)
     const pid_gains_t *gains = control_get_motor_pid();
     flash_cache.pid_gains = *gains;
-
-    // Collect current mag calibration
-    imu_get_mag_calibration(&flash_cache.mag_cal);
 
     // Set magic and compute checksum
     flash_cache.magic = FLASH_STORAGE_MAGIC;
@@ -124,7 +114,7 @@ int flash_storage_save(void)
 
     FLASH_Lock();
 
-    DEBUG_INFO("Flash: saved PID + mag calibration (%u bytes)\n",
+    DEBUG_INFO("Flash: saved PID gains (%u bytes)\n",
                (unsigned)sizeof(flash_data_t));
     return 0;
 }

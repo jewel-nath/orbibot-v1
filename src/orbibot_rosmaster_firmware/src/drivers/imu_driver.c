@@ -1,11 +1,13 @@
 /**
  * @file imu_driver.c
- * @brief ICM-20948 9-Axis IMU Driver Implementation
+ * @brief ICM-20948 6-Axis IMU Driver Implementation
  * @author Jewel Nath
  * @date 2025-11-30
  *
  * CRITICAL: User emphasized IMU is mandatory for OrbiBot.
  * This driver includes robust error handling and timeout protection.
+ *
+ * AK09916 magnetometer support removed 2026-04-28 — see firmware-changelog.md.
  */
 
 #include "imu_driver.h"
@@ -14,10 +16,7 @@
 #include "hal_spi.h"
 #include "stm32f10x.h"
 #include "orbibot_config.h"
-#include "FreeRTOS.h"
-#include "task.h"
 #include <math.h>
-#include <string.h>
 
 /* DWT (Data Watchpoint and Trace) for cycle-accurate delay.
  * Not all CMSIS versions define DWT; provide minimal definitions when missing. */
@@ -40,42 +39,16 @@ typedef struct {
 
 // ICM-20948 Register Map (User Bank 0)
 #define ICM20948_WHO_AM_I           0x00
-#define ICM20948_USER_CTRL          0x03
-#define ICM20948_LP_CONFIG          0x05
+#define ICM20948_USER_CTRL          0x03  // I2C_IF_DIS bit forces SPI-only mode
 #define ICM20948_PWR_MGMT_1         0x06
 #define ICM20948_PWR_MGMT_2         0x07
-#define ICM20948_INT_PIN_CFG        0x0F
-#define ICM20948_INT_ENABLE         0x10
-#define ICM20948_INT_ENABLE_1       0x11
-#define ICM20948_INT_ENABLE_2       0x12
-#define ICM20948_INT_ENABLE_3       0x13
 #define ICM20948_ACCEL_XOUT_H       0x2D
-#define ICM20948_GYRO_XOUT_H        0x33
-#define ICM20948_TEMP_OUT_H         0x39
-#define ICM20948_EXT_SLV_SENS_DATA_00 0x3B
 #define ICM20948_REG_BANK_SEL       0x7F
 
 // ICM-20948 Register Map (User Bank 2)
 #define ICM20948_GYRO_CONFIG_1      0x01
 #define ICM20948_ACCEL_CONFIG       0x14
 #define ICM20948_ACCEL_CONFIG_2     0x15
-
-// ICM-20948 Register Map (User Bank 3) — I2C Master for AK09916
-#define ICM20948_I2C_MST_ODR_CONFIG 0x00
-#define ICM20948_I2C_MST_CTRL       0x01
-#define ICM20948_I2C_SLV0_ADDR      0x03
-#define ICM20948_I2C_SLV0_REG       0x04
-#define ICM20948_I2C_SLV0_CTRL      0x05
-#define ICM20948_I2C_SLV0_DO        0x06
-
-// AK09916 Magnetometer (accessed via ICM-20948 I2C Master)
-#define AK09916_I2C_ADDR            0x0C
-#define AK09916_WIA2                0x01    // WHO_AM_I = 0x09
-#define AK09916_ST1                 0x10    // Status 1 (DRDY bit 0)
-#define AK09916_HXL                 0x11    // Mag data start (little-endian)
-#define AK09916_ST2                 0x18    // Status 2 (overflow)
-#define AK09916_CNTL2               0x31    // Mode control
-#define AK09916_CNTL3               0x32    // Soft reset
 
 // Expected WHO_AM_I value
 #define ICM20948_WHO_AM_I_VALUE     0xEA
@@ -90,7 +63,6 @@ typedef struct {
 // Conversion scales
 static float accel_scale = 1.0f;    // Will be set based on range
 static float gyro_scale = 1.0f;     // Will be set based on range
-static float mag_scale = 0.15f;     // Fixed for AK09916: 0.15 µT/LSB
 
 // Calibration offsets (computed at startup from 1000 stationary samples)
 static float gyro_offset_x = 0.0f;
@@ -104,21 +76,6 @@ static float accel_offset_y = 0.0f;  // Y bias (should be ~0 when level)
 // Units: accel in (m/s²)², gyro in (rad/s)² — ready for ROS2 Imu covariance
 static float accel_variance[3] = {0.01f, 0.01f, 0.01f};   // X, Y, Z
 static float gyro_variance[3] = {0.0025f, 0.0025f, 0.0025f}; // X, Y, Z
-
-// Magnetometer calibration (hard/soft iron correction)
-static mag_calibration_t mag_cal = {
-    .hard_iron_offset = {0.0f, 0.0f, 0.0f},
-    .soft_iron_matrix = {1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f},
-    .calibrated = 0
-};
-
-// Magnetometer initialization status
-static uint8_t mag_initialized = 0;
-
-// G6: Last valid magnetometer reading (for when DRDY not set)
-static int16_t last_mag_x = 0;
-static int16_t last_mag_y = 0;
-static int16_t last_mag_z = 0;
 
 /**
  * @brief Select IMU register bank
@@ -208,126 +165,6 @@ static void imu_delay_ms(uint32_t ms)
         while ((DWT->CYCCNT - start) < cycles_per_ms)
             ;
     }
-}
-
-/* ========================================================================
- * AK09916 MAGNETOMETER I2C MASTER FUNCTIONS
- * ======================================================================== */
-
-/**
- * @brief Write to AK09916 register via ICM-20948 I2C master
- * @param reg AK09916 register address
- * @param value Value to write
- */
-static void mag_i2c_write(uint8_t reg, uint8_t value)
-{
-    imu_select_bank(3);
-    imu_write_register(ICM20948_I2C_SLV0_ADDR, AK09916_I2C_ADDR);  // Write mode
-    imu_write_register(ICM20948_I2C_SLV0_REG, reg);
-    imu_write_register(ICM20948_I2C_SLV0_DO, value);
-    imu_write_register(ICM20948_I2C_SLV0_CTRL, 0x80 | 0x01);       // Enable + 1 byte
-    imu_select_bank(0);
-    imu_delay_ms(10);
-}
-
-/**
- * @brief Setup continuous read from AK09916 via I2C master
- *
- * After calling this, mag data will be automatically read by the ICM-20948
- * I2C master and placed in EXT_SLV_SENS_DATA registers.
- *
- * @param reg AK09916 starting register
- * @param len Number of bytes to read
- */
-static void mag_i2c_setup_read(uint8_t reg, uint8_t len)
-{
-    imu_select_bank(3);
-    imu_write_register(ICM20948_I2C_SLV0_ADDR, 0x80 | AK09916_I2C_ADDR);  // Read mode
-    imu_write_register(ICM20948_I2C_SLV0_REG, reg);
-    imu_write_register(ICM20948_I2C_SLV0_CTRL, 0x80 | len);               // Enable + len bytes
-    imu_select_bank(0);
-}
-
-/* AK09916 WHO_AM_I register value (read from WIA2 = 0x01) */
-#define AK09916_WIA2_VALUE          0x09
-
-/**
- * @brief Initialize AK09916 magnetometer via ICM-20948 I2C master
- *
- * Sequence follows LGDXRobot2 pattern:
- * 1. Reset I2C master
- * 2. Enable I2C master mode
- * 3. Verify AK09916 WHO_AM_I (WIA2 should read 0x09)
- * 4. Reset AK09916
- * 5. Set continuous measurement mode (100Hz)
- * 6. Setup continuous SLV0 read (9 bytes: ST1 + XYZ data + ST2)
- *
- * @return 0 on success, -1 on failure (WHO_AM_I mismatch => chip absent/dead).
- *         Caller leaves attitude filter in gyro-only mode — mag fields remain
- *         zero in all subsequent reports instead of feeding garbage into yaw.
- */
-static int mag_init(void)
-{
-    uint8_t buf;
-
-    // Reset I2C master
-    imu_select_bank(0);
-    buf = imu_read_register(ICM20948_USER_CTRL);
-    buf |= 0x02;  // I2C_MST_RST
-    imu_write_register(ICM20948_USER_CTRL, buf);
-    imu_delay_ms(100);
-
-    // Enable I2C master
-    buf = imu_read_register(ICM20948_USER_CTRL);
-    buf |= 0x20;  // I2C_MST_EN
-    imu_write_register(ICM20948_USER_CTRL, buf);
-    imu_delay_ms(10);
-
-    // Set I2C master clock to 400kHz
-    imu_select_bank(3);
-    imu_write_register(ICM20948_I2C_MST_CTRL, 0x07);
-    imu_select_bank(0);
-    imu_delay_ms(10);
-
-    // Configure low-power mode for I2C master
-    imu_write_register(ICM20948_LP_CONFIG, 0x40);
-    imu_delay_ms(10);
-
-    // Set I2C master ODR
-    imu_select_bank(3);
-    imu_write_register(ICM20948_I2C_MST_ODR_CONFIG, 0x03);
-    imu_select_bank(0);
-    imu_delay_ms(10);
-
-    // Verify AK09916 WHO_AM_I (WIA2 at reg 0x01 should read 0x09).
-    // Uses SLV0 for a one-byte read; reconfigured to 9-byte continuous
-    // read once WHO_AM_I passes.
-    mag_i2c_setup_read(AK09916_WIA2, 1);
-    imu_delay_ms(20);  // allow one I2C master cycle (ODR=100Hz)
-    uint8_t wia2 = imu_read_register(ICM20948_EXT_SLV_SENS_DATA_00);
-    if (wia2 != AK09916_WIA2_VALUE)
-    {
-        BOOT_PRINTF("[IMU]   AK09916 WHO_AM_I = 0x%02X (expected 0x09) "
-                    "— magnetometer NOT initialized\r\n", wia2);
-        mag_initialized = 0;
-        return -1;
-    }
-    BOOT_PRINTF("[IMU]   AK09916 WHO_AM_I = 0x09 OK\r\n");
-
-    // Reset AK09916 magnetometer
-    mag_i2c_write(AK09916_CNTL3, 0x01);
-    imu_delay_ms(100);
-
-    // Set AK09916 to continuous measurement mode 4 (100Hz)
-    mag_i2c_write(AK09916_CNTL2, 0x08);
-    imu_delay_ms(50);
-
-    // Setup continuous read: ST1(1) + HXL..HZH(6) + dummy(1) + ST2(1) = 9 bytes
-    mag_i2c_setup_read(AK09916_ST1, 9);
-    imu_delay_ms(100);
-
-    mag_initialized = 1;
-    return 0;
 }
 
 /* Known WHO_AM_I values for chips that may be fitted on the ROSMaster V3.0 */
@@ -477,18 +314,7 @@ robot_err_t imu_driver_init(void)
     }
 #endif
 
-    BOOT_PRINTF("[IMU] Step 8: initializing AK09916 magnetometer...\r\n");
-    if (mag_init() != 0)
-    {
-        mag_initialized = 0;
-        BOOT_PRINTF("[IMU]   mag_init() FAILED — continuing without magnetometer\r\n");
-    }
-    else
-    {
-        BOOT_PRINTF("[IMU]   mag_init() OK\r\n");
-    }
-
-    BOOT_PRINTF("[IMU] Step 9: gyro+accel calibration (1000 samples, ~1s, keep robot still & level)...\r\n");
+    BOOT_PRINTF("[IMU] Step 8: gyro+accel calibration (1000 samples, ~1s, keep robot still & level)...\r\n");
     imu_calibrate();
     BOOT_PRINTF("[IMU]   gyro+accel calibration done\r\n");
 
@@ -528,42 +354,6 @@ robot_err_t imu_read_raw(imu_raw_data_t *data)
     // Parse temperature data
     data->temperature = (int16_t)((buffer[12] << 8) | buffer[13]);
 
-    // Read magnetometer from external sensor data registers
-    // I2C master continuously reads AK09916 into EXT_SLV_SENS_DATA_00..08
-    // Layout: [ST1][HXL][HXH][HYL][HYH][HZL][HZH][dummy][ST2]
-    if (mag_initialized)
-    {
-        uint8_t mag_buf[9];
-        imu_read_registers(ICM20948_EXT_SLV_SENS_DATA_00, mag_buf, 9);
-
-        // Check data ready bit (ST1 bit 0)
-        if (mag_buf[0] & 0x01)
-        {
-            // AK09916 data is little-endian (low byte first)
-            data->mag_x = (int16_t)(mag_buf[2] << 8 | mag_buf[1]);
-            data->mag_y = (int16_t)(mag_buf[4] << 8 | mag_buf[3]);
-            data->mag_z = (int16_t)(mag_buf[6] << 8 | mag_buf[5]);
-
-            // G6: Store last valid reading
-            last_mag_x = data->mag_x;
-            last_mag_y = data->mag_y;
-            last_mag_z = data->mag_z;
-        }
-        else
-        {
-            // G6: Data not ready — keep previous reading to avoid spikes
-            data->mag_x = last_mag_x;
-            data->mag_y = last_mag_y;
-            data->mag_z = last_mag_z;
-        }
-    }
-    else
-    {
-        data->mag_x = 0;
-        data->mag_y = 0;
-        data->mag_z = 0;
-    }
-
     return ROBOT_OK;
 }
 
@@ -584,34 +374,6 @@ robot_err_t imu_read_both(imu_raw_data_t *raw, imu_data_t *cal)
         cal->gyro_x = (raw_data.gyro_x * gyro_scale) - gyro_offset_x;
         cal->gyro_y = (raw_data.gyro_y * gyro_scale) - gyro_offset_y;
         cal->gyro_z = (raw_data.gyro_z * gyro_scale) - gyro_offset_z;
-
-        /* DD-5: snapshot mag_cal under critical section so the floating-point
-         * math below operates on a self-consistent copy. Holding the critical
-         * section only for the 52-byte memcpy keeps the lock window to a
-         * few µs — the compute below runs unblocked. */
-        mag_calibration_t cal_snapshot;
-        taskENTER_CRITICAL();
-        memcpy(&cal_snapshot, &mag_cal, sizeof(cal_snapshot));
-        taskEXIT_CRITICAL();
-
-        if (cal_snapshot.calibrated)
-        {
-            float raw_mx = raw_data.mag_x * mag_scale;
-            float raw_my = raw_data.mag_y * mag_scale;
-            float raw_mz = raw_data.mag_z * mag_scale;
-            float hx = raw_mx - cal_snapshot.hard_iron_offset[0];
-            float hy = raw_my - cal_snapshot.hard_iron_offset[1];
-            float hz = raw_mz - cal_snapshot.hard_iron_offset[2];
-            cal->mag_x = cal_snapshot.soft_iron_matrix[0] * hx + cal_snapshot.soft_iron_matrix[1] * hy + cal_snapshot.soft_iron_matrix[2] * hz;
-            cal->mag_y = cal_snapshot.soft_iron_matrix[3] * hx + cal_snapshot.soft_iron_matrix[4] * hy + cal_snapshot.soft_iron_matrix[5] * hz;
-            cal->mag_z = cal_snapshot.soft_iron_matrix[6] * hx + cal_snapshot.soft_iron_matrix[7] * hy + cal_snapshot.soft_iron_matrix[8] * hz;
-        }
-        else
-        {
-            cal->mag_x = raw_data.mag_x * mag_scale;
-            cal->mag_y = raw_data.mag_y * mag_scale;
-            cal->mag_z = raw_data.mag_z * mag_scale;
-        }
         cal->temperature = ((float)raw_data.temperature / 333.87f) + 21.0f;
     }
     return ROBOT_OK;
@@ -710,35 +472,6 @@ int imu_calibrate(void)
                 gyro_variance[0], gyro_variance[1], gyro_variance[2]);
 
     return 0;
-}
-
-/* ========================================================================
- * MAGNETOMETER CALIBRATION FUNCTIONS
- * ======================================================================== */
-
-void imu_set_mag_calibration(const mag_calibration_t *cal)
-{
-    if (cal != NULL)
-    {
-        /* DD-5: 52-byte struct copy must be atomic w.r.t. imu_read_both()
-         * which reads mag_cal at 50 Hz from higher-priority task_imu.
-         * Without this, a torn read produces one bad mag-corrected sample
-         * (sub-degree yaw glitch attenuated by gyro-dominated complementary
-         * filter, but cleanly avoidable). */
-        taskENTER_CRITICAL();
-        mag_cal = *cal;
-        taskEXIT_CRITICAL();
-    }
-}
-
-void imu_get_mag_calibration(mag_calibration_t *cal)
-{
-    if (cal != NULL)
-    {
-        taskENTER_CRITICAL();
-        *cal = mag_cal;
-        taskEXIT_CRITICAL();
-    }
 }
 
 void imu_get_noise_variance(float accel_var[3], float gyro_var[3])

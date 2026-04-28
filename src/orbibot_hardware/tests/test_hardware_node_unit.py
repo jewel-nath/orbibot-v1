@@ -7,7 +7,7 @@ Tests (no ROS 2 / no hardware required):
   - Command timeout (stop sent once after 2 s, reset on new cmd)
   - PID rate limiting (_check_pid_rate_limit)
   - Odometry deduplication (skip unchanged data; heartbeat after interval)
-  - Magnetometer calibration (hard-iron + soft-iron correction)
+  - IMU pose estimation (gyro+accel only — magnetometer removed 2026-04-28)
   - Quaternion from yaw (yaw-only quaternion)
   - Joint state computation (encoder ticks → wheel angle via CPR)
 
@@ -88,7 +88,7 @@ def _stub_ros_modules():
 
     # Stub message classes (just need to be instantiable)
     for mod_name, attrs in [
-        ('sensor_msgs.msg', ['Imu', 'JointState', 'MagneticField']),
+        ('sensor_msgs.msg', ['Imu', 'JointState']),
         ('geometry_msgs.msg', ['Twist', 'Quaternion']),
         ('nav_msgs.msg', ['Odometry']),
         ('std_msgs.msg', ['Int32MultiArray', 'Float32MultiArray', 'UInt16']),
@@ -96,7 +96,7 @@ def _stub_ros_modules():
         ('orbibot_msgs.msg', ['SystemStatus', 'SafetyStatus']),
         ('orbibot_msgs.srv', [
             'SetMotorEnable', 'CalibrateIMU', 'ResetOdometry', 'ResetEncoders',
-            'GetFirmwareVersion', 'SetMagCalibration',
+            'GetFirmwareVersion',
         ]),
     ]:
         mod = sys.modules[mod_name]
@@ -135,12 +135,6 @@ _PARAM_DEFAULTS = {
     'imu.linear_acceleration_covariance': 0.01,
     'imu.angular_velocity_covariance': 0.0025,
     'imu.orientation_covariance': 0.0025,
-    'imu.mag_hard_iron_x': 0.0,
-    'imu.mag_hard_iron_y': 0.0,
-    'imu.mag_hard_iron_z': 0.0,
-    'imu.mag_soft_iron_scale_x': 1.0,
-    'imu.mag_soft_iron_scale_y': 1.0,
-    'imu.mag_soft_iron_scale_z': 1.0,
 }
 
 # Add the package root to sys.path so 'orbibot_hardware' resolves to the real package,
@@ -170,7 +164,7 @@ def _make_node():
     node.motors_enabled = True
 
     # Attach publisher stubs used by callbacks
-    for pub in ['odom_pub', 'imu_pub', 'imu_raw_pub', 'mag_pub',
+    for pub in ['odom_pub', 'imu_pub', 'imu_raw_pub',
                 'encoder_pub', 'joint_states_pub', 'system_status_pub',
                 'safety_status_pub', 'diagnostics_pub']:
         setattr(node, pub, MagicMock())
@@ -458,70 +452,8 @@ class TestOdomDeduplication:
 # Magnetometer calibration tests
 # ---------------------------------------------------------------------------
 
-class TestMagCalibration:
-    """
-    Test the calibration math in _publish_mag (lines 699-708 of hardware_node.py).
-    raw_x µT → raw_x * 1e-6 T → (T - hard_iron) * soft_iron_scale
-    """
-
-    def _apply_mag_cal(self, node, mag_uT):
-        """Apply the same transformation as _publish_mag."""
-        raw_x = float(mag_uT[0]) * 1e-6
-        raw_y = float(mag_uT[1]) * 1e-6
-        raw_z = float(mag_uT[2]) * 1e-6
-        cal_x = (raw_x - node._mag_hard_iron_x) * node._mag_soft_iron_scale_x
-        cal_y = (raw_y - node._mag_hard_iron_y) * node._mag_soft_iron_scale_y
-        cal_z = (raw_z - node._mag_hard_iron_z) * node._mag_soft_iron_scale_z
-        return cal_x, cal_y, cal_z
-
-    def setup_method(self):
-        self.node = _make_node()
-        self.node._mag_hard_iron_x = 0.0
-        self.node._mag_hard_iron_y = 0.0
-        self.node._mag_hard_iron_z = 0.0
-        self.node._mag_soft_iron_scale_x = 1.0
-        self.node._mag_soft_iron_scale_y = 1.0
-        self.node._mag_soft_iron_scale_z = 1.0
-
-    def test_no_calibration(self):
-        """With default cal (0 hard-iron, 1 soft-iron), output = input in Tesla."""
-        raw_uT = (50.0, -30.0, 20.0)
-        cal_x, cal_y, cal_z = self._apply_mag_cal(self.node, raw_uT)
-        assert cal_x == pytest.approx(50e-6, rel=1e-9)
-        assert cal_y == pytest.approx(-30e-6, rel=1e-9)
-        assert cal_z == pytest.approx(20e-6, rel=1e-9)
-
-    def test_hard_iron_subtraction(self):
-        """Hard-iron offset subtracted before soft-iron scaling."""
-        self.node._mag_hard_iron_x = 10e-6   # 10 µT → 10e-6 T
-        raw_uT = (60.0, 0.0, 0.0)            # 60 µT raw
-        cal_x, _, _ = self._apply_mag_cal(self.node, raw_uT)
-        # (60e-6 - 10e-6) * 1.0 = 50e-6 T
-        assert cal_x == pytest.approx(50e-6, rel=1e-9)
-
-    def test_soft_iron_scaling(self):
-        """Soft-iron scale applied after hard-iron correction."""
-        self.node._mag_soft_iron_scale_y = 2.0
-        raw_uT = (0.0, 40.0, 0.0)  # 40 µT raw
-        _, cal_y, _ = self._apply_mag_cal(self.node, raw_uT)
-        # (40e-6 - 0) * 2.0 = 80e-6 T
-        assert cal_y == pytest.approx(80e-6, rel=1e-9)
-
-    def test_combined_calibration(self):
-        """Hard-iron + soft-iron applied together."""
-        self.node._mag_hard_iron_z = 5e-6     # 5e-6 T
-        self.node._mag_soft_iron_scale_z = 1.5
-        raw_uT = (0.0, 0.0, 25.0)            # 25 µT raw
-        _, _, cal_z = self._apply_mag_cal(self.node, raw_uT)
-        # (25e-6 - 5e-6) * 1.5 = 30e-6 T
-        assert cal_z == pytest.approx(30e-6, rel=1e-9)
-
-    def test_zero_mag_not_published(self):
-        """All-zero mag data is silently skipped by _publish_mag."""
-        node = self.node
-        node.get_clock = MagicMock(return_value=MagicMock())
-        node._publish_mag([0.0, 0.0, 0.0])
-        node.mag_pub.publish.assert_not_called()
+# Magnetometer calibration tests removed 2026-04-28 — mag support dropped
+# from firmware and driver (see firmware-changelog.md).
 
 
 # ---------------------------------------------------------------------------

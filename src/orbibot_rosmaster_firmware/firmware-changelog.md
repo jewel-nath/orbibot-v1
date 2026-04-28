@@ -2,6 +2,41 @@
 
 ## [Unreleased] — 2026-04-28
 
+### Breaking Changes
+
+- **Magnetometer support removed entirely** (firmware, driver, msgs, localization)
+  Indoor SS-frame robot has too much hard/soft-iron contamination from steel
+  rebar, motors, battery, and motor-driver currents to make the AK09916
+  magnetometer useful for heading. Heading correction is now provided by
+  Madgwick (gyro+accel only) + EKF + slam_toolbox/AMCL — no compass needed.
+
+  Wire format changes:
+  - `REPORT_IMU_RAW (0x0E)` shrunk from **18 bytes → 12 bytes**
+    (gyro 6 + accel 6, no mag).
+  - `FUNC_SET_MAG_CAL (0x16)` removed — handler dropped, dispatcher rejects.
+  - Flash schema bumped magic `0xA5 → 0xA6`; old saved data is treated as
+    "no stored data" on first boot after flash and defaults are used.
+
+  Firmware code removed:
+  - AK09916 driver code in `imu_driver.c` (mag_init, I2C-master setup,
+    EXT_SLV_SENS_DATA reads).
+  - `mag_calibration_t` struct + `imu_set/get_mag_calibration` API.
+  - Mag fields from `imu_raw_data_t` / `imu_data_t`.
+  - Complementary-filter mag term in `task_imu.c` — yaw is now pure
+    gyro Z integration (long-term drift corrected by ROS 2-side fusion).
+
+  ROS 2 changes:
+  - `/imu/mag` topic publishing removed.
+  - `/orbibot/set_mag_calibration` service removed.
+  - `orbibot_msgs/srv/SetMagCalibration.srv` deleted.
+  - `imu_filter_madgwick` now runs with `use_mag: false` (6-DoF mode).
+  - `calibrate_magnetometer` script and entry point removed.
+  - Firmware text saved in flash dropped 1368 bytes; RAM dropped 132 bytes.
+
+  Migration: flash + driver must ship together. An old driver (pre-this-commit)
+  paired with the new firmware will see truncated 12-byte IMU raw packets and
+  silently drop them via the length-validation gate.
+
 ### Bug Fixes
 
 - **`set_auto_report_state` `forever` parameter dropped** (`rosmaster_driver.py`,

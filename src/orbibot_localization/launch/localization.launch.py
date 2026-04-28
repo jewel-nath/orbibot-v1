@@ -3,9 +3,11 @@
 OrbiBot Localization Launch
 
 Pipeline:
-  /imu/data_raw + /imu/mag → imu_filter_madgwick → /imu/data_filtered → EKF
-  /odom (wheel odometry) ──────────────────────────────────────────────→ EKF
+  /imu/data_raw → imu_filter_madgwick (use_mag=false) → /imu/data_filtered → EKF
+  /odom (wheel odometry) ────────────────────────────────────────────────→ EKF
   EKF → /odometry/filtered + odom→base_footprint TF
+
+Magnetometer was removed 2026-04-28; Madgwick now runs in 6-DoF mode.
 
 Requires: sudo apt install ros-jazzy-imu-filter-madgwick
 """
@@ -45,11 +47,11 @@ def generate_launch_description():
     log_level = LaunchConfiguration('log_level')
 
     log_startup = LogInfo(
-        msg=['[Localization] Madgwick + EKF — /imu/data_raw + /imu/mag → relative yaw → /odometry/filtered']
+        msg=['[Localization] Madgwick (6-DoF) + EKF — /imu/data_raw → relative yaw → /odometry/filtered']
     )
 
-    # Madgwick IMU filter: fuses raw accel/gyro + magnetometer → orientation quaternion
-    # Config in config/madgwick_params.yaml — override via madgwick_config launch arg
+    # Madgwick IMU filter: fuses raw accel + gyro → orientation quaternion.
+    # use_mag=false (mag was removed 2026-04-28) — see config/madgwick_params.yaml.
     imu_filter_madgwick = Node(
         package='imu_filter_madgwick',
         executable='imu_filter_madgwick_node',
@@ -58,7 +60,6 @@ def generate_launch_description():
         parameters=[madgwick_config],
         remappings=[
             ('imu/data_raw', '/imu/data_raw'),
-            ('imu/mag', '/imu/mag'),
             ('imu/data', '/imu/data_filtered'),
         ],
         respawn=True,

@@ -15,10 +15,10 @@ from orbibot_hardware.rosmaster_driver import (
     SERIAL_HEAD, SERIAL_DEVICE_ID, SERIAL_COMPLEMENT,
     FUNC_REPORT_SPEED, FUNC_REPORT_ICM_RAW, FUNC_REPORT_IMU_ATT,
     FUNC_REPORT_ENCODER, FUNC_REPORT_ODOM,
-    FUNC_SET_MOTOR_PID, FUNC_SET_YAW_PID, FUNC_SET_MAG_CAL,
+    FUNC_SET_MOTOR_PID, FUNC_SET_YAW_PID,
     FUNC_BEEP, FUNC_MOTION, FUNC_AUTO_REPORT,
     FUNC_RESET_ENCODERS, FUNC_RESET_ODOM,
-    ICM20948_GYRO_RATIO, ICM20948_ACCEL_RATIO, ICM20948_MAG_RATIO,
+    ICM20948_GYRO_RATIO, ICM20948_ACCEL_RATIO,
     CARTYPE_ORBIBOT,
 )
 
@@ -86,17 +86,16 @@ class TestParseSpeed:
 
 
 # ---------------------------------------------------------------------------
-# Protocol parsing — FUNC_REPORT_ICM_RAW (18-byte payload)
+# Protocol parsing — FUNC_REPORT_ICM_RAW (12-byte payload, no mag)
 # ---------------------------------------------------------------------------
 
 class TestParseICMRaw:
-    def test_parses_gyro_accel_mag(self):
+    def test_parses_gyro_accel(self):
         driver = _make_rosmaster()
-        # Construct 18-byte payload: gyro(6) + accel(6) + mag(6)
+        # Construct 12-byte payload: gyro(6) + accel(6)
         gyro = (1000, -500, 250)   # mrad/s
         accel = (0, 0, 9810)       # mm/s²
-        mag = (100, -80, 40)       # AK09916 raw counts
-        data = list(struct.pack('<9h', *gyro, *accel, *mag))
+        data = list(struct.pack('<6h', *gyro, *accel))
         driver._parse_data(FUNC_REPORT_ICM_RAW, data)
 
         gx, gy, gz = driver.get_gyroscope_data()
@@ -107,27 +106,15 @@ class TestParseICMRaw:
         ax, ay, az = driver.get_accelerometer_data()
         assert pytest.approx(az, abs=1e-6) == 9810 * ICM20948_ACCEL_RATIO
 
-        mx, my, mz = driver.get_magnetometer_data()
-        assert pytest.approx(mx, abs=1e-6) == 100 * ICM20948_MAG_RATIO
-        assert pytest.approx(my, abs=1e-6) == -80 * ICM20948_MAG_RATIO
-        assert pytest.approx(mz, abs=1e-6) == 40 * ICM20948_MAG_RATIO
-
-    def test_rejects_12_byte_payload(self):
-        """Pre-fix bug: 12 bytes was accepted but mag was silently missing."""
+    def test_rejects_short_payload(self):
         driver = _make_rosmaster()
-        driver._parse_data(FUNC_REPORT_ICM_RAW, [0] * 12)  # too short
-        mx, my, mz = driver.get_magnetometer_data()
-        assert mx == 0.0  # unchanged — parse was rejected
-
-    def test_rejects_17_byte_payload(self):
-        driver = _make_rosmaster()
-        driver._parse_data(FUNC_REPORT_ICM_RAW, [0] * 17)
+        driver._parse_data(FUNC_REPORT_ICM_RAW, [0] * 11)  # too short — rejected
         gx, gy, gz = driver.get_gyroscope_data()
         assert gx == 0.0
 
-    def test_accepts_18_byte_payload(self):
+    def test_accepts_12_byte_payload(self):
         driver = _make_rosmaster()
-        driver._parse_data(FUNC_REPORT_ICM_RAW, [0] * 18)
+        driver._parse_data(FUNC_REPORT_ICM_RAW, [0] * 12)
         # Should not raise
 
 
@@ -340,66 +327,6 @@ class TestSetYawPidParam:
         pkt = list(self._get_written(driver))
         expected = _checksum(pkt[:-1])
         assert pkt[-1] == expected
-
-
-# ---------------------------------------------------------------------------
-# Command building — set_mag_calibration
-# ---------------------------------------------------------------------------
-
-class TestSetMagCalibration:
-    def _get_written(self, driver):
-        return bytearray(driver.ser.write.call_args[0][0])
-
-    def test_raises_on_overflow_x(self):
-        driver = _make_rosmaster()
-        with pytest.raises(ValueError, match='offset_x'):
-            driver.set_mag_calibration(400.0, 0.0, 0.0)
-
-    def test_raises_on_overflow_y(self):
-        driver = _make_rosmaster()
-        with pytest.raises(ValueError, match='offset_y'):
-            driver.set_mag_calibration(0.0, -400.0, 0.0)
-
-    def test_raises_on_overflow_z(self):
-        driver = _make_rosmaster()
-        with pytest.raises(ValueError, match='offset_z'):
-            driver.set_mag_calibration(0.0, 0.0, 400.0)
-
-    def test_accepts_zero_offsets(self):
-        driver = _make_rosmaster()
-        driver.set_mag_calibration(0.0, 0.0, 0.0)
-        pkt = self._get_written(driver)
-        assert pkt[3] == FUNC_SET_MAG_CAL
-
-    def test_offsets_encoded_correctly(self):
-        driver = _make_rosmaster()
-        driver.set_mag_calibration(5.2, -3.1, 1.0)
-        pkt = self._get_written(driver)
-        ox = struct.unpack('<h', bytes(pkt[4:6]))[0]
-        oy = struct.unpack('<h', bytes(pkt[6:8]))[0]
-        oz = struct.unpack('<h', bytes(pkt[8:10]))[0]
-        assert ox == 520
-        assert oy == -310
-        assert oz == 100
-
-    def test_checksum_valid(self):
-        driver = _make_rosmaster()
-        driver.set_mag_calibration(5.2, -3.1, 1.0)
-        pkt = list(self._get_written(driver))
-        expected = _checksum(pkt[:-1])
-        assert pkt[-1] == expected
-
-    def test_max_positive_boundary(self):
-        driver = _make_rosmaster()
-        driver.set_mag_calibration(327.67, 0.0, 0.0)  # should not raise
-        pkt = self._get_written(driver)
-        ox = struct.unpack('<h', bytes(pkt[4:6]))[0]
-        assert ox == 32767
-
-    def test_just_over_boundary_raises(self):
-        driver = _make_rosmaster()
-        with pytest.raises(ValueError):
-            driver.set_mag_calibration(327.68, 0.0, 0.0)
 
 
 # ---------------------------------------------------------------------------

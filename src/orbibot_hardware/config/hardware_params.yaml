@@ -42,20 +42,9 @@ orbibot_hardware_node:
       gyro_covariance_z: 0.000001
       orientation_covariance: 0.0025
 
-      # Magnetometer calibration (Python-side correction in hardware_node._publish_mag).
-      # Firmware has a 3x3 soft-iron matrix capability but it is NOT activated — all
-      # correction happens here. Run: ros2 run orbibot_localization calibrate_magnetometer
-      # Hard-iron bias (Tesla): constant offset from motors and battery permanent magnets.
-      # Calibrated 2026-03-15 via 3 × 360° rotation.
-      mag_hard_iron_x: -0.00005452
-      mag_hard_iron_y: -0.00000832
-      mag_hard_iron_z:  0.00007170
-      # Soft-iron scale (dimensionless): corrects axis-dependent distortion from ferromagnetic material.
-      # 1.0 = no correction (default until soft-iron calibration is run).
-      # Run calibrate_magnetometer and copy the printed scale values here.
-      mag_soft_iron_scale_x: 1.0
-      mag_soft_iron_scale_y: 1.0
-      mag_soft_iron_scale_z: 1.0
+      # Magnetometer calibration block removed 2026-04-28 — magnetometer
+      # support was dropped from firmware and driver. Heading correction is
+      # provided by Madgwick (gyro+accel only) + EKF + slam_toolbox/AMCL.
 
     # Odometry Covariance (adaptive, grows with distance/rotation)
     odometry:

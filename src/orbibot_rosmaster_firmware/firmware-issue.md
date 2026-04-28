@@ -25,24 +25,6 @@ largest and multiply by 1.5.
 
 ---
 
-### FW-ISSUE-6: AK09916 magnetometer init doesn't verify WHO_AM_I
-**Severity:** LOW · **File:** `src/drivers/imu_driver.c` — `mag_init()`
-
-`mag_init()` issues the reset and mode-set commands to the AK09916 but
-never reads back `WIA2` (register `0x01`, expected `0x09`). On success it
-unconditionally sets `mag_initialized = 1`. If the mag chip is dead or
-wired wrong, the firmware silently returns zeros forever from
-`imu_read_raw()`'s mag fields, which would degrade yaw quality without any
-diagnostic hint.
-
-**Fix:** After the reset + mode-set sequence, do one `mag_i2c` read of
-`AK09916_WIA2` and check the result equals `0x09`. On mismatch, leave
-`mag_initialized = 0` and print a `BOOT_PRINTF` warning. Doesn't break the
-robot (attitude filter falls back to gyro-only yaw) but makes failures
-visible.
-
----
-
 ### FW-ISSUE-7: IMU variance never transmitted to ROS 2
 **Severity:** INFO · **Files:** firmware side — `imu_driver.c`,
 `protocol.c`; ROS 2 side — `hardware_node.py`, `hardware_params.yaml`

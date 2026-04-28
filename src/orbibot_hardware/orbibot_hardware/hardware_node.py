@@ -9,7 +9,7 @@ Key Features:
 - Velocity control via /cmd_vel → firmware
 - Firmware odometry → /odom with adaptive covariance
 - Encoder data publishing for diagnostics
-- IMU data publishing (raw + attitude + magnetometer)
+- IMU data publishing (raw + attitude); magnetometer removed 2026-04-28
 - Joint states for RViz visualization
 - System monitoring and safety
 
@@ -30,7 +30,7 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 from rcl_interfaces.msg import SetParametersResult
 
 # ROS2 Messages
-from sensor_msgs.msg import Imu, JointState, MagneticField
+from sensor_msgs.msg import Imu, JointState
 from geometry_msgs.msg import Twist, Quaternion
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Int32MultiArray, Float32MultiArray, UInt16
@@ -40,7 +40,7 @@ from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from orbibot_msgs.msg import SystemStatus, SafetyStatus
 from orbibot_msgs.srv import (
     SetMotorEnable, CalibrateIMU, ResetOdometry, ResetEncoders,
-    GetFirmwareVersion, SetMagCalibration,
+    GetFirmwareVersion,
 )
 
 # ROSMaster Driver
@@ -160,15 +160,6 @@ class OrbiBotHardwareNode(Node):
         self.declare_parameter('imu.gyro_covariance_z', 0.0025)
         self.declare_parameter('imu.orientation_covariance', 0.0025)
 
-        # Magnetometer calibration (applied before publishing /imu/mag)
-        # Hard-iron: constant offset from motors/battery permanent magnets (Tesla)
-        # Soft-iron: axis scale factors from ferromagnetic material distortion (dimensionless)
-        self.declare_parameter('imu.mag_hard_iron_x', 0.0)
-        self.declare_parameter('imu.mag_hard_iron_y', 0.0)
-        self.declare_parameter('imu.mag_hard_iron_z', 0.0)
-        self.declare_parameter('imu.mag_soft_iron_scale_x', 1.0)
-        self.declare_parameter('imu.mag_soft_iron_scale_y', 1.0)
-        self.declare_parameter('imu.mag_soft_iron_scale_z', 1.0)
 
         # Load values
         self.serial_port = self.get_parameter('hardware.serial_port').value
@@ -209,13 +200,6 @@ class OrbiBotHardwareNode(Node):
         ]
         self._imu_orient_cov = self.get_parameter('imu.orientation_covariance').value
 
-        # Magnetometer calibration
-        self._mag_hard_iron_x = self.get_parameter('imu.mag_hard_iron_x').value
-        self._mag_hard_iron_y = self.get_parameter('imu.mag_hard_iron_y').value
-        self._mag_hard_iron_z = self.get_parameter('imu.mag_hard_iron_z').value
-        self._mag_soft_iron_scale_x = self.get_parameter('imu.mag_soft_iron_scale_x').value
-        self._mag_soft_iron_scale_y = self.get_parameter('imu.mag_soft_iron_scale_y').value
-        self._mag_soft_iron_scale_z = self.get_parameter('imu.mag_soft_iron_scale_z').value
 
         # Validate parameters
         self._validate_parameters()
@@ -307,7 +291,6 @@ class OrbiBotHardwareNode(Node):
         )
         self.imu_pub = self.create_publisher(Imu, '/imu/data', sensor_qos)
         self.imu_raw_pub = self.create_publisher(Imu, '/imu/data_raw', sensor_qos)
-        self.mag_pub = self.create_publisher(MagneticField, '/imu/mag', sensor_qos)
         self.encoder_pub = self.create_publisher(Int32MultiArray, '/orbibot/encoders', sensor_qos)
         # /odom: TRANSIENT_LOCAL so late-joining subscribers (e.g. web dashboard) get last message
         odom_qos = QoSProfile(
@@ -362,9 +345,6 @@ class OrbiBotHardwareNode(Node):
         self.firmware_version_srv = self.create_service(
             GetFirmwareVersion, '/orbibot/get_firmware_version',
             self._get_firmware_version_callback)
-        self.set_mag_cal_srv = self.create_service(
-            SetMagCalibration, '/orbibot/set_mag_calibration',
-            self._set_mag_calibration_callback)
 
     def _create_timers(self):
         """Create periodic timers"""
@@ -564,38 +544,6 @@ class OrbiBotHardwareNode(Node):
 
         return response
 
-    def _set_mag_calibration_callback(self, request, response):
-        """Set magnetometer hard-iron offsets (µT) via /orbibot/set_mag_calibration service."""
-        if not self.hardware_connected:
-            response.success = False
-            response.message = "Hardware not connected"
-            return response
-
-        try:
-            # save=True preserves the pre-DD-11 behaviour: a single service
-            # call persists to firmware flash. Callers running a streaming
-            # calibration routine should bypass this service and call
-            # rosmaster_driver.set_mag_calibration(save=False) directly,
-            # then a single save=True at the end.
-            self.bot.set_mag_calibration(
-                float(request.offset_x),
-                float(request.offset_y),
-                float(request.offset_z),
-                save=True,
-            )
-            response.success = True
-            response.message = (
-                f"Mag calibration set: ox={request.offset_x:.3f} "
-                f"oy={request.offset_y:.3f} oz={request.offset_z:.3f} µT"
-            )
-            self.get_logger().info(response.message)
-        except Exception as e:
-            self.get_logger().error(f"Set mag calibration failed: {e}")
-            response.success = False
-            response.message = f"Failed: {e}"
-
-        return response
-
     def _sensor_callback(self):
         """Publish sensor data @ 50Hz. R1/Q4: single fetch per cycle. S1/S2: data freshness."""
         # S1/S2: Data freshness check — MUST happen before early-return so recovery
@@ -649,7 +597,6 @@ class OrbiBotHardwareNode(Node):
             accel_data = self.bot.get_accelerometer_data()
             gyro_data = self.bot.get_gyroscope_data()
             attitude_data = self.bot.get_imu_attitude_data(to_angle=False)
-            mag_data = self.bot.get_magnetometer_data()
             odom_data = self.bot.get_firmware_odometry()
             encoders = self.bot.get_motor_encoder()
         except Exception as e:
@@ -658,7 +605,6 @@ class OrbiBotHardwareNode(Node):
 
         self._publish_imu(accel_data, gyro_data, attitude_data)
         self._publish_imu_raw(accel_data, gyro_data)
-        self._publish_mag(mag_data)
         self._publish_firmware_odom(odom_data)
         self._publish_encoders(encoders)
         self._publish_joint_states(encoders)
@@ -720,40 +666,6 @@ class OrbiBotHardwareNode(Node):
             self.imu_raw_pub.publish(msg)
         except Exception as e:
             self.get_logger().error(f"IMU raw publish failed: {e}")
-
-    def _publish_mag(self, mag_data):
-        """Publish magnetometer data for imu_filter_madgwick."""
-        try:
-            if len(mag_data) != 3:
-                return
-            if mag_data[0] == 0.0 and mag_data[1] == 0.0 and mag_data[2] == 0.0:
-                return
-            msg = MagneticField()
-            msg.header.stamp = self.get_clock().now().to_msg()
-            msg.header.frame_id = 'imu_link'
-
-            # Convert µT → Tesla, then apply hard-iron + soft-iron correction.
-            # Hard-iron: subtract constant offset from nearby permanent magnets.
-            # Soft-iron: scale each axis to restore circular (undistorted) response.
-            # Run calibrate_magnetometer to compute and update hardware_params.yaml.
-            raw_x = float(mag_data[0]) * 1e-6
-            raw_y = float(mag_data[1]) * 1e-6
-            raw_z = float(mag_data[2]) * 1e-6
-            msg.magnetic_field.x = (raw_x - self._mag_hard_iron_x) * self._mag_soft_iron_scale_x
-            msg.magnetic_field.y = (raw_y - self._mag_hard_iron_y) * self._mag_soft_iron_scale_y
-            msg.magnetic_field.z = (raw_z - self._mag_hard_iron_z) * self._mag_soft_iron_scale_z
-
-            # AK09916 noise density ~0.15 µT → variance ≈ (0.15e-6)² ≈ 2.25e-14 T²
-            # Conservative estimate used: 1e-10 T² (diagonal, no cross-axis correlation)
-            mag_cov = 1e-10
-            msg.magnetic_field_covariance = [mag_cov, 0.0, 0.0,
-                                             0.0, mag_cov, 0.0,
-                                             0.0, 0.0, mag_cov]
-
-            self.mag_pub.publish(msg)
-
-        except Exception as e:
-            self.get_logger().error(f"Mag publish failed: {e}")
 
     def _publish_firmware_odom(self, odom_data):
         """Publish firmware odometry on /odom with adaptive covariance."""
@@ -1007,29 +919,23 @@ class OrbiBotHardwareNode(Node):
         return response
 
     def _calibrate_imu_callback(self, request, response):
-        """DEPRECATED: Use `ros2 run orbibot_localization calibrate_magnetometer` instead.
+        """No-op stub, kept for backward compatibility.
 
-        This service sends (0,0,0) to firmware mag calibration, which is a no-op.
-        Actual mag correction is applied in Python (_publish_mag) using values from
-        hardware_params.yaml. The firmware's 3x3 soft-iron matrix capability exists
-        but is not activated during normal operation.
+        Gyro/accel zero-rate calibration happens automatically at firmware
+        boot via imu_calibrate() (1000-sample Welford pass). There is no
+        useful runtime calibration to invoke from ROS 2.
 
-        Proper calibration workflow:
-          1. ros2 run orbibot_localization calibrate_magnetometer
-          2. Copy printed values to hardware_params.yaml (imu section)
-          3. Restart hardware_node
-
-        Kept for backward compatibility — always returns success with zero bias.
+        Magnetometer calibration was removed entirely on 2026-04-28; the
+        prior calibrate_magnetometer tool no longer exists.
         """
         self.get_logger().warn(
-            "calibrate_imu service is DEPRECATED. "
-            "Use: ros2 run orbibot_localization calibrate_magnetometer"
+            "calibrate_imu service is a no-op. "
+            "Gyro/accel calibration runs at firmware boot."
         )
         response.success = True
         response.message = (
-            "DEPRECATED: This service sends zero offsets (no-op). "
-            "Use `ros2 run orbibot_localization calibrate_magnetometer` "
-            "and copy values to hardware_params.yaml instead."
+            "No-op: gyro/accel zero-rate calibration is performed at "
+            "firmware boot. Magnetometer support was removed."
         )
         response.bias_values = [0.0, 0.0, 0.0]
         return response

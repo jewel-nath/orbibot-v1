@@ -17,36 +17,6 @@ safety paths, build hygiene). Skips items already in `firmware-issue.md` or
 
 ## 🟡 LOW
 
-### DD-6: Mag yaw blending sign convention untested on this hardware [STATIC-ONLY]
-
-**File:** `src/tasks/task_imu.c` line 178
-
-**Severity:** LOW (impacts long-duration heading stability only)
-
-**What is wrong:**
-```c
-float mag_yaw = atan2f(-imu_data.mag_y, imu_data.mag_x);
-```
-The complementary filter blends `mag_yaw` into `gyro_yaw` at α=0.02 weight.
-The sign of the `mag_y` argument depends on the chip's mounting
-orientation on the ROSMaster V3.0 board *relative to the robot body*. If
-the chip's +Y points away from robot's +Y (left), the `-mag_y` is
-correct. If +Y points toward robot's +Y, the formula should be
-`atan2f(mag_y, mag_x)`.
-
-**Why it matters:**
-A wrong sign means the magnetometer correction *opposes* the gyro
-integration over long horizons. Short-term you wouldn't notice (gyro
-dominates); after several minutes of operation yaw can drift several
-degrees more than gyro-only would.
-
-**Fix:** Rotate robot CCW by ~360° on the ground (not on blocks — the
-chip needs to physically rotate) and check whether the
-`/imu/data_filtered` yaw value tracks the actual rotation in the same
-direction. If it tracks opposite, flip the `-imu_data.mag_y` sign.
-
----
-
 ### DD-7: `vy` sanity-check spec drift between firmware and ROS 2 frame convention [STATIC-ONLY]
 
 **Files:** `src/communication/protocol.c` line 451–470,
@@ -143,7 +113,6 @@ an operator with a serial monitor will see the message most of the time.
 | Command timeout vs YAML | `COMMAND_TIMEOUT_MS = 2000` ↔ `cmd_timeout: 2.0` | OK |
 | Pre-scheduler watchdog feed | `main()` line 446 | OK — handles fast-LSI hardware (FW-BUG-3 history confirms) |
 | Watchdog gating | `task_monitoring` only feeds when *all 4* alive counters advance | OK — including initial-iteration-after-boot edge case |
-| AK09916 WHO_AM_I check | `mag_init()` line 302 | OK — *contradicts* `firmware-issue.md::FW-ISSUE-6` which calls this missing. **`firmware-issue.md` is stale** — see cleanup item below. |
 | Saturation guards | `g_rx_drop_count++` saturates at `UINT32_MAX`, `protocol_send_motion_data` saturates voltage | OK |
 | Per-motor steady-state speed (FW-ISSUE-4 baseline) | M1–M4 at 1.0 m/s commanded | OK — 0.1 % inter-motor variation; M4 stiction is transient only (see `test-report.md §9.2`) |
 
@@ -151,11 +120,6 @@ an operator with a serial monitor will see the message most of the time.
 
 ## 🧹 Documentation hygiene
 
-- **`firmware-issue.md::FW-ISSUE-6` is stale.** `mag_init()` already
-  reads back `WIA2` and rejects on mismatch (see `imu_driver.c` line
-  302–311 plus the `BOOT_PRINTF` warning). Move FW-ISSUE-6 to the
-  changelog under a future "Refactoring / Bug Fixes" section, or just
-  delete it from `firmware-issue.md`.
 - **`firmware-issue.md::FW-ISSUE-4`** ("`MAX_WHEEL_SPEED_MMS = 3500`
   too loose") now has a measured baseline: `test-report.md §9.2` shows
   worst-case combined wheel speed at firmware velocity caps is ~1.94 m/s.

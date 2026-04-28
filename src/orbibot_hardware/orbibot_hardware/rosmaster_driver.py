@@ -28,7 +28,6 @@ FUNC_MOTION = 0x12
 FUNC_SET_MOTOR_PID = 0x13
 FUNC_SET_YAW_PID = 0x14
 FUNC_REPORT_ODOM = 0x15
-FUNC_SET_MAG_CAL = 0x16
 FUNC_VERSION = 0x51
 
 # Car type (OrbiBot uses mecanum only; byte required in MOTION packet format)
@@ -39,11 +38,9 @@ CARTYPE_ORBIBOT = 0x07
 # sending; driver divides by 1000 to recover SI units.
 #   Gyro  ±500 dps  → firmware sends milli-rad/s  → ÷1000 → rad/s
 #   Accel ±2 g      → firmware sends milli-m/s²   → ÷1000 → m/s²
-# Mag: firmware sends raw AK09916 ADC counts; AK09916 sensitivity = 0.15 µT/count.
-#   hardware_node.py then converts µT → Tesla via ×1e-6.
+# Magnetometer support was removed 2026-04-28 (indoor SS-frame robot, not useful).
 ICM20948_GYRO_RATIO  = 1 / 1000.0   # milli-rad/s → rad/s
 ICM20948_ACCEL_RATIO = 1 / 1000.0   # milli-m/s²  → m/s²
-ICM20948_MAG_RATIO   = 0.15         # AK09916 raw counts → µT
 
 # Radians to degrees
 RAD_TO_DEG = 57.2957795
@@ -78,9 +75,6 @@ class Rosmaster:
         self._gx = 0.0
         self._gy = 0.0
         self._gz = 0.0
-        self._mx = 0.0
-        self._my = 0.0
-        self._mz = 0.0
         self._vx = 0.0
         self._vy = 0.0
         self._vz = 0.0
@@ -169,7 +163,8 @@ class Rosmaster:
                 self._battery_voltage = struct.unpack('B', bytearray(ext_data[6:7]))[0]
                 self._last_data_timestamp = time.time()
         elif ext_type == FUNC_REPORT_ICM_RAW:
-            if len(ext_data) < 18:
+            # Firmware sends 12 bytes (gyro+accel) since magnetometer was removed.
+            if len(ext_data) < 12:
                 return
             with self._data_lock:
                 self._gx = struct.unpack('h', bytearray(ext_data[0:2]))[0] * ICM20948_GYRO_RATIO
@@ -178,9 +173,6 @@ class Rosmaster:
                 self._ax = struct.unpack('h', bytearray(ext_data[6:8]))[0] * ICM20948_ACCEL_RATIO
                 self._ay = struct.unpack('h', bytearray(ext_data[8:10]))[0] * ICM20948_ACCEL_RATIO
                 self._az = struct.unpack('h', bytearray(ext_data[10:12]))[0] * ICM20948_ACCEL_RATIO
-                self._mx = struct.unpack('h', bytearray(ext_data[12:14]))[0] * ICM20948_MAG_RATIO
-                self._my = struct.unpack('h', bytearray(ext_data[14:16]))[0] * ICM20948_MAG_RATIO
-                self._mz = struct.unpack('h', bytearray(ext_data[16:18]))[0] * ICM20948_MAG_RATIO
                 self._last_data_timestamp = time.time()
         elif ext_type == FUNC_REPORT_IMU_ATT:
             if len(ext_data) < 6:
@@ -358,35 +350,6 @@ class Rosmaster:
         """Set yaw PID gains. forever=True saves to flash (persists across reboot)."""
         self._send_pid(FUNC_SET_YAW_PID, kp, ki, kd, forever)
 
-    # Maximum magnetometer offset in µT that fits in int16 with ×100 scaling.
-    _MAG_OFFSET_MAX_UT = 327.67
-
-    def set_mag_calibration(self, offset_x, offset_y, offset_z, save=False):
-        """Set magnetometer hard iron calibration offsets (in µT).
-
-        Args:
-            offset_x/y/z: Hard-iron bias in µT. Must be in [-327.67, +327.67].
-            save: If True, persist to firmware flash (one erase cycle).
-                  Default False = RAM-only update, suitable for streaming
-                  calibration during a "rotate the robot" routine. Persist
-                  once at the end with save=True.
-        Raises:
-            ValueError: if any offset is outside the int16 representable range.
-        """
-        for name, val in (('offset_x', offset_x), ('offset_y', offset_y), ('offset_z', offset_z)):
-            if abs(val) > self._MAG_OFFSET_MAX_UT:
-                raise ValueError(
-                    f"set_mag_calibration: {name}={val} µT out of range "
-                    f"[-{self._MAG_OFFSET_MAX_UT}, +{self._MAG_OFFSET_MAX_UT}]")
-        try:
-            ox = bytearray(struct.pack('h', int(offset_x * 100)))
-            oy = bytearray(struct.pack('h', int(offset_y * 100)))
-            oz = bytearray(struct.pack('h', int(offset_z * 100)))
-            state = 0x5F if save else 0x00  # SAVE_VERIFY in firmware protocol.h
-            data = [ox[0], ox[1], oy[0], oy[1], oz[0], oz[1], state]
-            self._send_command(FUNC_SET_MAG_CAL, data)
-        except (serial.SerialException, OSError) as e:
-            print(f'---set_mag_calibration error: {e}---')
 
     def reset_odometry(self):
         """Reset firmware odometry to zero. (BUG-4: length byte = len(cmd)-1 = 0x03.)"""
@@ -418,11 +381,6 @@ class Rosmaster:
         """Return (gx, gy, gz) in rad/s."""
         with self._data_lock:
             return self._gx, self._gy, self._gz
-
-    def get_magnetometer_data(self):
-        """Return (mx, my, mz) in uT."""
-        with self._data_lock:
-            return self._mx, self._my, self._mz
 
     def get_imu_attitude_data(self, to_angle=True):
         with self._data_lock:

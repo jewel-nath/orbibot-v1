@@ -4,7 +4,11 @@
  *
  * Handles IMU data acquisition and attitude estimation:
  * - Reads calibrated IMU data at 50Hz
- * - Integrates gyroscope Z-axis for yaw estimation
+ * - Roll/pitch from accelerometer (gravity vector)
+ * - Yaw from pure gyro Z integration (no mag — heading correction
+ *   provided by EKF + slam_toolbox at the ROS 2 layer; magnetometer
+ *   was removed 2026-04-28 due to indoor SS-frame contamination making
+ *   mag readings unreliable)
  * - Provides thread-safe access to attitude angles
  *
  * @author Jewel Nath
@@ -22,11 +26,6 @@
 /* IMU update period in seconds */
 #define IMU_DT              (1.0f / IMU_UPDATE_RATE_HZ)
 
-/* Complementary filter weight for gyro vs magnetometer yaw correction.
- * At 50Hz: 0.98 gyro / 0.02 mag — gyro leads transient response,
- * mag slowly corrects long-term drift. */
-#define YAW_CF_ALPHA        0.98f
-
 /* Attitude state (protected by FreeRTOS task isolation) */
 static volatile float g_roll = 0.0f;
 static volatile float g_pitch = 0.0f;
@@ -38,7 +37,6 @@ static volatile imu_data_t g_imu_data;
 /* Cached raw int16 IMU data for protocol reporting (eliminates SPI race) */
 static volatile int16_t g_raw_gyro[3]  = {0};
 static volatile int16_t g_raw_accel[3] = {0};
-static volatile int16_t g_raw_mag[3]   = {0};
 
 /**
  * @brief Get current attitude angles (thread-safe)
@@ -73,14 +71,13 @@ void imu_task_reset_yaw(void)
     g_yaw = 0.0f;
 }
 
-void imu_task_get_raw_data(int16_t gyro[3], int16_t accel[3], int16_t mag[3])
+void imu_task_get_raw_data(int16_t gyro[3], int16_t accel[3])
 {
     taskENTER_CRITICAL();
     for (int i = 0; i < 3; i++)
     {
         gyro[i]  = g_raw_gyro[i];
         accel[i] = g_raw_accel[i];
-        mag[i]   = g_raw_mag[i];
     }
     taskEXIT_CRITICAL();
 }
@@ -94,9 +91,6 @@ void imu_task_get_raw_data(int16_t gyro[3], int16_t accel[3], int16_t mag[3])
  * Sensor ranges are sized to prevent int16 overflow:
  *   Gyro  ±500 dps  → max ±8 727 milli-rad/s  (< 32 767) ✅
  *   Accel ±2 g      → max ±19 613 milli-m/s²  (< 32 767) ✅
- *
- * Mag is NOT included here — it is sent as raw AK09916 ADC counts via
- * imu_task_get_raw_data(); the ROS 2 driver applies 0.15 µT/count directly.
  *
  * @param gyro_mrad_s  [out] Angular velocity in milli-rad/s (×1000 rad/s)
  * @param accel_mm_s2  [out] Linear acceleration in milli-m/s² (×1000 m/s²)
@@ -148,9 +142,6 @@ void task_imu(void *params)
             g_raw_accel[0] = raw.accel_x;
             g_raw_accel[1] = raw.accel_y;
             g_raw_accel[2] = raw.accel_z;
-            g_raw_mag[0]   = raw.mag_x;
-            g_raw_mag[1]   = raw.mag_y;
-            g_raw_mag[2]   = raw.mag_z;
             taskEXIT_CRITICAL();
 
             g_imu_data = imu_data;
@@ -161,34 +152,15 @@ void task_imu(void *params)
                             sqrtf(imu_data.accel_x * imu_data.accel_x +
                                   imu_data.accel_z * imu_data.accel_z));
 
-            /* Gyro integration step (read g_yaw inside critical section) */
+            /* Gyro-only yaw integration. Heading correction is handled at the
+             * ROS 2 layer (Madgwick + EKF + slam_toolbox/AMCL), so this task
+             * just integrates and lets long-term drift be corrected upstream. */
             float prev_yaw;
             taskENTER_CRITICAL();
             prev_yaw = g_yaw;
             taskEXIT_CRITICAL();
 
-            float gyro_yaw = prev_yaw + imu_data.gyro_z * IMU_DT;
-            while (gyro_yaw > PI_F)  gyro_yaw -= 2.0f * PI_F;
-            while (gyro_yaw < -PI_F) gyro_yaw += 2.0f * PI_F;
-
-            /* Complementary filter: blend gyro with magnetometer heading */
-            float new_yaw;
-            if (imu_data.mag_x != 0.0f || imu_data.mag_y != 0.0f)
-            {
-                float mag_yaw = atan2f(-imu_data.mag_y, imu_data.mag_x);
-
-                float diff = mag_yaw - gyro_yaw;
-                while (diff > PI_F)  diff -= 2.0f * PI_F;
-                while (diff < -PI_F) diff += 2.0f * PI_F;
-
-                new_yaw = gyro_yaw + (1.0f - YAW_CF_ALPHA) * diff;
-            }
-            else
-            {
-                new_yaw = gyro_yaw;
-            }
-
-            /* Normalize final yaw to -PI to +PI */
+            float new_yaw = prev_yaw + imu_data.gyro_z * IMU_DT;
             while (new_yaw > PI_F)  new_yaw -= 2.0f * PI_F;
             while (new_yaw < -PI_F) new_yaw += 2.0f * PI_F;
 

@@ -227,57 +227,6 @@ class TestMotorPIDPacket(unittest.TestCase):
         self.assertEqual(pkt[2], expected_len)
 
 
-class TestMagCalibrationPacket(unittest.TestCase):
-    """FUNC_SET_MAG_CAL = 0x16: ox, oy, oz as int16 LE (×100 scaling, units µT)."""
-
-    FUNC = 0x16
-
-    def _make_mag_cal(self, ox, oy, oz):
-        ox_b = list(struct.pack('<h', int(ox * 100)))
-        oy_b = list(struct.pack('<h', int(oy * 100)))
-        oz_b = list(struct.pack('<h', int(oz * 100)))
-        return build_packet(self.FUNC, ox_b + oy_b + oz_b)
-
-    def test_zero_offsets(self):
-        pkt = self._make_mag_cal(0.0, 0.0, 0.0)
-        self.assertEqual(pkt[3], self.FUNC)
-        self.assertEqual(pkt[4:10], [0, 0, 0, 0, 0, 0])
-        self.assertTrue(checksum_valid(pkt))
-
-    def test_offsets_encoded(self):
-        # 5.2 µT × 100 = 520 = 0x0208 (LE: 0x08, 0x02)
-        pkt = self._make_mag_cal(5.2, -3.1, 1.0)
-        ox = struct.unpack('<h', bytes(pkt[4:6]))[0]
-        oy = struct.unpack('<h', bytes(pkt[6:8]))[0]
-        oz = struct.unpack('<h', bytes(pkt[8:10]))[0]
-        self.assertEqual(ox, 520)
-        self.assertEqual(oy, -310)
-        self.assertEqual(oz, 100)
-
-    def test_packet_length(self):
-        pkt = self._make_mag_cal(1.0, 2.0, 3.0)
-        # HEAD DEVID LEN FUNC ox[2] oy[2] oz[2] checksum = 11 bytes
-        # data = 6 bytes; LEN = 9
-        self.assertEqual(len(pkt), 11)
-
-    def test_checksum_valid(self):
-        pkt = self._make_mag_cal(5.2, -3.1, 1.0)
-        self.assertTrue(checksum_valid(pkt))
-
-    def test_max_positive_offset(self):
-        # 327.67 µT × 100 = 32767 = INT16_MAX
-        pkt = self._make_mag_cal(327.67, 0.0, 0.0)
-        ox = struct.unpack('<h', bytes(pkt[4:6]))[0]
-        self.assertEqual(ox, 32767)
-        self.assertTrue(checksum_valid(pkt))
-
-    def test_max_negative_offset(self):
-        pkt = self._make_mag_cal(-327.67, 0.0, 0.0)
-        ox = struct.unpack('<h', bytes(pkt[4:6]))[0]
-        self.assertEqual(ox, -32767)
-        self.assertTrue(checksum_valid(pkt))
-
-
 class TestFuncCodes(unittest.TestCase):
     """Verify function codes match firmware protocol.h."""
 
@@ -319,31 +268,26 @@ class TestFuncCodes(unittest.TestCase):
         from rosmaster_protocol import FuncCode
         self.assertEqual(FuncCode.SET_MOTOR_PID, 0x13)
 
-    def test_func_set_mag_cal(self):
-        from rosmaster_protocol import FuncCode
-        self.assertEqual(FuncCode.SET_MAG_CAL, 0x16)
-
 
 class TestIMURawParsing(unittest.TestCase):
-    """Verify parse_imu_raw handles 18-byte payload (gyro+accel+mag)."""
+    """Verify parse_imu_raw handles 12-byte payload (gyro+accel)."""
 
-    def _make_raw_payload(self, gyro, accel, mag):
-        """Build 18-byte IMU raw payload from (gx,gy,gz), (ax,ay,az), (mx,my,mz)."""
-        return struct.pack('<9h', *gyro, *accel, *mag)
+    def _make_raw_payload(self, gyro, accel):
+        """Build 12-byte IMU raw payload from (gx,gy,gz), (ax,ay,az)."""
+        return struct.pack('<6h', *gyro, *accel)
 
     def test_rejects_short_payload(self):
         from rosmaster_protocol import ROSMasterProtocol
         proto = ROSMasterProtocol.__new__(ROSMasterProtocol)
-        result = proto.parse_imu_raw(b'\x00' * 17)  # 17 bytes — too short
+        result = proto.parse_imu_raw(b'\x00' * 11)  # 11 bytes — too short
         self.assertIsNone(result)
 
-    def test_parses_18_bytes(self):
+    def test_parses_12_bytes(self):
         from rosmaster_protocol import ROSMasterProtocol
         proto = ROSMasterProtocol.__new__(ROSMasterProtocol)
         gyro = (100, -200, 300)
         accel = (0, 0, 16000)
-        mag = (50, -30, 10)
-        payload = self._make_raw_payload(gyro, accel, mag)
+        payload = self._make_raw_payload(gyro, accel)
         result = proto.parse_imu_raw(payload)
         self.assertIsNotNone(result)
         self.assertEqual(result.gyro_x, 100)
@@ -352,14 +296,11 @@ class TestIMURawParsing(unittest.TestCase):
         self.assertEqual(result.accel_x, 0)
         self.assertEqual(result.accel_y, 0)
         self.assertEqual(result.accel_z, 16000)
-        self.assertEqual(result.mag_x, 50)
-        self.assertEqual(result.mag_y, -30)
-        self.assertEqual(result.mag_z, 10)
 
-    def test_accepts_exactly_18_bytes(self):
+    def test_accepts_exactly_12_bytes(self):
         from rosmaster_protocol import ROSMasterProtocol
         proto = ROSMasterProtocol.__new__(ROSMasterProtocol)
-        result = proto.parse_imu_raw(b'\x00' * 18)
+        result = proto.parse_imu_raw(b'\x00' * 12)
         self.assertIsNotNone(result)
 
 

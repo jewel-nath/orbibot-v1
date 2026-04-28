@@ -62,13 +62,13 @@
 
 /**
  * Motion Control Functions (0x10-0x1F)
- * Only FUNC_MOTION (0x12) through FUNC_SET_MAG_CAL (0x16) are dispatched.
+ * FUNC_MOTION (0x12) through FUNC_REPORT_ODOM (0x15) are dispatched.
+ * 0x16 (FUNC_SET_MAG_CAL) was removed when magnetometer support was dropped.
  */
 #define FUNC_MOTION             0x12    // 3D velocity control (Vx, Vy, Vz)
 #define FUNC_SET_MOTOR_PID      0x13    // Set motor PID parameters
 #define FUNC_SET_YAW_PID        0x14    // Set yaw PID parameters
 #define FUNC_REPORT_ODOM        0x15    // Report firmware odometry (x, y, theta, vx, vy, omega)
-#define FUNC_SET_MAG_CAL        0x16    // Set magnetometer calibration data
 
 /**
  * Request Functions (0x50-0x5F)
@@ -254,12 +254,6 @@ void protocol_handle_set_motor_pid(const uint8_t *data);
  * Gains are int16_t little-endian, scaled by 1000 (e.g., 0.4 → 400).
  */
 void protocol_handle_set_yaw_pid(const uint8_t *data);
-
-/**
- * @brief Handle FUNC_SET_MAG_CAL command
- * @param data Pointer to command data [offset_x_lo][offset_x_hi]... (3× int16, scaled ×100)
- */
-void protocol_handle_set_mag_cal(const uint8_t *data);
 
 /**
  * @brief Send firmware odometry data (x, y, theta, vx, vy, omega)

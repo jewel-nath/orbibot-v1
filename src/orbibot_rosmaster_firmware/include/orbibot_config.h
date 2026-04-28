@@ -216,7 +216,7 @@
 
 /**
  * IMU: TDK InvenSense ICM-20948
- * - 9-axis: 3-axis gyro + 3-axis accel + 3-axis magnetometer
+ * - 6-axis (gyro+accel) — AK09916 magnetometer support removed 2026-04-28
  * - Interface: SPI2 (faster than I2C)
  * - Update rate: 50Hz (matches odometry rate)
  */
@@ -233,7 +233,6 @@
  */
 #define IMU_GYRO_RANGE_DPS          500         // ±500 °/s  (4× better sensitivity vs ±2000)
 #define IMU_ACCEL_RANGE_G           2           // ±2g       (8× better sensitivity vs ±16g)
-#define IMU_MAG_RANGE_UT            4900        // ±4900 μT  (AK09916 fixed; raw counts sent)
 
 /**
  * IMU Calibration (set these after calibration)

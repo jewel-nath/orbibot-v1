@@ -107,7 +107,6 @@ def main():
         ('FUNC_MOTION       (0x12)', FuncCode.MOTION),
         ('FUNC_SET_MOTOR_PID(0x13)', FuncCode.SET_MOTOR_PID),
         ('FUNC_SET_YAW_PID  (0x14)', FuncCode.SET_YAW_PID),
-        ('FUNC_SET_MAG_CAL  (0x16)', FuncCode.SET_MAG_CAL),
     ]
 
     rc = 0

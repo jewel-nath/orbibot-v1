@@ -46,12 +46,11 @@ robot_localization_ekf:
     odom0_pose_rejection_threshold: 5.0
     odom0_twist_rejection_threshold: 1.0
 
-    # IMU input (from Madgwick filter — fused accel/gyro/mag orientation)
-    # Madgwick provides mag-corrected yaw; EKF uses it in RELATIVE mode
-    # (imu0_relative: true) — first reading becomes zero reference.
-    # This avoids startup jumps from imperfect mag calibration and is
-    # correct for indoor SLAM where absolute compass north isn't needed.
-    # SLAM provides map→odom TF for global consistency.
+    # IMU input (from Madgwick filter — accel/gyro fused; mag removed 2026-04-28)
+    # Madgwick orientation is integrated from gyro with accelerometer roll/pitch
+    # correction. Yaw has no absolute reference, so EKF uses it in RELATIVE mode
+    # (imu0_relative: true) — first reading becomes zero reference. SLAM
+    # (slam_toolbox / AMCL) provides map→odom TF for global consistency.
     imu0: /imu/data_filtered
     imu0_config: [false, false, false,   # x, y, z
                   false, false, true,    # roll, pitch, yaw — fuse relative yaw changes

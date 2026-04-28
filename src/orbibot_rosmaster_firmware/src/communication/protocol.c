@@ -290,7 +290,6 @@ static uint8_t protocol_min_rx_len(uint8_t func_code)
         case FUNC_MOTION:        return 12;  /* 1 car_type + 3 × int16 */
         case FUNC_SET_MOTOR_PID: return 12;  /* 3 × int16 gains + state */
         case FUNC_SET_YAW_PID:   return 12;  /* 3 × int16 gains + state */
-        case FUNC_SET_MAG_CAL:   return 12;  /* 3 × int16 hard-iron offsets + state byte */
         case FUNC_REQUEST_DATA:  return 6;   /* 1 sub-byte (e.g. 0x51) */
         case FUNC_VERSION:
         case FUNC_RESET_ODOM:
@@ -449,10 +448,6 @@ int8_t protocol_parse_command(void)
             protocol_handle_set_yaw_pid(&rx_buf[4]);
             break;
 
-        case FUNC_SET_MAG_CAL:
-            protocol_handle_set_mag_cal(&rx_buf[4]);
-            break;
-
         default:
             g_unknown_cmd_count++;
             break;
@@ -595,19 +590,16 @@ void protocol_send_motion_data(void)
 
 void protocol_send_imu_raw_data(void)
 {
-    // Packet layout (18 bytes, all little-endian int16):
+    // Packet layout (12 bytes, all little-endian int16):
     //   [0..5]  Gyro  X/Y/Z — milli-rad/s  (ROS2 driver ×1/1000 → rad/s)
     //   [6..11] Accel X/Y/Z — milli-m/s²   (ROS2 driver ×1/1000 → m/s²)
-    //   [12..17] Mag  X/Y/Z — raw AK09916 counts (ROS2 driver ×0.15 → µT)
-    uint8_t data[18];
+    //
+    // Magnetometer fields removed 2026-04-28 — see firmware-changelog.md.
+    uint8_t data[12];
 
-    // Gyro + accel: calibrated physical values ×1000 (no SPI access — BUG-1 safe)
+    // Calibrated physical values ×1000 (no SPI access — BUG-1 safe)
     int16_t gyro_mrad_s[3], accel_mm_s2[3];
     imu_task_get_milli_data(gyro_mrad_s, accel_mm_s2);
-
-    // Mag: raw AK09916 ADC counts (milli-µT would overflow int16 at ±4900µT range)
-    int16_t gyro_raw[3], accel_raw[3], mag_raw[3];
-    imu_task_get_raw_data(gyro_raw, accel_raw, mag_raw);
 
     // Pack gyroscope (milli-rad/s, little-endian)
     data[0]  = (uint8_t)(gyro_mrad_s[0] & 0xFF);
@@ -624,15 +616,6 @@ void protocol_send_imu_raw_data(void)
     data[9]  = (uint8_t)((accel_mm_s2[1] >> 8) & 0xFF);
     data[10] = (uint8_t)(accel_mm_s2[2] & 0xFF);
     data[11] = (uint8_t)((accel_mm_s2[2] >> 8) & 0xFF);
-
-    // Pack magnetometer (raw AK09916 counts, little-endian)
-    data[12] = (uint8_t)(mag_raw[0] & 0xFF);
-    data[13] = (uint8_t)((mag_raw[0] >> 8) & 0xFF);
-    data[14] = (uint8_t)(mag_raw[1] & 0xFF);
-    data[15] = (uint8_t)((mag_raw[1] >> 8) & 0xFF);
-    data[16] = (uint8_t)(mag_raw[2] & 0xFF);
-    data[17] = (uint8_t)((mag_raw[2] >> 8) & 0xFF);
-
 
     protocol_send_packet(FUNC_REPORT_ICM_RAW, data, sizeof(data));
 }
@@ -726,46 +709,6 @@ void protocol_handle_set_yaw_pid(const uint8_t *data)
     float kd = (float)kd_raw / 1000.0f;
 
     control_set_yaw_pid(kp, ki, kd);
-}
-
-/* ========================================================================
- * MAGNETOMETER CALIBRATION HANDLER
- * ======================================================================== */
-
-void protocol_handle_set_mag_cal(const uint8_t *data)
-{
-    // Data format (7 bytes): [ox_lo][ox_hi][oy_lo][oy_hi][oz_lo][oz_hi][state]
-    // Offsets are int16_t little-endian, scaled by 100 (µT × 100).
-    // state == SAVE_VERIFY (0x5F) → also persist to flash. Any other value
-    // updates RAM only, matching the SAVE_VERIFY convention used by
-    // FUNC_SET_MOTOR_PID / FUNC_SET_YAW_PID. Prior versions saved to flash
-    // unconditionally, burning flash erase cycles on every calibration tweak.
-    int16_t ox_raw = (int16_t)((data[1] << 8) | data[0]);
-    int16_t oy_raw = (int16_t)((data[3] << 8) | data[2]);
-    int16_t oz_raw = (int16_t)((data[5] << 8) | data[4]);
-    uint8_t state = data[6];
-
-    mag_calibration_t cal;
-    imu_get_mag_calibration(&cal);
-
-    cal.hard_iron_offset[0] = (float)ox_raw / 100.0f;
-    cal.hard_iron_offset[1] = (float)oy_raw / 100.0f;
-    cal.hard_iron_offset[2] = (float)oz_raw / 100.0f;
-    cal.calibrated = 1;
-
-    imu_set_mag_calibration(&cal);
-
-    if (state == SAVE_VERIFY)
-    {
-        flash_storage_save();
-        DEBUG_INFO("Mag cal set+saved: [%.2f, %.2f, %.2f] uT\n",
-                   cal.hard_iron_offset[0], cal.hard_iron_offset[1], cal.hard_iron_offset[2]);
-    }
-    else
-    {
-        DEBUG_INFO("Mag cal set (RAM): [%.2f, %.2f, %.2f] uT\n",
-                   cal.hard_iron_offset[0], cal.hard_iron_offset[1], cal.hard_iron_offset[2]);
-    }
 }
 
 /* ========================================================================
