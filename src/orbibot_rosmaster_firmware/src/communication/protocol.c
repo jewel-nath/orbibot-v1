@@ -408,20 +408,24 @@ int8_t protocol_parse_command(void)
             break;
 
         case FUNC_BEEP:
-            // Beep command - no response needed (fire-and-forget)
-            // Protocol specification: no response for beep commands
-            // Data: 2-byte on_time (0=off, 1=always on, >=10=on for xx ms)
-            // Minimum valid packet: header(1)+device(1)+len_field(1)+func(1)+data[0](1)+data[1](1)+csum(1)
-            // packet_length = len_field + 2, so packet_length >= 6 guarantees 2 data bytes
-            if (rx_len >= 6)
+            // Beep command - no response needed (fire-and-forget).
+            // Data: 2-byte on_time (0=off, 1=always on, >=10=on for xx ms).
+            // The dispatcher's protocol_min_rx_len() check already enforces
+            // rx_len >= 7 (2 data bytes) — no inner length check needed.
             {
                 uint16_t on_time = (uint16_t)((rx_buf[5] << 8) | rx_buf[4]);
                 g_buzzer_on_time = on_time;
 
                 if (on_time == 0)
                 {
-                    // Turn off buzzer
-                    BUZZER_OFF();
+                    // DD-2: critical-battery alarm has priority over host BEEP(0).
+                    // Without this gate, an end-user `ros2 topic pub /orbibot/beep ... 0`
+                    // would silence the continuous low-voltage alarm even though
+                    // motor lockout remained active — robot appears mute & dead.
+                    if (!control_get_battery_lockout())
+                    {
+                        BUZZER_OFF();
+                    }
                 }
                 else if (on_time == 1)
                 {
@@ -843,7 +847,16 @@ void protocol_update_buzzer(void)
 
 void protocol_start_double_beep(void)
 {
+    /* DD-3: state + phase_tick must be updated atomically. Without this,
+     * higher-priority CommTask (which runs protocol_update_buzzer at 1 ms
+     * cadence) could observe state=ON1 paired with the previous double-beep's
+     * phase_tick — fires elapsed_ms >= 200 immediately, transitions to OFF1,
+     * silences the buzzer, and the user only hears a click instead of the
+     * intended 200 ms double-beep at the very moment battery first crosses
+     * the LOW threshold. */
+    taskENTER_CRITICAL();
     g_double_beep_state = DOUBLE_BEEP_ON1;
     g_double_beep_phase_tick = xTaskGetTickCount();
+    taskEXIT_CRITICAL();
     BUZZER_ON();
 }

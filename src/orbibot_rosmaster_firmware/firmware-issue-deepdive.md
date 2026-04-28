@@ -17,89 +17,6 @@ safety paths, build hygiene). Skips items already in `firmware-issue.md` or
 
 ## 🟠 MEDIUM
 
-### DD-2: `BUZZER_OFF` from a host BEEP command can silence the critical-battery alarm [STATIC-ONLY]
-
-**Files:** `src/communication/protocol.c` lines 376–394 (`case FUNC_BEEP`),
-`src/tasks/task_monitoring.c` lines 96–112 (critical branch).
-
-**Severity:** MEDIUM (safety-adjacent)
-
-**What is wrong:**
-When battery falls below `BATTERY_VOLTAGE_CRITICAL` (10.5 V), MonitorTask
-calls `BUZZER_ON()` for a *continuous* alarm and locks out motors. Nothing
-remembers "we are in CRITICAL state" inside the buzzer subsystem. If the
-host (ROS 2 or operator) sends a `FUNC_BEEP` with `on_time = 0`, the
-handler unconditionally calls `BUZZER_OFF()`, silencing the critical
-alarm even though the lockout is still active.
-
-**Why it matters:**
-Operator depends on the audible alarm to know the robot has stopped due
-to dangerously low voltage. A stray `set_beep(0)` from any tool sharing
-the link silences the alarm; the user sees a robot that "won't move" but
-no audible cue that the cause is empty battery. Lockout itself remains in
-place (good — safety not lost), but discoverability is.
-
-The ROS 2 driver has no current code path that sends `set_beep(0)` while
-in CRITICAL, but the `/orbibot/beep` topic is publicly published — an
-end-user `ros2 topic pub` of `0` will silence the alarm.
-
-**Fix:** In `case FUNC_BEEP:`, refuse to turn the buzzer off while
-`control_get_battery_lockout()` is active:
-```c
-if (on_time == 0)
-{
-    if (!control_get_battery_lockout())  // critical alarm has priority
-        BUZZER_OFF();
-}
-```
-
----
-
-### DD-3: `g_double_beep_state` + `g_double_beep_phase_tick` writes are not atomic [STATIC-ONLY]
-
-**File:** `src/communication/protocol.c` line 801
-
-**Severity:** MEDIUM (cosmetic safety-adjacent)
-
-**What is wrong:**
-```c
-void protocol_start_double_beep(void)
-{
-    g_double_beep_state = DOUBLE_BEEP_ON1;        // ← (A)
-    g_double_beep_phase_tick = xTaskGetTickCount();
-    BUZZER_ON();
-}
-```
-Called from `task_monitoring` (priority 5). `protocol_update_buzzer()`
-runs in `task_communication` (priority 7) and reads the *pair*
-`(g_double_beep_state, g_double_beep_phase_tick)` to advance the state
-machine. If CommTask preempts MonitorTask between line (A) and the
-next line, CommTask sees `state=ON1` with the *old* `phase_tick` from
-the previous double-beep — possibly seconds ago — `elapsed_ms ≥ 200`
-fires immediately, transitions to `OFF1`, calls `BUZZER_OFF()`. Net
-visible behaviour: at the moment battery first crosses the LOW
-threshold, the user hears a click instead of a 200 ms double-beep.
-
-**Why it matters:**
-The first low-battery warning is precisely the one you want to be
-audible. After the state machine advances past the glitch, subsequent
-double-beeps behave correctly. So the failure is at the most-important
-moment.
-
-**Fix:**
-```c
-void protocol_start_double_beep(void)
-{
-    taskENTER_CRITICAL();
-    g_double_beep_state = DOUBLE_BEEP_ON1;
-    g_double_beep_phase_tick = xTaskGetTickCount();
-    taskEXIT_CRITICAL();
-    BUZZER_ON();
-}
-```
-
----
-
 ### DD-4: ROS 2 driver's `forever=True` on auto-report is silently dropped by firmware [STATIC-ONLY]
 
 **Files:**
@@ -182,35 +99,6 @@ host therefore consumes one flash erase cycle.
 ---
 
 ## 🟡 LOW
-
-### DD-5: `mag_cal` (52-byte struct) read/write race [STATIC-ONLY]
-
-**File:** `src/drivers/imu_driver.c` lines 707, 567 (writer / reader).
-
-**Severity:** LOW (one bad mag-corrected sample per torn read; EKF tolerates).
-
-**What is wrong:**
-`imu_set_mag_calibration()` is called from `task_communication` (priority
-7) on `FUNC_SET_MAG_CAL` and copies the entire 52-byte struct without a
-critical section. `imu_read_both()` runs in `task_imu` (priority 8) at
-50 Hz and reads the same fields. Higher-priority `task_imu` can preempt
-`task_communication` mid-copy, observing an inconsistent snapshot of
-hard-iron offsets and soft-iron matrix.
-
-**Why it matters:**
-Mag calibration is set rarely (once per session, manually via a
-calibration tool), so the chance of a torn read coinciding with a
-calibration update is small. When it does happen, exactly one IMU
-sample at 50 Hz contains a mixed-old/new calibration, producing a yaw
-glitch that the gyro-dominated complementary filter (α=0.98) attenuates
-heavily. Net visible effect: brief sub-degree yaw twitch right at the
-moment the calibration command is received.
-
-**Fix:** Wrap `mag_cal = *cal;` in `taskENTER_CRITICAL()/taskEXIT_CRITICAL()`
-inside `imu_set_mag_calibration()`. Also wrap the `mag_cal.*` reads in
-`imu_read_both()`'s calibration block. Cheap.
-
----
 
 ### DD-6: Mag yaw blending sign convention untested on this hardware [STATIC-ONLY]
 

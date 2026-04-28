@@ -4,6 +4,36 @@
 
 ### Bug Fixes
 
+- **Critical-battery alarm priority over host BEEP(0)** (`protocol.c`) — DD-2
+  When battery falls below `BATTERY_VOLTAGE_CRITICAL` (10.5 V) MonitorTask
+  drives a continuous alarm + lockout. The `case FUNC_BEEP:` handler used to
+  call `BUZZER_OFF()` unconditionally on `on_time == 0`, so any host (including
+  `ros2 topic pub /orbibot/beep ... 0`) could silence the alarm even though
+  motor lockout remained active — robot appears mute & dead. Fix: gate the
+  off-path on `!control_get_battery_lockout()`. Lockout itself was always
+  preserved; this restores the audible cue.
+
+- **`protocol_start_double_beep()` write atomicity** (`protocol.c`) — DD-3
+  `g_double_beep_state` and `g_double_beep_phase_tick` are written by
+  MonitorTask (priority 5) and read by CommTask (priority 7) at 1 ms cadence
+  via `protocol_update_buzzer()`. Without atomicity, CommTask could observe
+  state=ON1 paired with the previous double-beep's stale phase_tick — fires
+  `elapsed_ms ≥ 200` immediately and silences the buzzer. User would hear a
+  click instead of the intended 200 ms double-beep at the moment battery
+  first crosses the LOW threshold. Fix: wrap the pair in
+  `taskENTER_CRITICAL/EXIT_CRITICAL`.
+
+- **`mag_cal` cross-task struct race** (`imu_driver.c`) — DD-5
+  `imu_set_mag_calibration()` runs in CommTask (priority 7) and copies a
+  52-byte struct into `mag_cal`. `imu_read_both()` runs in `task_imu`
+  (priority 8) at 50 Hz and uses the same struct. Higher-priority `task_imu`
+  could preempt mid-copy and observe a torn snapshot of hard-iron offsets +
+  soft-iron matrix, producing one bad mag-corrected sample (sub-degree yaw
+  glitch — attenuated heavily by the gyro-dominated complementary filter
+  but cleanly avoidable). Fix: writer wraps the copy in critical section;
+  reader takes a local snapshot under critical section then runs the FP
+  math unblocked, keeping the lock window to a few µs.
+
 - **Protocol command-handler payload-length validation** (`protocol.c`) — DD-1
   Prior dispatcher accepted any checksum-valid 5-byte packet `[HEAD, 0xFC,
   LEN=3, FUNC, CKSUM]` and dispatched to handlers that read past the actual

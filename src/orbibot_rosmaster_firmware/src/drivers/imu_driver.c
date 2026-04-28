@@ -14,7 +14,10 @@
 #include "hal_spi.h"
 #include "stm32f10x.h"
 #include "orbibot_config.h"
+#include "FreeRTOS.h"
+#include "task.h"
 #include <math.h>
+#include <string.h>
 
 /* DWT (Data Watchpoint and Trace) for cycle-accurate delay.
  * Not all CMSIS versions define DWT; provide minimal definitions when missing. */
@@ -582,17 +585,26 @@ robot_err_t imu_read_both(imu_raw_data_t *raw, imu_data_t *cal)
         cal->gyro_y = (raw_data.gyro_y * gyro_scale) - gyro_offset_y;
         cal->gyro_z = (raw_data.gyro_z * gyro_scale) - gyro_offset_z;
 
-        if (mag_cal.calibrated)
+        /* DD-5: snapshot mag_cal under critical section so the floating-point
+         * math below operates on a self-consistent copy. Holding the critical
+         * section only for the 52-byte memcpy keeps the lock window to a
+         * few µs — the compute below runs unblocked. */
+        mag_calibration_t cal_snapshot;
+        taskENTER_CRITICAL();
+        memcpy(&cal_snapshot, &mag_cal, sizeof(cal_snapshot));
+        taskEXIT_CRITICAL();
+
+        if (cal_snapshot.calibrated)
         {
             float raw_mx = raw_data.mag_x * mag_scale;
             float raw_my = raw_data.mag_y * mag_scale;
             float raw_mz = raw_data.mag_z * mag_scale;
-            float hx = raw_mx - mag_cal.hard_iron_offset[0];
-            float hy = raw_my - mag_cal.hard_iron_offset[1];
-            float hz = raw_mz - mag_cal.hard_iron_offset[2];
-            cal->mag_x = mag_cal.soft_iron_matrix[0] * hx + mag_cal.soft_iron_matrix[1] * hy + mag_cal.soft_iron_matrix[2] * hz;
-            cal->mag_y = mag_cal.soft_iron_matrix[3] * hx + mag_cal.soft_iron_matrix[4] * hy + mag_cal.soft_iron_matrix[5] * hz;
-            cal->mag_z = mag_cal.soft_iron_matrix[6] * hx + mag_cal.soft_iron_matrix[7] * hy + mag_cal.soft_iron_matrix[8] * hz;
+            float hx = raw_mx - cal_snapshot.hard_iron_offset[0];
+            float hy = raw_my - cal_snapshot.hard_iron_offset[1];
+            float hz = raw_mz - cal_snapshot.hard_iron_offset[2];
+            cal->mag_x = cal_snapshot.soft_iron_matrix[0] * hx + cal_snapshot.soft_iron_matrix[1] * hy + cal_snapshot.soft_iron_matrix[2] * hz;
+            cal->mag_y = cal_snapshot.soft_iron_matrix[3] * hx + cal_snapshot.soft_iron_matrix[4] * hy + cal_snapshot.soft_iron_matrix[5] * hz;
+            cal->mag_z = cal_snapshot.soft_iron_matrix[6] * hx + cal_snapshot.soft_iron_matrix[7] * hy + cal_snapshot.soft_iron_matrix[8] * hz;
         }
         else
         {
@@ -708,7 +720,14 @@ void imu_set_mag_calibration(const mag_calibration_t *cal)
 {
     if (cal != NULL)
     {
+        /* DD-5: 52-byte struct copy must be atomic w.r.t. imu_read_both()
+         * which reads mag_cal at 50 Hz from higher-priority task_imu.
+         * Without this, a torn read produces one bad mag-corrected sample
+         * (sub-degree yaw glitch attenuated by gyro-dominated complementary
+         * filter, but cleanly avoidable). */
+        taskENTER_CRITICAL();
         mag_cal = *cal;
+        taskEXIT_CRITICAL();
     }
 }
 
@@ -716,7 +735,9 @@ void imu_get_mag_calibration(mag_calibration_t *cal)
 {
     if (cal != NULL)
     {
+        taskENTER_CRITICAL();
         *cal = mag_cal;
+        taskEXIT_CRITICAL();
     }
 }
 
