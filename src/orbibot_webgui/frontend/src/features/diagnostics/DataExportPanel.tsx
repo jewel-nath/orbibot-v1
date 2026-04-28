@@ -13,7 +13,6 @@ const AVAILABLE_TOPICS = [
   { topic: '/odometry/filtered', messageType: 'nav_msgs/Odometry', label: '/odometry/filtered' },
   { topic: '/imu/data', messageType: 'sensor_msgs/Imu', label: '/imu/data' },
   { topic: '/imu/data_raw', messageType: 'sensor_msgs/Imu', label: '/imu/data_raw' },
-  { topic: '/imu/mag', messageType: 'sensor_msgs/MagneticField', label: '/imu/mag' },
   { topic: '/scan', messageType: 'sensor_msgs/LaserScan', label: '/scan' },
   { topic: '/orbibot/encoders', messageType: 'std_msgs/Int32MultiArray', label: '/orbibot/encoders' },
   { topic: '/orbibot/system_status', messageType: 'orbibot_msgs/SystemStatus', label: '/orbibot/system_status' },

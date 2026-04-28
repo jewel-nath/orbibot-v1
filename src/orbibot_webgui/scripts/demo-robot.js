@@ -461,33 +461,7 @@ wss.on('connection', function connection(ws) {
         }
     }, 50);
 
-    // 12. Magnetometer — offset circle pattern (simulating uncalibrated hard-iron)
-    let magAngle = 0;
-    const magInterval = setInterval(() => {
-        if (subscriptions.has('/imu/mag')) {
-            magAngle += 0.05;
-            const msg = {
-                op: 'publish',
-                topic: '/imu/mag',
-                type: 'sensor_msgs/MagneticField',
-                msg: {
-                    header: {
-                        stamp: { sec: Math.floor(Date.now() / 1000), nanosec: (Date.now() % 1000) * 1000000 },
-                        frame_id: 'imu_link'
-                    },
-                    magnetic_field: {
-                        x: 30 + 20 * Math.cos(magAngle) + (Math.random() - 0.5) * 3,
-                        y: -15 + 20 * Math.sin(magAngle) + (Math.random() - 0.5) * 3,
-                        z: 45 + (Math.random() - 0.5) * 2,
-                    },
-                    magnetic_field_covariance: new Array(9).fill(0),
-                }
-            };
-            ws.send(JSON.stringify(msg));
-        }
-    }, 100);
-
-    // 13. Diagnostics Array
+    // 12. Diagnostics Array
     const diagnosticsInterval = setInterval(() => {
         if (subscriptions.has('/diagnostics')) {
             const msg = {
@@ -523,7 +497,6 @@ wss.on('connection', function connection(ws) {
         clearInterval(motionInterval);
         clearInterval(jointStatesInterval);
         clearInterval(imuRawInterval);
-        clearInterval(magInterval);
         clearInterval(diagnosticsInterval);
     });
 });

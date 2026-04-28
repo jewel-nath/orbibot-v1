@@ -95,33 +95,3 @@ def register(registry, ros_bridge, safety_manager) -> None:
         handler=lambda: ros_bridge.reset_encoders(),
     )
 
-    registry.register_tool(
-        name='calibrate_imu',
-        description='Trigger magnetometer hard-iron auto-calibration. Keep robot stationary.',
-        parameters={
-            'type': 'object',
-            'properties': {
-                'calibration_time': {
-                    'type': 'integer',
-                    'description': 'Seconds to wait for stabilisation (default 5)',
-                    'default': 5,
-                },
-            },
-        },
-        handler=lambda calibration_time=5: ros_bridge.calibrate_imu(calibration_time),
-    )
-
-    registry.register_tool(
-        name='set_mag_calibration',
-        description='Set explicit magnetometer hard-iron offsets in uT.',
-        parameters={
-            'type': 'object',
-            'properties': {
-                'offset_x': {'type': 'number', 'description': 'X axis offset in uT'},
-                'offset_y': {'type': 'number', 'description': 'Y axis offset in uT'},
-                'offset_z': {'type': 'number', 'description': 'Z axis offset in uT'},
-            },
-            'required': ['offset_x', 'offset_y', 'offset_z'],
-        },
-        handler=lambda offset_x, offset_y, offset_z: ros_bridge.set_mag_calibration(offset_x, offset_y, offset_z),
-    )

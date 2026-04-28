@@ -1,7 +1,7 @@
 /**
  * ScatterPlot - Reusable D3 2D scatter/path plot.
  *
- * Used for magnetometer XY scatter and odometry path trace.
+ * Used for the odometry path trace.
  * Features: aspect ratio lock, pan/zoom, paths with optional dashing, grid lines.
  */
 

@@ -90,20 +90,15 @@ class FirmwareMixin:
             '/orbibot/reset_encoders', 'orbibot_msgs/srv/ResetEncoders', {}, timeout=5.0)
 
     def calibrate_imu(self, calibration_time: int = 5) -> Dict[str, Any]:
-        """Trigger magnetometer auto-calibration."""
+        """No-op stub kept for compat. Gyro/accel calibration runs at firmware boot.
+
+        Magnetometer support was removed 2026-04-28; the underlying service
+        is now a no-op that always returns success with zero bias values.
+        """
         return self.call_service(
             '/orbibot/calibrate_imu', 'orbibot_msgs/srv/CalibrateIMU',
             {'calibration_time': int(calibration_time)},
             timeout=max(calibration_time + 5, 10.0))
-
-    def set_mag_calibration(
-        self, offset_x: float, offset_y: float, offset_z: float
-    ) -> Dict[str, Any]:
-        """Set magnetometer hard-iron calibration offsets (uT)."""
-        return self.call_service(
-            '/orbibot/set_mag_calibration', 'orbibot_msgs/srv/SetMagCalibration',
-            {'offset_x': float(offset_x), 'offset_y': float(offset_y), 'offset_z': float(offset_z)},
-            timeout=5.0)
 
     def reset_firmware_state(self) -> Dict[str, Any]:
         """Emergency: stop motors, reset odometry, clear agent e-stop."""
@@ -145,7 +140,6 @@ class FirmwareMixin:
         snapshot['battery'] = self.get_battery_status() or {'error': 'unavailable'}
         snapshot['imu_attitude'] = self.get_imu_data() or {'error': 'unavailable'}
         snapshot['imu_raw'] = self.get_imu_raw() or {'error': 'unavailable'}
-        snapshot['magnetometer'] = self.get_magnetometer() or {'error': 'unavailable'}
         snapshot['encoders'] = self.get_encoder_counts() or {'error': 'unavailable'}
         snapshot['joint_states'] = self.get_joint_states() or {'error': 'unavailable'}
         snapshot['odometry'] = self.get_odometry() or {'error': 'unavailable'}

@@ -45,7 +45,7 @@ def register(registry, ros_bridge, safety_manager) -> None:
         name='run_health_check',
         description=(
             'Run deterministic hardware health check (no LLM involved). '
-            'Checks battery, IMU, encoders, motors, and magnetometer. '
+            'Checks battery, IMU, encoders, and motors. '
             'Returns PASS/FAIL per subsystem with a summary. '
             'Use tests parameter to run a subset, e.g. ["battery_test", "imu_test"].'
         ),
@@ -57,7 +57,7 @@ def register(registry, ros_bridge, safety_manager) -> None:
                     'items': {'type': 'string'},
                     'description': (
                         'Optional list of tests to run. '
-                        'Available: battery_test, imu_test, encoder_test, motor_test, magnetometer_test. '
+                        'Available: battery_test, imu_test, encoder_test, motor_test. '
                         'Omit to run all.'
                     ),
                 },

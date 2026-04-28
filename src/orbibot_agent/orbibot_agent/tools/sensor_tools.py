@@ -33,13 +33,6 @@ def register(registry, ros_bridge, safety_manager) -> None:
     )
 
     registry.register_tool(
-        name='get_magnetometer',
-        description='Get magnetometer compass readings from ICM-20948 AK09916 in uT.',
-        parameters={'type': 'object', 'properties': {}},
-        handler=lambda: _get_or_error(ros_bridge.get_magnetometer, 'Magnetometer data unavailable'),
-    )
-
-    registry.register_tool(
         name='get_encoder_counts',
         description='Get raw encoder tick counts [FL, BL, FR, BR]. Ticks accumulate since startup or last reset.',
         parameters={'type': 'object', 'properties': {}},

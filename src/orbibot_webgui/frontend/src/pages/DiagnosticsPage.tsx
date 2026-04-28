@@ -22,7 +22,6 @@ import { SystemInfo } from '@/features/telemetry/SystemInfo';
 import { OdometryDisplay } from '@/features/telemetry/OdometryDisplay';
 import { PIDTuningPanel } from '@/features/telemetry/PIDTuningPanel';
 import { PIDResponseGraph } from '@/features/telemetry/PIDResponseGraph';
-import { ImuCalibrationSection } from '@/features/telemetry/ImuCalibrationSection';
 
 // New diagnostics components
 import { DiagnosticsSection } from '@/features/diagnostics/DiagnosticsSection';
@@ -33,7 +32,6 @@ import { MotorDetailPanel } from '@/features/diagnostics/MotorDetailPanel';
 import { OdometryPathTrace } from '@/features/diagnostics/OdometryPathTrace';
 import { OdometryComparisonChart } from '@/features/diagnostics/OdometryComparisonChart';
 import { IMUDetailPanel } from '@/features/diagnostics/IMUDetailPanel';
-import { MagnetometerPanel } from '@/features/diagnostics/MagnetometerPanel';
 import { LidarDiagnosticsPanel } from '@/features/diagnostics/LidarDiagnosticsPanel';
 import { DataExportPanel } from '@/features/diagnostics/DataExportPanel';
 import { WheelCalibrationWizard } from '@/features/diagnostics/WheelCalibrationWizard';
@@ -118,14 +116,6 @@ export function DiagnosticsPage() {
           <TabsContent value="imu" className="h-full overflow-y-auto p-4 lg:p-6 m-0">
             <div className="space-y-4 max-w-6xl mx-auto">
               <IMUDetailPanel />
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <DiagnosticsSection title="Magnetometer" icon={Compass}>
-                  <MagnetometerPanel />
-                </DiagnosticsSection>
-                <DiagnosticsSection title="IMU Calibration" icon={Compass}>
-                  <ImuCalibrationSection />
-                </DiagnosticsSection>
-              </div>
             </div>
           </TabsContent>
 

@@ -15,7 +15,6 @@ You can control the robot, read sensors, run hardware tests, diagnose problems, 
 - get_battery — voltage, percentage, current
 - get_imu_data — fused orientation (roll/pitch/yaw) + angular velocity
 - get_imu_raw — raw ICM-20948 accelerometer + gyroscope
-- get_magnetometer — heading and magnetic field strength (µT)
 - get_encoder_counts — raw tick counts [FL, BL, FR, BR]
 - get_joint_states — wheel velocities and positions
 - get_odometry — x, y, yaw from /odom (wheel odometry)
@@ -32,8 +31,6 @@ You can control the robot, read sensors, run hardware tests, diagnose problems, 
 - save_motor_pid(p, i, d) — set + persist motor PID to flash
 - set_yaw_pid(p, i, d) — set angular PID
 - save_yaw_pid(p, i, d) — set + persist angular PID
-- calibrate_magnetometer — run magnetometer calibration routine
-- set_mag_offset(x, y, z) — set hard-iron offset manually
 - motor_beep(duration_ms, frequency_hz) — buzzer control
 - reset_odometry — clear odometry state
 - reset_encoders — clear encoder counts
@@ -53,7 +50,6 @@ When asked to test hardware, diagnose a problem, or debug the robot:
    - Motor/encoder test: get_encoder_counts (baseline) → move_robot → get_encoder_counts (after) → compare_values
    - IMU test: get_imu_raw → compute_statistics on gyro values → check bias < 0.05 rad/s, accel magnitude ~9.81 m/s²
    - Battery test: get_battery → PASS if voltage > 10.5 V
-   - Magnetometer test: get_magnetometer → PASS if 20–80 µT
    - PID tuning: record_timeseries(sources=["odom"], cmd_vel={vx:0.3}, duration_sec=5) → inspect tracking_metrics
 
 4. Quick health check: run_health_check() runs all subsystem tests deterministically (no LLM, ~15–20 sec).

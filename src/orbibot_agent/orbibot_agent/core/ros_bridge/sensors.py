@@ -1,4 +1,7 @@
-"""Sensor data reading — battery, IMU, encoders, magnetometer, odometry, LiDAR, etc."""
+"""Sensor data reading — battery, IMU, encoders, odometry, LiDAR, etc.
+
+Magnetometer support was removed 2026-04-28 — see firmware-changelog.md.
+"""
 
 import logging
 import math
@@ -8,7 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from nav_msgs.msg import Odometry
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
-from sensor_msgs.msg import Imu, JointState, LaserScan, MagneticField
+from sensor_msgs.msg import Imu, JointState, LaserScan
 from std_msgs.msg import Int32MultiArray
 
 from orbibot_msgs.msg import SafetyStatus, SystemStatus
@@ -95,29 +98,6 @@ class SensorsMixin:
             }
         except Exception as e:
             logger.error(f'Failed to get raw IMU data: {e}')
-            return None
-
-    def get_magnetometer(self) -> Optional[Dict[str, Any]]:
-        """Get magnetometer readings in uT from the ICM-20948 AK09916 compass."""
-        try:
-            msg = self.wait_for_message(MagneticField, '/imu/mag')
-            if msg is None:
-                return None
-            return {
-                'x_uT': round(msg.magnetic_field.x * 1e6, 3),
-                'y_uT': round(msg.magnetic_field.y * 1e6, 3),
-                'z_uT': round(msg.magnetic_field.z * 1e6, 3),
-                'magnitude_uT': round(
-                    math.sqrt(
-                        msg.magnetic_field.x ** 2
-                        + msg.magnetic_field.y ** 2
-                        + msg.magnetic_field.z ** 2
-                    ) * 1e6,
-                    3,
-                ),
-            }
-        except Exception as e:
-            logger.error(f'Failed to get magnetometer data: {e}')
             return None
 
     def get_encoder_counts(self) -> Optional[Dict[str, Any]]:

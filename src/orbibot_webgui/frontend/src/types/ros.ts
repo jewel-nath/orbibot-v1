@@ -120,13 +120,6 @@ export interface JointState {
   effort: number[];
 }
 
-// sensor_msgs/MagneticField
-export interface MagneticField {
-  header: Header;
-  magnetic_field: Vector3;
-  magnetic_field_covariance: number[]; // 3x3 matrix as 9-element array
-}
-
 // diagnostic_msgs/DiagnosticStatus
 export interface DiagnosticStatus {
   level: number; // 0=OK, 1=WARN, 2=ERROR, 3=STALE

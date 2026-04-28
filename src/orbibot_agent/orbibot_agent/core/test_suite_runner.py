@@ -74,7 +74,6 @@ class TestSuiteRunner:
         report['imu_test'] = self._run_imu_test()
         report['encoder_test'] = self._run_encoder_test()
         report['motor_test'] = self._run_motor_test()
-        report['magnetometer_test'] = self._run_magnetometer_test()
 
         # Summary
         total = len(report)
@@ -103,7 +102,6 @@ class TestSuiteRunner:
             'imu_test': self._run_imu_test,
             'encoder_test': self._run_encoder_test,
             'motor_test': self._run_motor_test,
-            'magnetometer_test': self._run_magnetometer_test,
         }
         report = {}
         for name in tests:
@@ -257,40 +255,3 @@ class TestSuiteRunner:
             'details': result,
         }
 
-    def _run_magnetometer_test(self) -> Dict[str, Any]:
-        """Test magnetometer field strength.
-
-        PASS: magnitude in 20-80 µT range (typical Earth field), no NaN.
-        """
-        result = self._call('get_magnetometer')
-        if 'error' in result:
-            return {'pass': False, 'error': result['error'], 'details': result}
-
-        import math
-
-        x = float(result.get('x_uT', float('nan')))
-        y = float(result.get('y_uT', float('nan')))
-        z = float(result.get('z_uT', float('nan')))
-
-        has_nan = any(math.isnan(v) for v in [x, y, z])
-        if has_nan:
-            return {
-                'pass': False,
-                'verdict': 'FAIL — NaN values (check magnetometer wiring/calibration)',
-                'details': result,
-            }
-
-        magnitude = math.sqrt(x**2 + y**2 + z**2)
-        in_range = 20.0 <= magnitude <= 80.0
-
-        return {
-            'pass': in_range,
-            'magnitude_uT': round(magnitude, 2),
-            'x_uT': round(x, 2),
-            'y_uT': round(y, 2),
-            'z_uT': round(z, 2),
-            'verdict': 'PASS' if in_range else (
-                f'FAIL — magnitude {magnitude:.1f} µT outside 20-80 µT range'
-            ),
-            'details': result,
-        }
