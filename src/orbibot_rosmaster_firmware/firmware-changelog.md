@@ -4,6 +4,26 @@
 
 ### Bug Fixes
 
+- **`FUNC_SET_MAG_CAL` state-byte gate** (`protocol.c`, `rosmaster_driver.py`,
+  `hardware_node.py`) — DD-11
+  Wire-format extended from 6 to 7 bytes: `[ox_lo][ox_hi][oy_lo][oy_hi][oz_lo][oz_hi][state]`,
+  matching the SAVE_VERIFY convention already used by `FUNC_SET_MOTOR_PID`
+  and `FUNC_SET_YAW_PID`. The handler now persists to flash only when
+  `state == 0x5F`; otherwise the calibration update is RAM-only. Prior
+  versions wrote flash unconditionally — a streaming calibration routine
+  could plausibly burn 30+ erase cycles per session.
+  - `protocol_min_rx_len(FUNC_SET_MAG_CAL)` bumped 11 → 12 (the dispatcher
+    rejects legacy 6-byte payloads with `g_unknown_cmd_count++`).
+  - Python driver gained `save: bool = False` parameter.
+  - `/orbibot/set_mag_calibration` ROS 2 service still defaults to
+    persist-on-call (`save=True` from the callback) so external behaviour
+    is unchanged.
+  - New regression test: `tests/test_mag_cal_gate.py`.
+
+  **Compat note:** an old (pre-this-commit) Python driver paired with
+  this firmware will fail mag calibration silently — flash & driver must
+  ship together.
+
 - **Critical-battery alarm priority over host BEEP(0)** (`protocol.c`) — DD-2
   When battery falls below `BATTERY_VOLTAGE_CRITICAL` (10.5 V) MonitorTask
   drives a continuous alarm + lockout. The `case FUNC_BEEP:` handler used to

@@ -572,10 +572,16 @@ class OrbiBotHardwareNode(Node):
             return response
 
         try:
+            # save=True preserves the pre-DD-11 behaviour: a single service
+            # call persists to firmware flash. Callers running a streaming
+            # calibration routine should bypass this service and call
+            # rosmaster_driver.set_mag_calibration(save=False) directly,
+            # then a single save=True at the end.
             self.bot.set_mag_calibration(
                 float(request.offset_x),
                 float(request.offset_y),
                 float(request.offset_z),
+                save=True,
             )
             response.success = True
             response.message = (

@@ -290,7 +290,7 @@ static uint8_t protocol_min_rx_len(uint8_t func_code)
         case FUNC_MOTION:        return 12;  /* 1 car_type + 3 × int16 */
         case FUNC_SET_MOTOR_PID: return 12;  /* 3 × int16 gains + state */
         case FUNC_SET_YAW_PID:   return 12;  /* 3 × int16 gains + state */
-        case FUNC_SET_MAG_CAL:   return 11;  /* 3 × int16 hard-iron offsets */
+        case FUNC_SET_MAG_CAL:   return 12;  /* 3 × int16 hard-iron offsets + state byte */
         case FUNC_REQUEST_DATA:  return 6;   /* 1 sub-byte (e.g. 0x51) */
         case FUNC_VERSION:
         case FUNC_RESET_ODOM:
@@ -734,11 +734,16 @@ void protocol_handle_set_yaw_pid(const uint8_t *data)
 
 void protocol_handle_set_mag_cal(const uint8_t *data)
 {
-    // Data format: [ox_lo][ox_hi][oy_lo][oy_hi][oz_lo][oz_hi]
-    // Offsets are int16_t little-endian, scaled by 100 (µT × 100)
+    // Data format (7 bytes): [ox_lo][ox_hi][oy_lo][oy_hi][oz_lo][oz_hi][state]
+    // Offsets are int16_t little-endian, scaled by 100 (µT × 100).
+    // state == SAVE_VERIFY (0x5F) → also persist to flash. Any other value
+    // updates RAM only, matching the SAVE_VERIFY convention used by
+    // FUNC_SET_MOTOR_PID / FUNC_SET_YAW_PID. Prior versions saved to flash
+    // unconditionally, burning flash erase cycles on every calibration tweak.
     int16_t ox_raw = (int16_t)((data[1] << 8) | data[0]);
     int16_t oy_raw = (int16_t)((data[3] << 8) | data[2]);
     int16_t oz_raw = (int16_t)((data[5] << 8) | data[4]);
+    uint8_t state = data[6];
 
     mag_calibration_t cal;
     imu_get_mag_calibration(&cal);
@@ -750,11 +755,17 @@ void protocol_handle_set_mag_cal(const uint8_t *data)
 
     imu_set_mag_calibration(&cal);
 
-    // Auto-save mag calibration to flash
-    flash_storage_save();
-
-    DEBUG_INFO("Mag cal set+saved: [%.2f, %.2f, %.2f] uT\n",
-               cal.hard_iron_offset[0], cal.hard_iron_offset[1], cal.hard_iron_offset[2]);
+    if (state == SAVE_VERIFY)
+    {
+        flash_storage_save();
+        DEBUG_INFO("Mag cal set+saved: [%.2f, %.2f, %.2f] uT\n",
+                   cal.hard_iron_offset[0], cal.hard_iron_offset[1], cal.hard_iron_offset[2]);
+    }
+    else
+    {
+        DEBUG_INFO("Mag cal set (RAM): [%.2f, %.2f, %.2f] uT\n",
+                   cal.hard_iron_offset[0], cal.hard_iron_offset[1], cal.hard_iron_offset[2]);
+    }
 }
 
 /* ========================================================================

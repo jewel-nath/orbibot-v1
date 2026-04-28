@@ -352,11 +352,15 @@ class Rosmaster:
     # Maximum magnetometer offset in µT that fits in int16 with ×100 scaling.
     _MAG_OFFSET_MAX_UT = 327.67
 
-    def set_mag_calibration(self, offset_x, offset_y, offset_z):
+    def set_mag_calibration(self, offset_x, offset_y, offset_z, save=False):
         """Set magnetometer hard iron calibration offsets (in µT).
 
         Args:
             offset_x/y/z: Hard-iron bias in µT. Must be in [-327.67, +327.67].
+            save: If True, persist to firmware flash (one erase cycle).
+                  Default False = RAM-only update, suitable for streaming
+                  calibration during a "rotate the robot" routine. Persist
+                  once at the end with save=True.
         Raises:
             ValueError: if any offset is outside the int16 representable range.
         """
@@ -369,7 +373,8 @@ class Rosmaster:
             ox = bytearray(struct.pack('h', int(offset_x * 100)))
             oy = bytearray(struct.pack('h', int(offset_y * 100)))
             oz = bytearray(struct.pack('h', int(offset_z * 100)))
-            data = [ox[0], ox[1], oy[0], oy[1], oz[0], oz[1]]
+            state = 0x5F if save else 0x00  # SAVE_VERIFY in firmware protocol.h
+            data = [ox[0], ox[1], oy[0], oy[1], oz[0], oz[1], state]
             self._send_command(FUNC_SET_MAG_CAL, data)
         except (serial.SerialException, OSError) as e:
             print(f'---set_mag_calibration error: {e}---')

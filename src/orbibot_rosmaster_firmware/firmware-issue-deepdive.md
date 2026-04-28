@@ -52,52 +52,6 @@ on this robot since the host always controls the connection.
 
 ---
 
-### DD-11: `FUNC_SET_MAG_CAL` writes flash unconditionally — no `SAVE_VERIFY` gate [STATIC-ONLY]
-
-**File:** `src/communication/protocol.c` line 707
-
-**Severity:** MEDIUM (flash wear + design inconsistency)
-
-**What is wrong:**
-```c
-void protocol_handle_set_mag_cal(const uint8_t *data)
-{
-    /* parse 6 bytes into mag_calibration_t cal */
-    imu_set_mag_calibration(&cal);
-    flash_storage_save();   // ← always, no opt-out
-}
-```
-`protocol_handle_set_motor_pid()` and `protocol_handle_set_yaw_pid()`
-both gate the flash write behind `if (state == SAVE_VERIFY)` — so a
-caller can update gains live without persisting. `protocol_handle_set_mag_cal()`
-has no equivalent gate. Every magnetometer-calibration command from the
-host therefore consumes one flash erase cycle.
-
-**Why it matters:**
-1. **Flash wear** — STM32F103 flash has ~10 000 erase cycles per page.
-   A calibration tool that streams updates during a "rotate the robot
-   for 30 s" routine could plausibly send 30+ updates and burn through
-   0.3 % of the flash budget per session. Not catastrophic, but
-   completely avoidable.
-2. **Inconsistency** — the firmware's three "set persistent value"
-   handlers (motor PID, yaw PID, mag cal) split 2-1 on the SAVE_VERIFY
-   gate. Picking up the same convention everywhere makes the contract
-   easier to remember on both sides.
-3. **Test cost** — a RAM-only round-trip test cannot exist today.
-   `tests/test-report.md §9.3` deferred this as a Phase-3 follow-up.
-
-**Fix:**
-1. Extend the wire format from 6 bytes to 7: `[ox_lo][ox_hi][oy_lo][oy_hi][oz_lo][oz_hi][state]`.
-2. Update `protocol_min_rx_len(FUNC_SET_MAG_CAL)` from 11 to 12.
-3. Match the PID handler:
-   ```c
-   if (data[6] == SAVE_VERIFY) flash_storage_save();
-   ```
-4. Update `rosmaster_driver.set_mag_calibration()` to send the trailing
-   state byte (`0x5F` when caller passes `save=True`, else `0x00`).
-
----
-
 ## 🟡 LOW
 
 ### DD-6: Mag yaw blending sign convention untested on this hardware [STATIC-ONLY]
