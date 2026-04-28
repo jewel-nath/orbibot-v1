@@ -15,43 +15,6 @@ safety paths, build hygiene). Skips items already in `firmware-issue.md` or
 
 ---
 
-## 🟠 MEDIUM
-
-### DD-4: ROS 2 driver's `forever=True` on auto-report is silently dropped by firmware [STATIC-ONLY]
-
-**Files:**
-- ROS 2: `src/orbibot_hardware/orbibot_hardware/rosmaster_driver.py` line 297 (`set_auto_report_state`).
-- Firmware: `src/communication/protocol.c` line 427 (`protocol_handle_auto_report`).
-
-**Severity:** MEDIUM (feature gap → silent regression risk)
-
-**What is wrong:**
-The ROS 2 driver sends a 2-byte `[state, save]` payload where
-`save = 0x5F` if the caller passed `forever=True`. Firmware reads only
-`data[0]` and discards `data[1]` — so the persist-to-flash semantics
-that the driver advertises don't actually run.
-
-**Why it matters:**
-A future user who wants the robot to auto-stream sensor data on power-up
-without an explicit ROS 2 enable command cannot get there from here.
-Today the ROS 2 hardware node always re-issues `enable_auto_report(True)`
-on connect, so nobody notices — but if anyone refactors that out, sensor
-streams will silently stop streaming on boot. Worth either implementing
-or removing the `forever` parameter from the Python side.
-
-**Fix (one of two):**
-1. Honour `data[1]`: if `data[1] == SAVE_VERIFY`, save a "default
-   auto-report=on" flag in `flash_storage` and have `protocol_init()`
-   set `g_auto_report_enabled` from the flash flag at boot. Adds one
-   `bool` to the flash schema.
-2. Drop the parameter on the ROS 2 side and document that auto-report
-   is always commanded explicitly by the host.
-
-Recommend option 2 — auto-report on boot has no actual user benefit
-on this robot since the host always controls the connection.
-
----
-
 ## 🟡 LOW
 
 ### DD-6: Mag yaw blending sign convention untested on this hardware [STATIC-ONLY]

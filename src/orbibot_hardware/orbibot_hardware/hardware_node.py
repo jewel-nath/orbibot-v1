@@ -394,11 +394,11 @@ class OrbiBotHardwareNode(Node):
             )
 
             # Enable auto-report (firmware sends data @ 25Hz per type).
-            # forever=False: temporary — avoids unnecessary flash writes on every startup.
-            # OrbiBot firmware enables auto-report by default in its RTOS task.
+            # The host must always re-issue this on connect — the firmware
+            # does not persist auto-report state across reboots (DD-4).
             self.bot.create_receive_threading()
             time.sleep(0.1)
-            self.bot.set_auto_report_state(True, forever=False)
+            self.bot.set_auto_report_state(True)
             time.sleep(0.1)
 
             # Initialize to stopped
@@ -613,7 +613,7 @@ class OrbiBotHardwareNode(Node):
                     # Re-enable auto-report so firmware resumes sending when it wakes up.
                     # This handles cases where auto-report was lost (firmware reset, glitch).
                     try:
-                        self.bot.set_auto_report_state(True, forever=False)
+                        self.bot.set_auto_report_state(True)
                     except Exception:
                         pass
                 return
@@ -1080,7 +1080,7 @@ class OrbiBotHardwareNode(Node):
         if self.hardware_connected and self.bot:
             try:
                 self.bot.set_car_motion(0, 0, 0)
-                self.bot.set_auto_report_state(False, forever=False)
+                self.bot.set_auto_report_state(False)
             except Exception as e:
                 self.get_logger().debug(f'Cleanup error: {e}')
             finally:

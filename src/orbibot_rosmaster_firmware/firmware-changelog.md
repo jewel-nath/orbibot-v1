@@ -4,6 +4,16 @@
 
 ### Bug Fixes
 
+- **`set_auto_report_state` `forever` parameter dropped** (`rosmaster_driver.py`,
+  `hardware_node.py`) — DD-4
+  The Python driver used to accept `forever=True` and send a 2-byte
+  `[state, save]` payload where `save = 0x5F` mapped to "persist on
+  flash". The firmware reads only `data[0]` and ignores the second byte,
+  so the option never actually ran. Removed the parameter to keep the
+  driver contract honest. Wire format kept at 2 data bytes for backward
+  compatibility (firmware ignores the trailing zero). Auto-report is
+  always re-enabled on host connect — no flash persistence needed.
+
 - **`FUNC_SET_MAG_CAL` state-byte gate** (`protocol.c`, `rosmaster_driver.py`,
   `hardware_node.py`) — DD-11
   Wire-format extended from 6 to 7 bytes: `[ox_lo][ox_hi][oy_lo][oy_hi][oz_lo][oz_hi][state]`,

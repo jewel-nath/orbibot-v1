@@ -241,7 +241,7 @@ screen /dev/motordriver 115200              # Direct serial monitor (Ctrl+A K to
 - **Odometry QoS** — `/odom` uses RELIABLE + TRANSIENT_LOCAL (depth 5) so subscribers that support TRANSIENT_LOCAL receive the last message on connect; heartbeat ensures VOLATILE subscribers (e.g. rosbridge) get a message within `heartbeat_interval`
 - **Yaw wraparound** — angular difference uses modular arithmetic to prevent ±2π spikes in covariance accumulation
 - **Serial reconnect** — receive thread auto-reconnects after disconnect and re-enables auto-report if firmware rebooted; uses backoff (2s, 3s, …) to give USB/device time to recover
-- **Flash protection** — `set_auto_report_state` uses `forever=False` to avoid writing firmware flash on every startup
+- **Auto-report on connect** — `set_auto_report_state(True)` is re-issued on every host connect; firmware does not persist auto-report state across reboots
 
 ### Serial dropout after ~60 s (“device reports readiness to read but returned no data”)
 

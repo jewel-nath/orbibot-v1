@@ -294,13 +294,22 @@ class Rosmaster:
         except Exception as e:
             print(f'---create_receive_threading error: {e}---')
 
-    def set_auto_report_state(self, enable, forever=False):
-        """Enable/disable firmware auto-report. forever=True saves to flash."""
+    def set_auto_report_state(self, enable):
+        """Enable/disable firmware auto-report.
+
+        Note: this firmware does NOT support persisting the auto-report state
+        across reboots — the host must always re-issue this command on
+        connect. (DD-4: prior versions of this driver accepted a
+        ``forever=True`` argument that mapped to a flash-save state byte,
+        but the firmware reads only ``data[0]`` and ignores the trailing
+        byte. The parameter has been removed to make the contract honest.)
+        """
         try:
             self._auto_report_enabled = bool(enable)
             state1 = 1 if enable else 0
-            state2 = 0x5F if forever else 0
-            self._send_command(FUNC_AUTO_REPORT, [state1, state2])
+            # data[1] is unused by the firmware but the wire format keeps
+            # 2 data bytes for backward-compatibility with older firmwares.
+            self._send_command(FUNC_AUTO_REPORT, [state1, 0])
         except (serial.SerialException, OSError) as e:
             print(f'---set_auto_report_state error: {e}---')
 
