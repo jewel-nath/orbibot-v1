@@ -278,21 +278,26 @@ robot_err_t imu_driver_init(void)
     /* Accelerometer: ±2g, DLPF 5.7Hz
      * ACCEL_CONFIG [5:3]=110 (DLPFCFG=6), [2:1]=00 (FS_SEL=±2g), [0]=1 (FCHOICE on)
      * = 0b00110001 = 0x31
-     * ACCEL_CONFIG_2: DLPFCFG=6 → 5.7Hz bandwidth (matches gyro filter).
+     * The accel DLPF lives in ACCEL_CONFIG [5:3] above — not in ACCEL_CONFIG_2.
      * Range chosen so physical×1000 fits int16: max ±19613 milli-m/s² < 32767. */
     imu_write_register(ICM20948_ACCEL_CONFIG, 0x31);
-    imu_write_register(ICM20948_ACCEL_CONFIG_2, 0x06);
 
-    /* FW-BUG-2 fix: empirical scale derived from hardware measurement.
-     * ACCEL_CONFIG register readback confirmed 0x31 (±2g, FS_SEL=0), but chip
-     * outputs 1.566× gravity: measured |accel| = 15.35 m/s² at rest (expected 9.81).
-     * Back-calculated: 1g = 25644 raw ADC counts instead of the nominal 16384.
-     * This is a persistent hardware characteristic of this ICM-20948 unit.
-     * Nominal formula (wrong for this chip): 2.0f / 32768.0f * 9.80665f = 0.000599
-     * Empirical formula (correct):           9.80665f / 25644.0f         = 0.000382 */
-    accel_scale = 9.80665f / 25644.0f;
-    BOOT_PRINTF("[IMU]   ACCEL_CONFIG = 0x31 (+/-2g), ACCEL_CONFIG_2 = 0x06 (DLPF 5.7Hz)\r\n");
-    BOOT_PRINTF("[IMU]   accel_scale = 9.80665/25644 (empirical, FW-BUG-2 fix)\r\n");
+    /* ACCEL_CONFIG_2 on the ICM-20948 is NOT the MPU-9250's DLPF register.
+     * Its layout is [4:2] = AX/AY/AZ_ST_EN_REG (self-test) and [1:0] = DEC3_CFG.
+     * The value 0x06 carried over from an MPU-9250 port sets bit 2 = AZ_ST_EN_REG,
+     * which drives the Z-axis self-test actuator and inflates az by ~1.55×.
+     * That, not the chip, is the "1.566× gravity" this driver used to compensate
+     * for: az was measured at rest — where |accel| is almost entirely Z — and the
+     * back-calculated 9.80665/25644 was then applied to all three axes. X and Y
+     * were never inflated, so that scale made them read ~36 % low.
+     * 0x00 = no self-test, no decimation. Verified on hardware 2026-08-02:
+     *   before  raw az ~25330, |a| = 15.179 m/s² (ratio 1.548)
+     *   after   raw az ~16613, |a| =  9.971 m/s² (ratio 1.017) */
+    imu_write_register(ICM20948_ACCEL_CONFIG_2, 0x00);
+    accel_scale = 2.0f / 32768.0f * 9.80665f;
+    BOOT_PRINTF("[IMU]   ACCEL_CONFIG = 0x31 (+/-2g, DLPF 5.7Hz)\r\n");
+    BOOT_PRINTF("[IMU]   ACCEL_CONFIG_2 = 0x00 (self-test off, no decimation)\r\n");
+    BOOT_PRINTF("[IMU]   accel_scale = 2/32768*9.80665 (nominal +/-2g)\r\n");
 
     imu_select_bank(0);
 

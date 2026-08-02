@@ -39,6 +39,32 @@
 
 ### Bug Fixes
 
+- **FW-BUG-2 reopened and fixed at the root — accel Z self-test was left on**
+  (`imu_driver.c`)
+  The 2.0.1 entry below concluded that "ICM-20948 on this hardware produces
+  25644 counts/g" and compensated with `accel_scale = 9.80665f / 25644.0f`.
+  That reading was real but the cause was not the chip.
+
+  `ACCEL_CONFIG_2` (0x15) on the ICM-20948 is **not** the MPU-9250's DLPF
+  register. Its layout is `[4:2] = AX/AY/AZ_ST_EN_REG` (self-test) and
+  `[1:0] = DEC3_CFG`. The value `0x06`, carried over from an MPU-9250 port,
+  sets bit 2 = `AZ_ST_EN_REG` — driving the Z-axis self-test actuator. The
+  accel DLPF was already configured correctly by `ACCEL_CONFIG [5:3]`.
+
+  Because the 15.35 m/s² figure was taken at rest, where `|accel|` is almost
+  entirely Z, only the inflated axis was ever measured — and the resulting
+  scale was applied to all three. **X and Y were never inflated, so the
+  compensation made them read ~36 % low**, on exactly the two axes a ground
+  robot accelerates along.
+
+  Fix: `ACCEL_CONFIG_2 = 0x00`, scale back to nominal
+  `2.0f / 32768.0f * 9.80665f`. Measured on hardware, robot static and level:
+
+  | | raw az | \|a\| | ratio to g |
+  |---|---|---|---|
+  | before | ~25330 | 15.179 m/s² | 1.548 |
+  | after | ~16613 | 9.971 m/s² | 1.017 |
+
 - **`set_auto_report_state` `forever` parameter dropped** (`rosmaster_driver.py`,
   `hardware_node.py`) — DD-4
   The Python driver used to accept `forever=True` and send a 2-byte

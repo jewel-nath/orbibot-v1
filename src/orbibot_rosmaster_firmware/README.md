@@ -251,7 +251,7 @@ If you need to add new data from firmware to ROS 2:
 | 50Hz max sensor report rate | Serial bandwidth at 115200 baud (~22KB/s budget) |
 | No camera/LiDAR on firmware | These are USB devices connected directly to RPi 5 |
 | Single serial port | USART1 shared between protocol and debug — only one at a time |
-| Empirical accel scale | ICM-20948 on this board reads 1.566x; corrected in firmware |
+| Accel bias calibrated at startup | X/Y offsets measured on boot; robot must be still and level when powered |
 | OLED display is stub | Code compiles but no physical display on most OrbiBot builds |
 
 ### Key design decisions
