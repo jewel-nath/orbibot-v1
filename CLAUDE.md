@@ -1,448 +1,167 @@
-# OrbiBot — Comprehensive Project Guide
+# OrbiBot
 
-**OrbiBot**: Mecanum-wheeled mobile robot with ROS 2 Jazzy, Raspberry Pi 5, and Yahboom ROSMaster V3.0 expansion board.
+Mecanum-wheeled indoor robot. ROS 2 Jazzy on a Raspberry Pi 5, motor control on
+a Yahboom ROSMaster V3.0 (STM32F103RCT6) over serial.
 
-> **Quick Start**: See [Quick Start Guide](#quick-start) below for common operations.
-
----
-
-## Project Architecture Overview
-
-```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                              HARDWARE LAYER                                   │
-│                                                                                │
-│  ┌─────────────────────────────────────────────────────┐                       │
-│  │  Yahboom ROSMaster V3.0 (STM32F103RCT6 @ 72MHz)     │                       │
-│  │                                                       │                       │
-│  │  ┌───────────┐  ┌───────────┐  ┌───────────────┐    │                       │
-│  │  │ ICM-20948 │  │ Encoders  │  │ Motors (4x)   │    │                       │
-│  │  │  (SPI2)   │  │(Quadrature│  │ Mecanum PWM   │    │                       │
-│  │  └───────────┘  └───────────┘  └───────────────┘    │                       │
-│  │                                                       │                       │
-│  │  FreeRTOS: 100Hz PID + 50Hz IMU + serial protocol    │                       │
-│  └───────────────────────┬───────────────────────────────┘                       │
-│                          │ USB Serial (/dev/motordriver)                         │
-│                          │                                                       │
-│  ┌───────────────┐  ┌───────────────┐    (connect directly to RPi 5 via USB)    │
-│  │  RPLidar A1   │  │ RealSense D435│                                           │
-│  │ (/dev/lidar)  │  │  (USB 3.0)    │                                           │
-│  └───────┬───────┘  └───────┬───────┘                                           │
-│          │                  │                                                    │
-└──────────┼──────────────────┼────────────┬──────────────────────────────────────┘
-           │                  │            │
-           ▼                  ▼            ▼
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                              ROS 2 LAYER (RPi 5)                              │
-│                                                                                │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────┐            │
-│  │ orbibot_hardware │  │ orbibot_sensors │  │ orbibot_description │            │
-│  │                 │  │                 │  │                     │            │
-│  │ • Serial bridge │  │ • RPLidar A1    │  │ • URDF/Xacro        │            │
-│  │ • /odom publish │  │ • RealSense D435│  │ • TF frames         │            │
-│  │ • IMU publish   │  │                 │  │ • RViz config       │            │
-│  └────────┬────────┘  └────────┬────────┘  └─────────────────────┘            │
-│           │                    │                                               │
-│           │         ┌──────────┴──────────┐                                    │
-│           │         │                     │                                    │
-│           │    ┌────┴────┐          ┌────┴────┐                              │
-│           │    │ /scan   │          │/camera/*│                              │
-│           │    │ 10Hz    │          │ 15Hz    │                              │
-│           │    └────┬────┘          └─────────┘                              │
-│           │         │                                                         │
-│           └────┬────┴────────────────┬────────────────┐                       │
-│                │                     │                │                       │
-│           ┌────┴────┐          ┌────┴────┐      ┌────┴────┐                  │
-│           │/imu/*   │          │/joint_states│   │/tf      │                  │
-│           │ 50Hz    │          │ 50Hz        │   │ 100Hz   │                  │
-│           └────┬────┘          └─────────────┘   └─────────┘                  │
-│                │                                                            │
-│                ▼                                                            │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │              orbibot_localization (EKF Fusion)                      │   │
-│  │                                                                     │   │
-│  │   /imu/data_raw ──┐                                                 │   │
-│  │   /imu/mag ───────┼──→ imu_filter_madgwick → /imu/data_filtered ─┐ │   │
-│  │                    │                                              │ │   │
-│  │   /odom (velocity) ├─────────────────────────────────────────────┼─┼──→│
-│  │   (wheel odometry) │                                             │ │   │
-│  │                    │                                             │ │   │
-│  │                    └─────────────────────────────────────────────┘ │   │
-│  │                                                                   ▼    │
-│  │                      /odometry/filtered (20Hz) + odom→base_footprint TF│
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                    │                                         │
-│                                    ▼                                         │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                   orbibot_slam (slam_toolbox)                       │   │
-│  │                                                                     │   │
-│  │   • Subscribes: /scan, TF (odom→base_footprint)                    │   │
-│  │   • Publishes: /map, map→odom TF                                   │   │
-│  │   • Modes: mapping (async_slam_toolbox_node)                       │   │
-│  │            localization (localization_slam_toolbox_node)           │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                    │                                         │
-│                                    ▼                                         │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                 Nav2 Navigation Stack                               │   │
-│  │   • Path planning (NavfnPlanner with A*)                             │   │
-│  │   • MPPI controller (Model Predictive Path Integral)                │   │
-│  │   • Costmaps (obstacle avoidance)                                   │   │
-│  │   • Behavior trees (NavigateToPose, NavigateThroughPoses)           │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                    │                                         │
-│                                    ▼                                         │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                 orbibot_agent (AI Integration)                      │   │
-│  │   • Multi-LLM support (Gemini, Claude, Kimi, Ollama)               │   │
-│  │   • HTTP API for web GUI (chat_server)                             │   │
-│  │   • MCP server for Claude Desktop (mcp_server)                     │   │
-│  │   • Terminal CLI (chat_cli)                                        │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+**Claude Code runs on the robot's own Pi**, wired to the motor board and the
+LiDAR. Commands here move real wheels — read `.claude/rules/robot-safety.md`
+before commanding motion or flashing firmware.
 
 ---
 
-## Package Reference
+## Find things
 
-| Package | Purpose | Key Files | Status |
-|---------|---------|-----------|--------|
-| **orbibot_rosmaster_firmware** | STM32 firmware | `src/main.c`, `include/orbibot_config.h` | ✅ Production |
-| **orbibot_description** | Robot URDF/TF | `urdf/orbibot.urdf.xacro` | ✅ Production |
-| **orbibot_hardware** | ROS 2 serial bridge | `hardware_node.py`, `rosmaster_driver.py` | ✅ Production |
-| **orbibot_sensors** | LiDAR + Camera | `lidar.launch.py`, `camera.launch.py` | ✅ Production |
-| **orbibot_localization** | EKF sensor fusion | `ekf_params.yaml` | ✅ Production |
-| **orbibot_slam** | SLAM mapping | `slam_params.yaml` | ✅ Production |
-| **orbibot_navigation** | Nav2 stack | `nav2_params.yaml` | ✅ Production |
-| **orbibot_teleop** | Gamepad control | `controller.launch.py` | ✅ Production |
-| **orbibot_bringup** | System launch | `robot.launch.py`, `mapping.launch.py` | ✅ Production |
-| **orbibot_msgs** | Custom messages | `SystemStatus.msg`, `SafetyStatus.msg` | ✅ Production |
-| **orbibot_agent** | AI Agent (multi-LLM) | `chat_server`, `mcp_server`, `chat_cli` | ✅ Production |
+Documentation sits **beside the code it describes**. `docs/` holds only what has
+nowhere else to live — why the system is shaped this way, what is planned, what
+was measured, and how to learn it. Start at [docs/README.md](docs/README.md).
 
----
+| Looking for | Read |
+|---|---|
+| **What to build next** | [docs/plan/roadmap.md](docs/plan/roadmap.md) — phases and gates |
+| **What is broken** | `src/<pkg>/<pkg>-issue.md`; [docs/moc/backlog-moc.md](docs/moc/backlog-moc.md) maps them |
+| A package's API | `src/<pkg>/README.md` |
+| A package's orientation and open items | `docs/packages/<pkg>.md` |
+| How the system fits together | [docs/architecture/system-overview.md](docs/architecture/system-overview.md) |
+| Who is allowed to drive the robot | [docs/architecture/command-pipeline.md](docs/architecture/command-pipeline.md) |
+| Dashboard architecture and CPU budget | [docs/architecture/dashboard-design.md](docs/architecture/dashboard-design.md) |
+| Board pinout, timers, peripherals | [docs/hardware/rosmaster-board.md](docs/hardware/rosmaster-board.md) |
+| What hardware is actually fitted | [docs/hardware/inventory.md](docs/hardware/inventory.md) |
+| Bring-up and test procedures | [testing-guide.md](testing-guide.md) |
+| What has been verified on hardware, and when | `src/orbibot_rosmaster_firmware/test-report.md` |
+| Learning a subsystem from zero | [docs/learn/learn-moc.md](docs/learn/learn-moc.md) — 71 lessons |
 
-## ROS2 Package README Workflow
-
-**Follow these rules every time when working with any ROS 2 package:**
-
-- **Before** reading or editing any ROS 2 package → read `src/<package_name>/README.md` first (e.g. `src/orbibot_hardware/README.md`).
-- **After** changing a package (functionality, API, launch/config, or dependencies) → update that package’s `README.md` if needed (features, parameters, usage, deps).
-
-Detailed workflow: `.claude/rules/ros2_package_readme_workflow.md`.
+**Source of truth**: the code. If a note disagrees with it, the note is a bug —
+fix it.
 
 ---
 
-## Quick Start
+## Packages
 
-### 1. Build Firmware (First Time)
-```bash
-cd src/orbibot_rosmaster_firmware
-~/.platformio/penv/bin/pio run                  # Build
-# Set BOOT0=HIGH, press RESET, then:
-~/.platformio/penv/bin/pio run --target upload  # Upload
-~/.platformio/penv/bin/pio device monitor       # Verify (115200 baud)
-```
+| Package | Build | Owns |
+|---|---|---|
+| `orbibot_rosmaster_firmware` | PlatformIO | STM32: PID, encoders, IMU, odometry, serial protocol |
+| `orbibot_hardware` | ament_python | Serial bridge → `/odom`, `/imu/*`, `/joint_states` |
+| `orbibot_msgs` | ament_cmake | Custom messages and services |
+| `orbibot_description` | ament_cmake | URDF/Xacro, meshes, RViz |
+| `orbibot_sensors` | ament_python | RPLidar A1, RealSense, obstacle detector |
+| `orbibot_localization` | ament_python | Madgwick + EKF → `odom → base_footprint` |
+| `orbibot_slam` | ament_python | slam_toolbox → `/map` + `map → odom` |
+| `orbibot_navigation` | ament_cmake | Nav2 params (map and SLAM variants), maps |
+| `orbibot_exploration` | ament_python | BFS frontier explorer |
+| `orbibot_bringup` | ament_python | Cross-package launch orchestration |
+| `orbibot_webgui` | ament_python | rosbridge + WebRTC backend, React frontend |
+| `orbibot_agent` | ament_python | Multi-LLM agent, MCP server, CLI, 62 tools |
+| `orbibot_teleop` | ament_python | Gamepad teleop — **dormant**, teleop is web-only |
 
-### 2. Build ROS 2 Packages
+Details: [docs/moc/packages-moc.md](docs/moc/packages-moc.md).
+
+**Deleted, do not recreate:** `orbibot_gazebo` (the Pi is the robot),
+`orbibot_ai` and `orbibot_mcp_server` (replaced by `orbibot_agent`). Ignore
+stale references in old notes.
+
+---
+
+## Build and run
+
 ```bash
 source /opt/ros/jazzy/setup.bash
-colcon build --symlink-install
+colcon build --symlink-install                              # everything
+colcon build --symlink-install --packages-select <pkg>      # one package
+colcon build --symlink-install --packages-up-to <pkg>       # + dependents
 source install/setup.bash
 ```
 
-### 3. Launch Robot Base
+`orbibot_rosmaster_firmware` carries a `COLCON_IGNORE` — it is a PlatformIO
+project and is never built by colcon. The toolchain is pinned in
+`platformio.ini` so the Pi can build it:
+
 ```bash
-# Terminal 1: Robot base (description + hardware + LiDAR + EKF)
+cd src/orbibot_rosmaster_firmware
+~/.platformio/penv/bin/pio run                  # build first, always
+~/.platformio/penv/bin/pio run --target upload  # needs BOOT0 — see the rules file
+~/.platformio/penv/bin/pio device monitor       # 115200
+```
+
+```bash
+# base: description + hardware + LiDAR + EKF
 ros2 launch orbibot_bringup robot.launch.py
 
-# Terminal 2: Teleop control
-ros2 launch orbibot_teleop controller.launch.py
-```
-
-### 4. SLAM Mapping
-```bash
-# Terminal 3: SLAM
+# mapping, or exploration instead
 ros2 launch orbibot_bringup mapping.launch.py
+ros2 launch orbibot_bringup exploration.launch.py
 
-# Drive around, then save map:
-ros2 service call /slam_toolbox/save_map slam_toolbox/srv/SaveMap \
-  "{name: {data: '/home/orbibot/maps/my_map'}}"
-ros2 run nav2_map_server map_saver_cli -f /home/orbibot/maps/my_map
-```
-
-### 5. Autonomous Navigation
-```bash
-# Terminal 3: Navigation (with saved map)
+# navigation against a saved map
 ros2 launch orbibot_navigation navigation.launch.py map:=$HOME/maps/my_map.yaml
 
-# Terminal 4: Send navigation goal
-ros2 topic pub /goal_pose geometry_msgs/PoseStamped \
-  "{header: {frame_id: 'map'}, pose: {position: {x: 2.0, y: 1.0}}}"
+# web dashboard: rosbridge :9090 + WebRTC :8081
+ros2 launch orbibot_webgui webgui.launch.py
+
+# firmware test suite (serial, no ROS needed)
+cd src/orbibot_rosmaster_firmware/tests && python3 run_all_tests.py --port /dev/motordriver
 ```
 
-### 6. AI Agent (Optional)
-```bash
-# Terminal CLI with multi-LLM support
-ros2 run orbibot_agent chat_cli
+Frontend lives in `src/orbibot_webgui/frontend` — `npm run build` for a served
+bundle; do not run the Vite dev server on the Pi.
 
-# HTTP API for web GUI
-ros2 launch orbibot_agent chat_server.launch.py
-
-# MCP server for Claude Desktop
-ros2 run orbibot_agent mcp_server
-```
+Handy scripts: `.claude/scripts/preflight.sh` before operating,
+`safety.sh` to cross-check firmware limits against the ROS 2 config.
 
 ---
 
-## Key Configuration Files
+## Conventions
 
-| File | Purpose | Key Parameters |
-|------|---------|----------------|
-| `orbibot_hardware/config/hardware_params.yaml` | Serial, safety, odometry | `serial_port`, `cmd_timeout`, `covariance_decay` |
-| `orbibot_localization/config/ekf_params.yaml` | EKF fusion | `odom0_config`, `imu0_config`, `process_noise_covariance` |
-| `orbibot_slam/config/slam_params.yaml` | SLAM mapping | `min_laser_range`, `loop_search_maximum_distance` |
-| `orbibot_navigation/config/nav2_params.yaml` | Navigation | `controller_frequency`, `planner_plugin` |
-| `orbibot_sensors/config/rplidar_params.yaml` | LiDAR | `scan_mode`, `serial_port` |
-| `orbibot_teleop/config/controller.yaml` | Gamepad | `axis_linear`, `axis_angular` |
-| `orbibot_agent/config/agent_params.yaml` | AI configuration | `llm_providers`, `safety` |
+- **Base frame is `base_footprint`**, never `base_link`
+- **TF chain**: `map → odom → base_footprint → base_link → sensor_links`.
+  Exactly one node may publish `map → odom`
+- **Odometry**: `/odom` is raw wheel odometry; Nav2 and consumers use
+  `/odometry/filtered` from the EKF
+- **No magnetometer.** Removed 2026-04-28 — indoor iron and motor currents made
+  heading worse. Madgwick runs `use_mag: false`, EKF yaw is relative, and drift
+  is corrected by SLAM/AMCL. Do not propose bringing it back
+- **Teleop is web dashboard only.** `orbibot_teleop` stays as a
+  network-independent fallback; do not wire it up
+- **Topics**: standard ROS 2 / Nav2 names stay flat (`/cmd_vel`, `/scan`,
+  `/odom`); OrbiBot-specific topics take the `/orbibot/` prefix
+- **Naming**: `PascalCase` classes, `snake_case` functions and variables,
+  `UPPER_SNAKE_CASE` module-level constants, `_single_underscore` for private.
+  Files `snake_case.py` / `snake_case.c`, docs `kebab-case.md`
+- **Launch messages**: `[PackageName] Description — key: value`
+- **Single-package launches** start only their own nodes; cross-package
+  composition belongs in `orbibot_bringup`
+- **Maintainer**: Jewel Nath <jewel.nath@orbitax.com>
 
----
-
-## Hardware Specifications
-
-### Robot Geometry
-| Parameter | Value | Notes |
-|-----------|-------|-------|
-| Wheel radius | 50mm | 100mm mecanum wheels |
-| Track width | 360mm | Left-right wheel separation |
-| Wheelbase | 260mm | Front-rear wheel separation |
-| Encoder resolution | 1320 PPR | 11 PPR × 30:1 gear × 4 quadrature |
-| Mecanum layout | ABBA | A=+45° rollers, B=-45° rollers |
-
-### Motor/Encoder Mapping
-| Motor | Position | PWM Timer | Encoder Timer | Pins |
-|-------|----------|-----------|---------------|------|
-| M1 | Front-Left | TIM8 CH1/CH2 | TIM2 | PA11/PA8, PA15/PB3 |
-| M2 | Back-Left | TIM8 CH3/CH4 | TIM4 | PB0/PB1, PB6/PB7 |
-| M3 | Front-Right | TIM1 CH4/CH1 | TIM5 | PC6/PC7, PA0/PA1 |
-| M4 | Back-Right | TIM1 CH2/CH3 | TIM3 | PC8/PC9, PA6/PA7 |
-
-### Battery (4S LiFePO4)
-| State | Voltage | Action |
-|-------|---------|--------|
-| Full | 14.6V | — |
-| Nominal | 12.8V | Normal operation |
-| Low warning | 11.0V | Warning buzzer |
-| Critical | 10.5V | Emergency motor stop |
-
-### Sensors
-| Sensor | Interface | Rate | Topics |
-|--------|-----------|------|--------|
-| RPLidar A1 | USB Serial (/dev/lidar) | 10Hz | `/scan` |
-| RealSense D435 | USB 3.0 | 15Hz | `/camera/color/image_raw`, `/camera/depth/image_rect_raw` |
-| ICM-20948 IMU | SPI2 (PB12-PB15) | 50Hz | `/imu/data_raw`, `/imu/mag` |
+Full detail in `.claude/rules/`. Longer reference material — node templates, QoS
+profiles, test patterns — lives in skills and loads on demand.
 
 ---
 
-## Data Flow Reference
+## Hardware, in one table
 
-### Odometry Pipeline
-```
-Firmware encoders → mecanum_kinematics → /odom (velocity)
-                                          ↓
-Madgwick filter ← /imu/data_raw + /imu/mag → /imu/data_filtered
-                                          ↓
-                                    EKF fusion
-                                          ↓
-                              /odometry/filtered (fused)
-                                          ↓
-                                   SLAM / Nav2
-```
+| | |
+|---|---|
+| Wheel radius | 50 mm (100 mm mecanum, ABBA) |
+| Wheelbase × track | 260 × 360 mm; footprint 350 × 250 mm; ~6 kg |
+| Encoders | 1320 CPR (11 PPR × 30:1 × 4) |
+| Motors | JGB37-520, 30:1, 333 RPM no-load |
+| Battery | 4S LiFePO4 — 12.8 V nominal, 11.0 V warning, 10.5 V cutoff |
+| IMU | ICM-20948 on SPI2, ±500 dps, ±2 g |
+| LiDAR | RPLidar A1 → `/scan` 10 Hz on `/dev/lidar` |
+| Board link | 115200 baud on `/dev/motordriver` |
 
-### SLAM Pipeline
-```
-/scan (LiDAR) ──┐
-                ├──→ slam_toolbox → /map + map→odom TF
-/odometry/filtered ──┘
-```
-
-### Navigation Pipeline
-```
-/map (static or SLAM) ──┐
-                        ├──→ Nav2 costmap → MPPI controller → /cmd_vel
-/scan (LiDAR) ──────────┘
-```
-
-### AI Agent Pipeline
-```
-User Input → LLM Provider (Gemini/Claude/Kimi/Ollama)
-                ↓
-         Tool Decision (move, get_sensor, etc.)
-                ↓
-         ROS 2 Tool Execution
-                ↓
-         Robot Response
-```
+Everything else — pinout, timers, power rails, spare capacity:
+[docs/hardware/](docs/hardware/).
 
 ---
 
-## Debugging Commands
+## Working here
 
-### Firmware Level
-```bash
-# Test suite
-cd src/orbibot_rosmaster_firmware/tests
-python3 run_all_tests.py --port /dev/motordriver
+1. Read `docs/packages/<pkg>.md` **and** `src/<pkg>/README.md` before touching a
+   package
+2. After **any** change — added, changed, or deleted — ask whether it made a
+   document untrue, and fix it. `.claude/rules/docs-sync.md` has the map; a
+   `Stop` hook interrupts if code moved and no docs did
+3. Commit per logical unit, with the reasoning — not batched
+4. Report measurements as numbers, not adjectives, and write them down with the
+   date and the robot's state
 
-# Individual tests
-python3 test_encoder.py       # Verify encoder counting
-python3 test_imu.py           # Check IMU data
-python3 test_motor_speed.py   # Motor PWM test
-python3 test_beep.py          # Buzzer test
-
-# Serial monitor
-screen /dev/motordriver 115200  # Ctrl+A K to quit
-```
-
-### ROS 2 Level
-```bash
-# Check topic rates
-ros2 topic hz /scan              # Should be ~10Hz
-ros2 topic hz /odom              # Should be ~20Hz
-ros2 topic hz /imu/data_filtered # Should be ~50Hz
-ros2 topic hz /odometry/filtered # Should be ~20Hz
-
-# Inspect data
-ros2 topic echo /odom --once
-ros2 topic echo /orbibot/system_status
-
-# TF tree
-ros2 run tf2_tools view_frames   # Generates frames.pdf
-
-# Node graph
-ros2 run rqt_graph rqt_graph
-
-# Service calls
-ros2 service call /orbibot/set_motor_enable orbibot_msgs/srv/SetMotorEnable '{enable: true}'
-ros2 service call /orbibot/reset_odometry orbibot_msgs/srv/ResetOdometry '{}'
-```
-
-### AI Agent Level
-```bash
-# Test chat CLI
-ros2 run orbibot_agent chat_cli
-
-# Test HTTP API
-curl -X POST http://localhost:8082/api/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "what is your battery level?"}'
-
-# Check available providers
-curl http://localhost:8082/api/providers
-```
-
-### System Level
-```bash
-# Check device connections
-ls -la /dev/motordriver /dev/lidar
-
-# Monitor system resources
-ros2 topic echo /orbibot/system_status_enriched  # CPU%, RAM%, temp
-
-# Check logs
-ros2 launch orbibot_bringup robot.launch.py 2>&1 | tee robot.log
-```
-
----
-
-## Common Issues & Solutions
-
-| Issue | Cause | Solution |
-|-------|-------|----------|
-| **Motors don't spin** | BOOT0 not LOW after upload | Set BOOT0=LOW, press RESET |
-| **No serial data** | Wrong port or permissions | Check `/dev/motordriver`, add udev rules |
-| **Encoder wrong direction** | Wiring or config error | Verify M1-M4 mapping in `orbibot_config.h` |
-| **IMU returns zeros** | SPI wiring or WHO_AM_I fail | Check PB12-PB15, verify returns 0xEA |
-| **Odometry drift** | Wrong wheel radius/encoder CPR | Verify 50mm radius, 1320 CPR in config |
-| **SLAM not building map** | No /scan or wrong TF | Check LiDAR publishing, verify odom→base_footprint TF |
-| **Navigation fails** | No map or localization | Load map first, check AMCL particles |
-| **High CPU usage** | Camera + SLAM + Nav2 | Disable camera pointcloud, lower SLAM rate |
-| **AI agent not responding** | No API key set | Set GEMINI_API_KEY, ANTHROPIC_API_KEY, etc. |
-
----
-
-## Design Decisions
-
-### Why Velocity-Only Odometry Fusion?
-The EKF is configured with `odom0_config` positions=false. This prevents wheel encoder position drift from accumulating in the EKF state. Only velocities are fused, with IMU providing absolute yaw correction.
-
-### Why Madgwick + EKF (not direct IMU fusion)?
-Madgwick filter runs at 50Hz on raw IMU data to produce drift-free orientation using magnetometer. EKF then fuses this with wheel odometry at 20Hz. This two-stage approach provides better yaw accuracy than EKF alone.
-
-### Why slam_toolbox (not gmapping)?
-slam_toolbox provides:
-- Better loop closure for long sessions
-- Serialization for localization mode
-- Ceres solver for graph optimization
-- Lower CPU usage on Raspberry Pi
-
-### Why orbibot_agent (unified AI package)?
-Instead of separate `orbibot_ai` and `orbibot_mcp_server` packages:
-- Single codebase for all AI interfaces
-- Multi-LLM support (Gemini, Claude, Kimi, Ollama)
-- Same tools work for web GUI, MCP, and CLI
-- Native ROS 2 (rclpy) without rosbridge overhead
-- Easier maintenance and feature parity
-
----
-
-## File Organization
-
-```
-OrbiBot/
-├── src/
-│   ├── orbibot_rosmaster_firmware/   # STM32 firmware (PlatformIO)
-│   │   ├── src/                      # C source files
-│   │   ├── include/                  # Headers (orbibot_config.h)
-│   │   ├── tests/                    # Python test suite
-│   │   └── README.md                 # Firmware documentation
-│   ├── orbibot_description/          # URDF, meshes, RViz
-│   ├── orbibot_hardware/             # ROS 2 serial bridge
-│   ├── orbibot_sensors/              # LiDAR, camera, obstacle detector
-│   ├── orbibot_localization/         # EKF sensor fusion
-│   ├── orbibot_slam/                 # slam_toolbox wrapper
-│   ├── orbibot_navigation/           # Nav2 configuration
-│   ├── orbibot_teleop/               # Gamepad teleop
-│   ├── orbibot_bringup/              # System launch files
-│   ├── orbibot_msgs/                 # Custom messages
-│   └── orbibot_agent/                # AI Agent (multi-LLM, unified)
-│       ├── core/                     # Safety, ROS bridge
-│       ├── llm_providers/            # Gemini, Claude, Kimi, Ollama
-│       ├── tools/                    # Tool registry
-│       ├── interfaces/               # Chat server, MCP, CLI
-│       ├── launch/                   # Launch files
-│       └── config/                   # Configuration
-├── CLAUDE.md                         # This file
-└── .claude/                          # Claude Code configuration
-    ├── CLAUDE.md                     # Skills & conventions
-    └── rules/                        # Coding standards
-        ├── workflow.md
-        └── coding_standards.md
-```
-
----
-
-## References
-
-- **Yahboom ROSMaster V3.0**: https://github.com/YahboomTechnology/ROS-robot-expansion-board
-- **ROS 2 Jazzy**: https://docs.ros.org/en/jazzy/
-- **slam_toolbox**: https://github.com/SteveMacenski/slam_toolbox
-- **Nav2**: https://navigation.ros.org/
-- **PlatformIO**: https://platformio.org/
-
----
-
-**Last Updated**: 2026-02-25  
-**Version**: v2.1.0  
-**Author**: Jewel Nath
+Skills in `.claude/skills/` are auto-discovered and load only when used.
