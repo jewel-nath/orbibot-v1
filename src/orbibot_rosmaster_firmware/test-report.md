@@ -395,12 +395,39 @@ calibration run, not here.
 
 ---
 
+## 9.5 ROS 2 End-to-End — hardware_node ↔ firmware — 2026-08-03
+
+*Robot static on a stool, wheels free. Clean colcon build, `hardware.launch.py`
+only — no motion commanded.*
+
+This is the check that would have caught the months-long raw-IMU outage: the
+firmware and the driver must agree on packet length, or `rosmaster_driver.py`
+length-checks and returns without a word.
+
+| Topic | Measured | Verdict |
+|---|---|---|
+| `/imu/data_raw` | **49.998 Hz** | ✅ 12-byte packet parsed |
+| `/joint_states` | **49.971 Hz** | ✅ |
+| `/orbibot/encoders` | **49.951 Hz** | ✅ |
+| `/odom` | **1.949 Hz** | ✅ **by design — see below** |
+
+**`/odom` at ~2 Hz on a stationary robot is correct, not a fault.** The
+firmware de-duplicates identical odometry and falls back to a 0.5 s heartbeat,
+so a robot that is not moving produces ~2 messages/s. It rises to the full rate
+under motion. Do not "fix" this.
+
+`/imu/mag` appears in `ros2 topic list` with **zero publishers** — nothing emits
+it. Any subscriber is a leftover process from before the magnetometer was
+removed, not a live part of the system.
+
+---
+
 ## 10. Not Yet Covered
 
 - Flash-save persistence of PID gains across reboot.
 - Accel X/Y scale under real acceleration (see §9.4) — needs the robot on the ground.
 - Sustained / thermal duty.
-- Rosbridge / ROS 2 end-to-end (hardware_node ↔ firmware).
+- Anything measured **on the ground** — distance, drift, traction, PID under load.
 
 ---
 
