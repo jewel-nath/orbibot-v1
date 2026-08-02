@@ -58,12 +58,16 @@
   robot accelerates along.
 
   Fix: `ACCEL_CONFIG_2 = 0x00`, scale back to nominal
-  `2.0f / 32768.0f * 9.80665f`. Measured on hardware, robot static and level:
+  `2.0f / 32768.0f * 9.80665f`. Measured on hardware 2026-08-03, robot
+  static and level, 630 samples over 12 s:
 
-  | | raw az | \|a\| | ratio to g |
-  |---|---|---|---|
-  | before | ~25330 | 15.179 m/s² | 1.548 |
-  | after | ~16613 | 9.971 m/s² | 1.017 |
+  | Firmware | `ACCEL_CONFIG_2` | scale | raw az | \|a\| | ratio to g |
+  |---|---|---|---|---|---|
+  | 2.0.1 | `0x06` | `9.80665/25644` | ~25330 | 9.606 | 0.980 |
+  | 2.0.1 without the compensation | `0x06` | nominal | ~25330 | 15.179 | 1.548 |
+  | **this build** | **`0x00`** | **nominal** | **~16613** | **9.802** | **0.9995** |
+
+  Full numbers and the still-open X/Y question in `test-report.md` §9.4.
 
 - **`set_auto_report_state` `forever` parameter dropped** (`rosmaster_driver.py`,
   `hardware_node.py`) — DD-4

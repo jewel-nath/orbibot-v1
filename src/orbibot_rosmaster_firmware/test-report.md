@@ -21,7 +21,7 @@
 | USB enumeration after flash | ✅ | cable re-plug may be needed once |
 | Contract fix: direct `FUNC_VERSION` (0x51) | ✅ **FIXED** | firmware replies `major=2 minor=0` |
 | Auto-report rate | ✅ | 270 pkt/s total, 54 Hz per type (5 types) |
-| IMU RAW data | ✅ | Az = 9.76 m/s² (gravity), gyro bias < 1°/s, mag non-zero |
+| IMU RAW data | ✅ | \|a\| = 9.802 m/s², ratio to g 0.9995; gyro bias < 1°/s |
 | Encoder channel | ✅ | zeros when static, resets clean |
 | Firmware odometry | ✅ | zeros when static, resets clean |
 | Battery monitoring | ✅ | 12.5 V (in range) |
@@ -94,10 +94,9 @@ which is the important contract.
 |--------|-------|----------|---------|
 | `REPORT_SPEED` | battery_v | **12.5 V** (4S LiFePO4 nominal 12.8) | ✅ |
 | `REPORT_SPEED` | vx/vy/vz | 0 / 0 / 0 | ✅ (static) |
-| `REPORT_IMU_RAW` | accel Z | **9 760 mm/s²** (=9.76 m/s²) | ✅ gravity |
-| `REPORT_IMU_RAW` | accel X/Y | 4 / 3 mm/s² | ✅ near 0 |
+| `REPORT_IMU_RAW` | accel Z | **9 802 mm/s²** (=9.802 m/s²) | ✅ gravity — *re-measured 2026-08-03* |
+| `REPORT_IMU_RAW` | accel X/Y | 14 / 16 mm/s² | ✅ near 0 — *re-measured 2026-08-03* |
 | `REPORT_IMU_RAW` | gyro X/Y/Z | 0 / 0 / −15 mrad/s | ⚠️ small Z bias ≈ 0.86 °/s (below first-order concern, see §6) |
-| `REPORT_IMU_RAW` | mag X/Y/Z | −392 / −134 / 554 (raw counts) | ✅ magnetometer alive |
 | `REPORT_IMU_ATTITUDE` | roll / pitch | −0.023 / −0.017 rad | ✅ near 0 |
 | `REPORT_ENCODER` | M1/M2/M3/M4 | 0 / 0 / 0 / 0 | ✅ |
 | `REPORT_ODOM` | x, y, θ, vx, vy, ω | all 0 | ✅ |
@@ -334,7 +333,14 @@ behaviour rather than raw motor RPM.
    the 200 ms ramp-up window, not steady-state. Don't size
    `MAX_WHEEL_SPEED_MMS` against them.
 
-### 9.3 Mag-calibration round-trip — DEFERRED
+### 9.3 Mag-calibration round-trip — OBSOLETE
+
+> Superseded 2026-04-28. The magnetometer was removed across firmware,
+> driver and msgs — indoor hard/soft-iron contamination made it unusable
+> for heading, and heading is now gyro + accel (Madgwick, `use_mag: false`)
+> corrected by slam_toolbox/AMCL. `FUNC_SET_MAG_CAL (0x16)` no longer
+> exists, so there is nothing left to round-trip. Kept for provenance;
+> DD-11 is closed by deletion. Original text below.
 
 `protocol_handle_set_mag_cal()` calls `flash_storage_save()`
 unconditionally — no `SAVE_VERIFY` (0x5F) gate like PID has, no RAM-only
@@ -351,10 +357,48 @@ This isn't a bug — it's a design-consistency gap with the PID handler
 
 ---
 
+## 9.4 FW-BUG-2 Root Cause — Accel Z Self-Test — 2026-08-03
+
+*Robot static and level, on a stool, wheels free. Firmware: this branch
+(April base + `ACCEL_CONFIG_2 = 0x00`, nominal ±2g scale).*
+
+§5's original 9.76 m/s² was produced by `accel_scale = 9.80665/25644`, an
+empirical factor added in 2.0.1 to cancel a 1.566× reading. The cause was
+not the chip: `ACCEL_CONFIG_2 = 0x06` set bit 2 = `AZ_ST_EN_REG`, enabling
+the Z-axis self-test actuator. See the changelog entry for the register
+layout.
+
+Because the original 15.35 m/s² was taken **at rest**, where `|a|` is
+almost entirely Z, only the inflated axis was ever sampled — and the
+factor was then applied to all three axes.
+
+| Firmware | `ACCEL_CONFIG_2` | scale | raw az | `\|a\|` | ratio to g |
+|---|---|---|---|---|---|
+| 2.0.1 – Apr 28 | `0x06` | `9.80665/25644` | ~25330 | 9.606 | 0.980 |
+| March base, no compensation | `0x06` | nominal | ~25330 | 15.179 | 1.548 |
+| **this branch** | **`0x00`** | **nominal** | **~16613** | **9.802** | **0.9995** |
+
+630 samples over 12.0 s (52.5 Hz):
+
+```
+ax  mean  +0.014 m/s²   sd 0.0084
+ay  mean  +0.016 m/s²   sd 0.0069
+az  mean  +9.802 m/s²   sd 0.0159
+|a| mean   9.802 m/s²   sd 0.0159      ratio to g 0.9995
+```
+
+**Still open:** X and Y were never inflated by the self-test, so the old
+`9.80665/25644` made them read ~36 % low. A static robot cannot show this —
+`ax` and `ay` are both ~0 either way. Confirming the X/Y scale needs a
+known acceleration on the ground, which belongs with the odometry
+calibration run, not here.
+
+---
+
 ## 10. Not Yet Covered
 
 - Flash-save persistence of PID gains across reboot.
-- Mag-calibration round-trip (deferred until SET_MAG_CAL has a state-byte gate; see §9.3).
+- Accel X/Y scale under real acceleration (see §9.4) — needs the robot on the ground.
 - Sustained / thermal duty.
 - Rosbridge / ROS 2 end-to-end (hardware_node ↔ firmware).
 
