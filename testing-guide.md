@@ -626,7 +626,7 @@ ros2 topic echo /diagnostics
 
 | Symptom                          | Cause                       | Solution                         |
 | -------------------------------- | --------------------------- | -------------------------------- |
-| Yaw drifts over time             | Magnetometer not calibrated | Calibrate magnetometer           |
+| Yaw drifts over time             | Expected — no absolute heading reference since the magnetometer was removed | Bound it: tune Madgwick `zeta` (gyro bias), and let SLAM/AMCL correct via `map → odom`. Measure the drift rate rather than chasing zero |
 | Position jumps                   | Wheel slip                  | Reduce acceleration, check floor |
 | EKF "Failed to meet update rate" | CPU overload                | Reduce EKF frequency to 20Hz     |
 | TF extrapolation errors          | Timing mismatch             | Check sensor timestamps          |
