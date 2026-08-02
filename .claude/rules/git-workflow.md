@@ -20,7 +20,7 @@
 
 ## 2. Follow Naming Conventions Strictly
 
-- **ALWAYS** read `.claude/rules/coding_standards.md` before writing ANY code
+- **ALWAYS** read `.claude/rules/code-style.md` before writing ANY code
 - Python: `PascalCase` for classes, `snake_case` for functions/variables, `UPPER_SNAKE_CASE` for constants
 - C: `snake_case` for functions/variables, `snake_case_t` for types, `UPPER_SNAKE_CASE` for macros
 - Files: `snake_case.py`, `snake_case.c`, `kebab-case.md`

@@ -33,5 +33,30 @@
       "Bash(git push:*)"
     ],
     "defaultMode": "acceptEdits"
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/docs-sync-session-start.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/docs-sync-check.sh\"",
+            "timeout": 15,
+            "statusMessage": "Checking docs are in sync with the code"
+          }
+        ]
+      }
+    ]
   }
 }
