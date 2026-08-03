@@ -1,23 +1,26 @@
 ---
-title: "Beelink Bring-up"
-type: plan
+title: "Onboard Computer Setup"
+type: operations
 date: 2026-08-03
 tags:
-  - plan
+  - operations
   - hardware
   - bringup
-  - migration
 ---
 
-# Beelink Bring-up — replacing the Pi 5
+# Onboard Computer Setup
 
-The Raspberry Pi 5 ran out of CPU. Anything real — SLAM, Nav2, the dashboard,
-the camera — pushed it to 100 % and the robot stopped being controllable. The
-compute is being replaced by a **Beelink SER5 Pro**, and the Pi is coming off
-the robot entirely.
+The runbook to get from *a computer on a desk* to *a computer driving the
+robot*: power, OS, ROS 2, devices, build, mounting. Work the stages in order.
+**Stage 0 is the one that can destroy hardware.**
 
-This is the runbook to get from *a mini PC on a desk* to *a mini PC driving the
-robot*. Work the stages in order. Stage 0 is the one that can destroy hardware.
+This file is not tied to a particular machine. When the computer is replaced,
+update it in place rather than writing a new one — a filename with today's
+hardware in it ages exactly as badly as a config comment does.
+
+**Current machine: Beelink SER5 Pro**, since 2026-08-03. It replaced a
+Raspberry Pi 5 that ran out of CPU — anything real, SLAM, Nav2, the dashboard,
+the camera, pushed it to 100 % and the robot stopped being controllable.
 
 Related: [[roadmap]] Phase 0 · [[inventory]] · [[system-overview]]
 

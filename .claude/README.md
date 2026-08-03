@@ -82,16 +82,26 @@ matching skills cover the same ground and are discoverable.
 | `encoder.sh` | Diagnoses encoder communication failures |
 | `motor.sh` | Spins each wheel briefly — **wheels must be free** |
 
-## No simulation
+## No simulation — but the reason expired
 
-`orbibot_gazebo` was removed on 2026-08-03. Claude Code runs on the robot's own
-Pi 5, which *is* the robot — a simulator sitting beside the real thing earns
-nothing, and Gazebo pulled 202 MB of `gz` packages onto a machine with no GPU,
-where the render engine a simulated LiDAR needs would fall back to software.
+`orbibot_gazebo` was removed on 2026-08-03. The reasoning was that Claude Code
+ran on the robot's own **Raspberry Pi 5**, which *was* the robot — a simulator
+beside the real thing earned nothing, and Gazebo pulled 202 MB of `gz` packages
+onto a machine with no usable GPU, where the render engine a simulated LiDAR
+needs would fall back to software.
+
+**Later the same day the Pi was replaced by a Beelink SER5 Pro** — Ryzen 7 PRO
+5800H with a Radeon Vega iGPU. Both halves of that argument are now false: the
+GPU exists, and `gz sim -s` runs headless on Ubuntu Server with the GUI on the
+operator's laptop.
+
+**The removal still stands**, because nothing currently needs a simulator — not
+because it would not work. It becomes worth reviving when Phase 6 or 7
+iteration costs more in cleared floor space and operator time than standing one
+up would. See *Optional — Simulation* in `docs/plan/roadmap.md`.
 
 It is not lost: the commit that added it is still in history, so
-`git checkout <sha> -- src/orbibot_gazebo` brings it back if the work ever moves
-to a laptop.
+`git checkout <sha> -- src/orbibot_gazebo` brings it back.
 
 ## Where the project knowledge lives
 

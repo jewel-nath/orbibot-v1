@@ -203,5 +203,5 @@ Read `.claude/rules/robot-safety.md` before any of the last two.
 
 ## Related
 
-[[roadmap]] · [[beelink-bringup]] · [[backlog-moc]] · [[lgdxrobot2]] ·
+[[roadmap]] · [[computer-setup]] · [[backlog-moc]] · [[lgdxrobot2]] ·
 [[firmware-architecture]]

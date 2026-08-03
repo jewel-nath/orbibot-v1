@@ -42,7 +42,7 @@ That property is what let the compute be swapped without touching the firmware.
 > saturated all four cores under any real workload. It is replaced by a Beelink
 > SER5 Pro — roughly 4–6× the CPU, and x86_64 rather than aarch64. The Pi's
 > state is preserved on the `raspberry_pi` branch. Bring-up is not finished:
-> see [[beelink-bringup]].
+> see [[computer-setup]].
 >
 > The consequence for this document is narrow — the graph below is unchanged,
 > because the split above held. The consequence for *tuning* is not narrow:
@@ -123,5 +123,5 @@ ros2 launch orbibot_webgui  webgui.launch.py       # rosbridge :9090, WebRTC :80
 ## Related
 
 [[docs/README|Docs home]] · [[command-pipeline]] · [[dashboard-design]] ·
-[[beelink-bringup]] · [[packages-moc]] · [[rosmaster-board]] ·
+[[computer-setup]] · [[packages-moc]] · [[rosmaster-board]] ·
 [[firmware-architecture]]

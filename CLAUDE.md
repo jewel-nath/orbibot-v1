@@ -1,11 +1,20 @@
 # OrbiBot
 
-Mecanum-wheeled indoor robot. ROS 2 Jazzy on a Raspberry Pi 5, motor control on
-a Yahboom ROSMaster V3.0 (STM32F103RCT6) over serial.
+Mecanum-wheeled indoor robot. ROS 2 Jazzy on a **Beelink SER5 Pro**, motor
+control on a Yahboom ROSMaster V3.0 (STM32F103RCT6) over serial.
 
-**Claude Code runs on the robot's own Pi**, wired to the motor board and the
-LiDAR. Commands here move real wheels — read `.claude/rules/robot-safety.md`
-before commanding motion or flashing firmware.
+> ⚠️ **Migration in progress — 2026-08-03.** The Raspberry Pi 5 that ran this
+> stack saturated all four cores under any real load and has been replaced.
+> **The Beelink is on a bench, not on the robot.** Nothing is wired to it: no
+> motor board, no LiDAR, no camera, and ROS 2 is not installed yet.
+>
+> So **commands here do not currently move wheels** — but that changes the
+> moment the hardware is plugged in, and the safety rules apply from that
+> moment. Read `.claude/rules/robot-safety.md` before commanding motion or
+> flashing firmware. Setup sequence: [docs/operations/computer-setup.md](docs/operations/computer-setup.md).
+>
+> The Pi's state is preserved on the `raspberry_pi` branch. Do not delete it.
+> **Every CPU-derived tuning value in this repo is void** — see the roadmap.
 
 ---
 
@@ -17,6 +26,7 @@ was measured, and how to learn it. Start at [docs/README.md](docs/README.md).
 
 | Looking for | Read |
 |---|---|
+| **Setting up the new computer** | [docs/operations/computer-setup.md](docs/operations/computer-setup.md) — power, ROS 2, build, mounting |
 | **What to build next** | [docs/plan/roadmap.md](docs/plan/roadmap.md) — phases and gates |
 | **What is broken** | `src/<pkg>/<pkg>-issue.md`; [docs/moc/backlog-moc.md](docs/moc/backlog-moc.md) maps them |
 | A package's API | `src/<pkg>/README.md` |
@@ -55,9 +65,14 @@ fix it.
 
 Details: [docs/moc/packages-moc.md](docs/moc/packages-moc.md).
 
-**Deleted, do not recreate:** `orbibot_gazebo` (the Pi is the robot),
-`orbibot_ai` and `orbibot_mcp_server` (replaced by `orbibot_agent`). Ignore
-stale references in old notes.
+**Deleted, do not recreate:** `orbibot_ai` and `orbibot_mcp_server` (replaced
+by `orbibot_agent`). Ignore stale references in old notes.
+
+**Deleted, but re-openable:** `orbibot_gazebo`. It went on the reasoning that
+"the Pi is the robot" — a Pi could not run a simulator. The Beelink can
+(Ryzen 7 + Vega iGPU, headless via `gz sim -s`). The decision stands until
+someone needs it; see *Optional — Simulation* in the roadmap. Do not recreate
+it speculatively.
 
 ---
 
@@ -73,14 +88,19 @@ source install/setup.bash
 
 `orbibot_rosmaster_firmware` carries a `COLCON_IGNORE` — it is a PlatformIO
 project and is never built by colcon. The toolchain is pinned in
-`platformio.ini` so the Pi can build it:
+`platformio.ini` so the robot's own computer can build it:
 
 ```bash
 cd src/orbibot_rosmaster_firmware
-~/.platformio/penv/bin/pio run                  # build first, always
-~/.platformio/penv/bin/pio run --target upload  # needs BOOT0 — see the rules file
-~/.platformio/penv/bin/pio device monitor       # 115200
+<pio> run                  # build first, always
+<pio> run --target upload  # needs BOOT0 — see the rules file
+<pio> device monitor       # 115200
 ```
+
+> `<pio>` was `~/.platformio/penv/bin/pio` on the Pi. PlatformIO is **not yet
+> installed on the Beelink** — once it is, replace `<pio>` here and in
+> `src/orbibot_rosmaster_firmware/README.md` with the real path. Do not leave
+> the Pi's path in the docs.
 
 ```bash
 # base: description + hardware + LiDAR + EKF
@@ -101,7 +121,7 @@ cd src/orbibot_rosmaster_firmware/tests && python3 run_all_tests.py --port /dev/
 ```
 
 Frontend lives in `src/orbibot_webgui/frontend` — `npm run build` for a served
-bundle; do not run the Vite dev server on the Pi.
+bundle; do not run the Vite dev server on the robot.
 
 Handy scripts: `.claude/scripts/preflight.sh` before operating,
 `safety.sh` to cross-check firmware limits against the ROS 2 config.
@@ -139,8 +159,10 @@ profiles, test patterns — lives in skills and loads on demand.
 
 | | |
 |---|---|
+| Compute | Beelink SER5 Pro — Ryzen 7 PRO 5800H, 8C/16T, 11.6 GiB, x86_64 |
+| Compute power | 12.8 V → RBD-2767 boost → 19 V; 10 A fuse on the **input** side |
 | Wheel radius | 50 mm (100 mm mecanum, ABBA) |
-| Wheelbase × track | 260 × 360 mm; footprint 350 × 250 mm; ~6 kg |
+| Wheelbase × track | 260 × 360 mm; footprint 350 × 250 mm; ~6 kg — **re-measure after mounting the Beelink** |
 | Encoders | 1320 CPR (11 PPR × 30:1 × 4) |
 | Motors | JGB37-520, 30:1, 333 RPM no-load |
 | Battery | 4S LiFePO4 — 12.8 V nominal, 11.0 V warning, 10.5 V cutoff |

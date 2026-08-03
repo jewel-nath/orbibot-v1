@@ -2,8 +2,14 @@
 
 **This robot is real. It has motors, a battery, and a human near it.**
 
-Claude Code runs on the robot's own Raspberry Pi 5, which is wired to the
-ROSMaster board and the LiDAR. Commands here move real wheels.
+Claude Code runs on the robot's own computer — a **Beelink SER5 Pro** since
+2026-08-03, replacing a Raspberry Pi 5.
+
+> **Right now that machine is on a bench and nothing is wired to it** — no
+> ROSMaster board, no LiDAR, no camera. Commands do not currently reach a
+> motor. **Do not treat that as permanent.** The moment the operator plugs the
+> hardware in, every rule below applies, and you will not necessarily be told.
+> Check for `/dev/motordriver` before assuming either way.
 
 The operator is present and will do any physical action you ask for — but
 **only if you ask clearly and then wait**.
@@ -22,6 +28,42 @@ Ask for **one action at a time**. Say exactly what to touch and what to expect.
 Then stop and wait.
 
 ---
+
+## Power and wiring
+
+New hazard class as of 2026-08-03. The Pi took 5 V from the ROSMaster board's
+Type-C. The Beelink takes ~19 V through a **RBD-2767 boost converter** off the
+same 12.8 V node that feeds the motor board:
+
+```
+4S LiFePO4 ──┬── ROSMaster V3.0 ── motors
+   12.8V     │
+             └── 10A fuse ── RBD-2767 boost ── 19V ── Beelink
+```
+
+**One battery, one node, shared with four motors.** That is the operator's
+chosen topology, and it has a consequence worth stating plainly rather than
+discovering: motor current transients sag the same rail the computer runs on.
+
+Three rules follow.
+
+1. **Never ask for the Beelink to be connected before the converter output has
+   been measured.** The multi-turn pot ships at an arbitrary position and its
+   range reaches 35 V. Order is always: battery → converter input → *measure
+   with a multimeter* → adjust to the target → **then** the computer.
+2. **The target voltage comes from the adapter label, not from you.** If it has
+   not been read, say so and wait. Do not carry the 19 V assumption in this
+   repo into a wiring instruction.
+3. **A brown-out is not a reboot.** The converter's 10 V minimum input sits
+   0.5 V below the BMS cutoff at 10.5 V. If the rail dips while the NVMe is
+   writing, the filesystem corrupts. Until P-1…P-5 in
+   `docs/operations/computer-setup.md` are measured and recorded, treat *"can the
+   robot drive on battery with the computer up"* as **unanswered** — do not
+   assume it either way.
+
+Before any command that spins motors while the Beelink runs on battery: ask
+whether P-1…P-5 have been done. If not, say what could go wrong and let the
+operator decide.
 
 ## Flashing firmware
 

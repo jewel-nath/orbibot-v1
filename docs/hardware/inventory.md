@@ -32,7 +32,7 @@ Measured on the machine itself, 2026-08-03, on a bench.
 | Firmware | SER5HU01, 2024-10-28 |
 
 **Not yet installed:** ROS 2, `colcon`, `rosdep`, `gcc`/`cmake`, `node`,
-PlatformIO. See [[beelink-bringup]].
+PlatformIO. See [[computer-setup]].
 
 ### Replacing the Raspberry Pi 5
 
@@ -75,7 +75,7 @@ threshold — on the output only 3.4 A ever flows.
 **Open risk:** the converter's 10 V minimum input sits 0.5 V below the BMS
 cutoff at 10.5 V. Motor current transients could brown out the Beelink, and a
 brown-out with the NVMe writing corrupts the filesystem. Measurements P-1…P-5
-in [[beelink-bringup]] settle this; none have been taken.
+in [[computer-setup]] settle this; none have been taken.
 
 ## MCU — Yahboom ROSMaster V3.0
 
@@ -159,12 +159,12 @@ USB 3-rated cable.
 ## Missing software the hardware implies
 
 The Beelink is a **fresh Ubuntu Server install — none of this exists yet**,
-including ROS 2 itself. Full sequence in [[beelink-bringup]]. What matters
+including ROS 2 itself. Full sequence in [[computer-setup]]. What matters
 beyond the obvious:
 
 | Package | State | Consequence |
 |---|---|---|
-| ROS 2 Jazzy + `ros-dev-tools` | **not installed** | Nothing runs. Stage 2 of [[beelink-bringup]] |
+| ROS 2 Jazzy + `ros-dev-tools` | **not installed** | Nothing runs. Stage 2 of [[computer-setup]] |
 | `ros-jazzy-twist-mux` | **not installed — needed** | No arbitration between the four `/cmd_vel` publishers — see [[command-pipeline]]. This was the gap on the Pi too; install it this time |
 | `ros-jazzy-realsense2-camera` | **not installed — now wanted** | Depth is enabled by decision; on the Pi this driver was deliberately bypassed |
 | `ros-jazzy-joy` | not installed — **not needed** | `orbibot_teleop` declares it and subscribes to `/joy`, so that package is dormant. Teleop is web-only by decision; leave it uninstalled |
@@ -191,5 +191,5 @@ All are available in apt for Jazzy on noble/x86_64.
 
 ## Related
 
-[[rosmaster-board]] · [[components]] · [[beelink-bringup]] · [[roadmap]] ·
+[[rosmaster-board]] · [[components]] · [[computer-setup]] · [[roadmap]] ·
 [[backlog-moc]]

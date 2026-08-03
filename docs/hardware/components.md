@@ -276,7 +276,7 @@ reaches 35V.
 ⚠️ **Margin warning:** the converter's 10V minimum input is only 0.5V below the
 BMS cutoff at 10.5V. Motor transients could brown out the Beelink, and a
 brown-out during an NVMe write corrupts the filesystem. Measurements P-1…P-5
-in [[beelink-bringup]] settle this. None have been taken.
+in [[computer-setup]] settle this. None have been taken.
 
 ### Power Distribution
 
@@ -330,4 +330,4 @@ The Beelink costs roughly 20–25W more than the Pi did. Plan sessions around
 
 ## Related
 
-[[inventory]] · [[rosmaster-board]] · [[beelink-bringup]] · [[roadmap]]
+[[inventory]] · [[rosmaster-board]] · [[computer-setup]] · [[roadmap]]

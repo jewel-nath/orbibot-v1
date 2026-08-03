@@ -47,7 +47,7 @@ working as designed — see [[system-overview]].
 **Not solid:**
 
 - **The Beelink is not mounted and not set up.** No ROS 2, no toolchain, no
-  hardware attached. [[beelink-bringup]] is Phase 0.
+  hardware attached. [[computer-setup]] is Phase 0.
 - **The robot's mass and centre of gravity are about to change.** Every Phase 1
   number must be taken *after* the Beelink and its converter are bolted on.
 - Nothing on this robot has been calibrated **on the ground**. Every motion
@@ -106,7 +106,7 @@ has an operating system and nothing else.
 | 0.10 | Power measurements P-1…P-5 — sag, thermals, brown-out | robot |
 | 0.11 | **Record a CPU and thermal baseline** — stack idle, and stack driving | robot |
 
-Full procedure, including the wiring order that matters: [[beelink-bringup]].
+Full procedure, including the wiring order that matters: [[computer-setup]].
 
 **Gate**
 
@@ -385,6 +385,6 @@ Rules to read first: `.claude/rules/robot-safety.md`.
 
 ## Related
 
-[[docs/README|Docs home]] · [[beelink-bringup]] · [[backlog-moc]] ·
+[[docs/README|Docs home]] · [[computer-setup]] · [[backlog-moc]] ·
 [[command-pipeline]] · [[dashboard-design]] · [[system-overview]] ·
 [[next-session-prompt]]

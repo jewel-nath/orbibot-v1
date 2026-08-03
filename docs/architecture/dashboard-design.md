@@ -15,7 +15,7 @@ happens in the operator's browser — it is **what the robot has to serialise an
 send**.
 
 > **Rewritten in part on 2026-08-03**, when the Raspberry Pi 5 was replaced by
-> a Beelink SER5 Pro — see [[beelink-bringup]].
+> a Beelink SER5 Pro — see [[computer-setup]].
 >
 > Much of this document was written against a machine with four cores that was
 > already at 100 %. Some of that advice was really about CPU and is now
@@ -205,7 +205,7 @@ The table that used to be here read *"< 40 % of 4 cores"*, *"< 75 %"*,
 
 **Do not translate them.** A budget derived by scaling old numbers by a guessed
 core ratio is worse than no budget: it looks measured and is not. The Phase 0
-gate in [[beelink-bringup]] requires a fresh baseline on the Beelink — stack
+gate in [[computer-setup]] requires a fresh baseline on the Beelink — stack
 idle, and stack driving — and the real targets get written here from that.
 
 What survives, because it is about the operator and not the hardware:
@@ -236,5 +236,5 @@ Record real numbers as they are measured — a budget nobody checks is decoratio
 
 ## Related
 
-[[roadmap]] · [[beelink-bringup]] · [[command-pipeline]] · [[orbibot_webgui]] ·
+[[roadmap]] · [[computer-setup]] · [[command-pipeline]] · [[orbibot_webgui]] ·
 [[inventory]]

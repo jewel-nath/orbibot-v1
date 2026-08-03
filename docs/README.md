@@ -8,11 +8,17 @@ tags:
 
 # OrbiBot
 
-Mecanum-wheeled indoor robot. ROS 2 Jazzy on a Raspberry Pi 5, motor control on
-a Yahboom ROSMaster V3.0 (STM32F103RCT6) over serial at 115200 baud.
+Mecanum-wheeled indoor robot. ROS 2 Jazzy on a **Beelink SER5 Pro**, motor
+control on a Yahboom ROSMaster V3.0 (STM32F103RCT6) over serial at 115200 baud.
 
-**Claude Code runs on the robot's own Pi**, wired to the motor board and the
-LiDAR. Commands here move real wheels — `.claude/rules/robot-safety.md` first.
+> ⚠️ **Migration in progress — 2026-08-03.** The Raspberry Pi 5 hit 100 % CPU
+> under any real workload and has been replaced. **The Beelink is on a bench,
+> not on the robot** — nothing is wired to it and ROS 2 is not installed.
+> Start at [[computer-setup]]. The Pi's state lives on the `raspberry_pi`
+> branch.
+
+Once the hardware is connected, commands here move real wheels —
+`.claude/rules/robot-safety.md` first.
 
 ---
 
@@ -20,11 +26,12 @@ LiDAR. Commands here move real wheels — `.claude/rules/robot-safety.md` first.
 
 | You want | Go to |
 |---|---|
+| **To set up the new computer** | [[computer-setup]] — power, ROS 2, build, mounting |
 | What to build next | [[roadmap]] — phases, and the numbers that gate each one |
 | What is broken | [[backlog-moc]] — where every open finding lives |
 | How the pieces connect | [[system-overview]] |
 | Who is allowed to drive the robot | [[command-pipeline]] |
-| A dashboard that fits the Pi's CPU | [[dashboard-design]] |
+| Dashboard architecture | [[dashboard-design]] — CPU budget void, being re-derived |
 | One package | [[packages-moc]], then that package's own `README.md` |
 | Learning a subsystem from zero | [[learn-moc]] — 71 lessons, six areas |
 | The board itself — pinout, timers, rails | [[rosmaster-board]] |
@@ -63,4 +70,5 @@ deliberate: it lets a note link straight to `[[firmware-architecture]]` or
 
 ## Related
 
-[[roadmap]] · [[backlog-moc]] · [[packages-moc]] · [[learn-moc]] · [[system-overview]]
+[[roadmap]] · [[computer-setup]] · [[backlog-moc]] · [[packages-moc]] ·
+[[learn-moc]] · [[system-overview]]
