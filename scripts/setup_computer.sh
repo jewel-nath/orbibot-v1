@@ -144,9 +144,35 @@ stage_build() {
     source "/opt/ros/${ROS_DISTRO_NAME}/setup.bash"
 
     cd "$WS_DIR"
-    rosdep install --from-paths src --ignore-src -r -y
+
+    # Three keys are skipped deliberately:
+    #
+    #   joy              orbibot_teleop declares it, but teleop is web-only by
+    #                    decision and that package is dormant. Letting rosdep
+    #                    pull joy in would quietly undo the decision recorded in
+    #                    docs/architecture/command-pipeline.md.
+    #
+    #   python3-anthropic
+    #   python3-mcp      Not packaged in Ubuntu 24.04 at all. rosdep cannot
+    #                    resolve them; they come from pip below.
+    rosdep install --from-paths src --ignore-src -r -y \
+        --skip-keys "joy python3-anthropic python3-mcp"
+
     colcon build --symlink-install
     ok "workspace built"
+}
+
+# ------------------------------------------------------- stage: pip (agent)
+
+stage_pip() {
+    info "Python packages the agent needs that apt does not carry"
+
+    # Ubuntu 24.04 marks the system Python externally-managed (PEP 668), so a
+    # plain pip install refuses. --user keeps this out of /usr and confines it
+    # to ~/.local, which is already on sys.path for ROS nodes run as this user;
+    # --break-system-packages is what satisfies PEP 668 for that.
+    python3 -m pip install --user --break-system-packages anthropic mcp
+    ok "anthropic + mcp installed to ~/.local"
 }
 
 # ------------------------------------------------------------- stage: devices
@@ -221,6 +247,15 @@ stage_verify() {
     _check "pio"      test -x "$HOME/.platformio-venv/bin/pio"
     _check "udev rules" test -f /etc/udev/rules.d/99-orbibot.rules
     _check "workspace built" test -f "$WS_DIR/install/setup.bash"
+    _check "python: anthropic" python3 -c "import anthropic"
+    _check "python: mcp"       python3 -c "import mcp"
+
+    # joy must NOT be installed — teleop is web-only by decision.
+    if [[ -d "/opt/ros/${ROS_DISTRO_NAME}/share/joy" ]]; then
+        warn "ros-${ROS_DISTRO_NAME}-joy is installed; teleop is web-only by decision"
+    else
+        ok "joy absent, as intended"
+    fi
 
     echo
     info "Hardware (absent is expected until it is wired up)"
@@ -270,6 +305,7 @@ case "$STAGE" in
     realsense) stage_realsense ;;
     build)     stage_build ;;
     devices)   stage_devices ;;
+    pip)       stage_pip ;;
     pio)       stage_pio ;;
     node)      stage_node ;;
     bashrc)    stage_bashrc ;;
@@ -281,13 +317,14 @@ case "$STAGE" in
         stage_devices
         stage_bashrc
         stage_build
+        stage_pip
         stage_pio
         stage_node
         echo
         stage_verify
         ;;
     *)
-        echo "Usage: $0 [base|ros|realsense|build|devices|pio|node|bashrc|verify|all]"
+        echo "Usage: $0 [base|ros|realsense|build|devices|pip|pio|node|bashrc|verify|all]"
         exit 1
         ;;
 esac

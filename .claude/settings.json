@@ -20,17 +20,27 @@
       "Bash(vcs:*)",
       "Bash(source:*)",
       "Bash(pytest:*)",
-      "Bash(pio:*)"
+      "Bash(pio:*)",
+      "Bash(./scripts/setup_computer.sh:*)",
+      "Bash(sudo apt-get:*)",
+      "Bash(sudo apt:*)",
+      "Bash(sudo add-apt-repository:*)",
+      "Bash(sudo dpkg -i:*)",
+      "Bash(sudo rosdep init)",
+      "Bash(sudo udevadm:*)",
+      "Bash(sudo usermod:*)",
+      "Bash(sudo tee /etc/udev/rules.d/*)"
     ],
     "deny": [
-      "Bash(sudo:*)",
       "Bash(docker:*)",
       "Bash(rm -rf:*)",
+      "Bash(sudo rm:*)",
+      "Bash(sudo dd:*)",
+      "Bash(sudo mkfs:*)",
       "Read(./.env)",
       "Read(~/.ssh/**)"
     ],
     "ask": [
-      "Bash(git push:*)"
     ],
     "defaultMode": "acceptEdits"
   },

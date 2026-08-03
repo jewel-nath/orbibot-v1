@@ -6,6 +6,10 @@ Remaining issues, technical debt, and improvement ideas after the 2026-03 refact
 
 ### High Priority
 
+- [ ] **`python3-anthropic` and `python3-mcp` are not resolvable by rosdep** — both are declared in `package.xml`, and neither exists as an apt package on Ubuntu 24.04 (verified 2026-08-03: `apt-cache policy` returns no candidate; `python3-openai`, `python3-aiortc`, `python3-av` and `python3-aiohttp-cors` all do exist). A plain `rosdep install` over this workspace therefore cannot satisfy them, and with `-r` it continues silently — leaving the agent unimportable at runtime rather than failing loudly at install.
+
+  Worked around in `scripts/setup_computer.sh`: the two keys are passed to `--skip-keys`, and the packages are installed with `pip install --user --break-system-packages` (Ubuntu 24.04 marks the system Python externally-managed, PEP 668). **This is a workaround, not a fix** — the declared dependency still cannot be satisfied the normal way. Options worth weighing: a rosdep source-entry mapping these keys to pip, a `requirements.txt` the package documents, or vendoring the provider clients behind an optional import so the package degrades instead of failing.
+
 - [ ] **No unit tests** — zero test coverage. Start with SafetyManager (pure logic), TestSuiteRunner, and provider initialization. Then add integration tests with a mock RosBridge.
 - [ ] **Anthropic provider argument parsing inconsistency** — Anthropic SDK returns tool arguments as Python dicts; Moonshot/Ollama parse from JSON strings. Unify handling in all providers.
 

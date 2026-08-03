@@ -234,12 +234,46 @@ which is why four nodes publish `/cmd_vel` with nothing arbitrating —
 ```bash
 sudo rosdep init && rosdep update
 cd ~/orbibot_ws
-rosdep install --from-paths src --ignore-src -r -y
+rosdep install --from-paths src --ignore-src -r -y \
+  --skip-keys "joy python3-anthropic python3-mcp"
 
 source /opt/ros/jazzy/setup.bash
 colcon build --symlink-install
 source install/setup.bash
+
+# The two skipped Python keys, which apt does not carry
+python3 -m pip install --user --break-system-packages anthropic mcp
 ```
+
+### Why three keys are skipped
+
+A plain `rosdep install` over this workspace does the wrong thing in two
+distinct ways. Checked on 2026-08-03:
+
+| Key | Declared by | What happens |
+|---|---|---|
+| `joy` | `orbibot_teleop` | rosdep **installs it** — quietly undoing a decision |
+| `python3-anthropic` | `orbibot_agent` | No apt candidate on Ubuntu 24.04 |
+| `python3-mcp` | `orbibot_agent` | No apt candidate on Ubuntu 24.04 |
+
+**`joy`** is the interesting one. `orbibot_teleop` is dormant by decision —
+teleop is web-only — but the package still *declares* `joy`, so rosdep
+installs it and the decision recorded in [[command-pipeline]] is undone by a
+dependency resolver. Skipping the key is the smallest correct fix; the
+alternative is editing a dormant package's manifest.
+
+**The two Python keys** have no apt package at all. With `-r`, rosdep does not
+fail on them — it warns and continues — so the failure surfaces much later as
+an import error inside the agent. They come from pip instead, `--user` so
+nothing lands in `/usr`, and `--break-system-packages` because Ubuntu 24.04
+marks the system Python externally-managed (PEP 668). Tracked in
+`src/orbibot_agent/agent-issues.md`.
+
+`rviz2` and `joint_state_publisher_gui`, declared by `orbibot_description`,
+**are** installed. They pull Qt onto a headless server and will never be run
+here — but they are genuine declared dependencies, disk is not scarce
+(425 G free), and skipping them buys nothing. RViz runs on the operator's
+laptop.
 
 Expect **12 packages**. The 13th, `orbibot_rosmaster_firmware`, carries a
 `COLCON_IGNORE` — it is a PlatformIO project.
