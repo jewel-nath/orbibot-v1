@@ -271,10 +271,14 @@ stage_verify() {
         if [[ -e "$dev" ]]; then ok "$dev"; else warn "$dev not present"; fi
     done
 
+    # The trailing `|| true` is load-bearing. Without it, the loop exits
+    # non-zero whenever the last /sys entry has no `product` file, the command
+    # substitution inherits that, and `set -e` kills verify before it prints
+    # its summary — reporting nothing while looking like it ran.
     local rs_speed
     rs_speed="$(for d in /sys/bus/usb/devices/*/; do
         [ -f "$d/product" ] && grep -qi realsense "$d/product" 2>/dev/null && cat "$d/speed"
-    done | head -1)"
+    done | head -1 || true)"
     if [[ -z "$rs_speed" ]]; then
         warn "RealSense not connected"
     elif [[ "$rs_speed" == "5000" ]]; then

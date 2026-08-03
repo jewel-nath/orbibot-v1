@@ -1,7 +1,7 @@
 ---
 title: "Baseline Test Results"
 type: operations
-date: 2026-03-14
+date: 2026-08-03
 tags:
   - operations
   - testing
@@ -10,10 +10,62 @@ tags:
 
 # OrbiBot Baseline Test Notes
 
+Newest first. **Anything dated before 2026-08-03 was measured on the Raspberry
+Pi 5**, which has been replaced — see [[computer-setup]]. Those numbers are
+kept as history and are not a target for the current machine.
+
+---
+
+## 2026-08-03 — Beelink SER5 Pro, idle
+
+Phase 0 gate item 0.11. Taken on a bench: **no robot hardware attached**, no
+ROS nodes running, mains power via the stock adapter. This is the floor to
+measure everything else against, not a workload figure.
+
+| Parameter | Value |
+|---|---|
+| Load average (1/5/15 min) | 0.59 / 0.61 / 0.42 |
+| CPU idle | **99.4 %** |
+| RAM | 2117 MiB used of 11878 — 9760 MiB available |
+| CPU temperature | **49.8 °C** (`k10temp`/Tctl) |
+| NVMe temperature | 46.9 °C |
+| Clock, mean of 16 threads | 1355 MHz |
+| Scaling governor | `powersave` |
+| Disk | 14 G used of 457 G (4 %) |
+
+**Build times on this machine**, for comparison with the Pi's ~40 s:
+
+| | |
+|---|---|
+| `colcon build --symlink-install`, 12 packages | **17.9 s** |
+| Frontend `npm run build` | 3.4 s → 816 K `dist/`, 742 kB JS (222 kB gzipped) |
+
+### What is still missing from this baseline
+
+The Phase 0 gate asks for **idle and driving**. Only idle exists, because the
+Beelink is not mounted and no hardware is attached. Still to record, and Phases
+3, 5 and 6 cannot set real CPU targets until they are:
+
+- Whole stack up, robot stationary
+- Driving under teleop
+- Driving with Nav2 + SLAM + depth
+
+> `powersave` is the governor the installer left. On `amd-pstate` that is not
+> the old ondemand behaviour and is probably fine, but it has **not** been
+> shown to hold latency under a Nav2 control loop. Measure before changing it —
+> and if it does get changed, record both.
+
+---
+
+## 2026-03-14 — Raspberry Pi 5 *(history — hardware replaced)*
+
 **Date:** 2026-03-14  
 **Tester:** AI Robot Tester (MCP)  
 **Launch:** `robot.launch.py` running  
 **Location:** Indoor, flat surface
+
+> Measured on the Pi 5. Kept for history only. The machine is gone, and these
+> figures should not be used as targets or scaled — see [[roadmap]] Principle 5.
 
 ---
 
