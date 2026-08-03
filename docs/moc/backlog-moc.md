@@ -19,7 +19,9 @@ holds is *where to look*, and the findings that belong to no single package.
 | `orbibot_rosmaster_firmware` | `firmware-issue.md` | 9 |
 | `orbibot_rosmaster_firmware` | `firmware-issue-deepdive.md` — static-analysis pass | 4 |
 | `orbibot_webgui` | `webgui-issue.md` | 9 |
-| `orbibot_hardware` | `hardware-issue.md` | 6 |
+| `orbibot_hardware` | `hardware-issue.md` | 8 |
+| `orbibot_bringup` | `bringup-issue.md` | 1 |
+| `orbibot_sensors` | `sensors-issue.md` | 2 |
 | `orbibot_agent` | `agent-issues.md` | 3 |
 
 Measured results are separate from findings: firmware numbers go in

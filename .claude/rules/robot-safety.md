@@ -5,10 +5,10 @@
 Claude Code runs on the robot's own computer — a **Beelink SER5 Pro** since
 2026-08-03, replacing a Raspberry Pi 5.
 
-> **Right now that machine is on a bench and nothing is wired to it** — no
-> ROSMaster board, no LiDAR, no camera. Commands do not currently reach a
-> motor. **Do not treat that as permanent.** The moment the operator plugs the
-> hardware in, every rule below applies, and you will not necessarily be told.
+> **As of 2026-08-03 that machine is on a bench with no robot hardware
+> attached** — no ROSMaster board, no LiDAR, no camera — so commands do not
+> reach a motor. **Do not treat that as permanent.** The operator is actively
+> wiring the power harness and will not necessarily announce finishing.
 > Check for `/dev/motordriver` before assuming either way.
 
 The operator is present and will do any physical action you ask for — but
@@ -51,9 +51,9 @@ Three rules follow.
    been measured.** The multi-turn pot ships at an arbitrary position and its
    range reaches 35 V. Order is always: battery → converter input → *measure
    with a multimeter* → adjust to the target → **then** the computer.
-2. **The target voltage comes from the adapter label, not from you.** If it has
-   not been read, say so and wait. Do not carry the 19 V assumption in this
-   repo into a wiring instruction.
+2. **The target voltage comes from the adapter label, not from you.** For this
+   machine it has been read: **19 V / 3.42 A**, 2026-08-03. If the computer is
+   ever replaced, read the new label before quoting a number.
 3. **A brown-out is not a reboot.** The converter's 10 V minimum input sits
    0.5 V below the BMS cutoff at 10.5 V. If the rail dips while the NVMe is
    writing, the filesystem corrupts. Until P-1…P-5 in
@@ -73,13 +73,13 @@ This sequence is mandatory:
 1. **Build first.** Never ask for a jumper before `pio run` succeeds — do not
    spend the operator's hands on a build that fails.
    ```bash
-   cd src/orbibot_rosmaster_firmware && ~/.platformio/penv/bin/pio run
+   cd src/orbibot_rosmaster_firmware && ~/.platformio-venv/bin/pio run
    ```
 2. **Ask, then wait:**
    > **BOOT0 jumper HIGH (3.3V) করুন, তারপর RESET চাপুন** — হয়ে গেলে বলুন।
 3. Upload only after they confirm:
    ```bash
-   ~/.platformio/penv/bin/pio run --target upload
+   ~/.platformio-venv/bin/pio run --target upload
    ```
 4. **Ask, then wait:**
    > **BOOT0 jumper LOW (GND) করুন, তারপর RESET চাপুন** — হয়ে গেলে বলুন।

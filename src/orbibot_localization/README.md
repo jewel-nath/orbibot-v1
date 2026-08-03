@@ -98,7 +98,7 @@ ros2 launch orbibot_localization localization.launch.py log_level:=debug
 | Topic | Type | Rate | Description |
 |-------|------|------|-------------|
 | `/imu/data_filtered` | `sensor_msgs/Imu` | 50 Hz | Madgwick-filtered IMU with orientation quaternion |
-| `/odometry/filtered` | `nav_msgs/Odometry` | **25 Hz configured** | EKF-fused odometry for Nav2/SLAM. ⚠️ Measured ~2.5 Hz — see `orbibot_hardware/hardware-issue.md` HW-BUG-1 |
+| `/odometry/filtered` | `nav_msgs/Odometry` | **24.0–24.5 Hz measured** (25 configured) | EKF-fused odometry for Nav2/SLAM. The ~2.5 Hz of HW-BUG-1 was a Pi-era symptom and does not occur on the Beelink |
 
 ### TF Published
 
@@ -227,7 +227,7 @@ accelerometer path and are **suspect** — re-measure before trusting them. See
 ros2 topic hz /imu/data_raw           # ~50Hz
 ros2 topic hz /imu/data_filtered      # ~50Hz
 ros2 topic hz /odom                   # ~20Hz
-ros2 topic hz /odometry/filtered      # should be ~25Hz; HW-BUG-1 reports ~2.5Hz
+ros2 topic hz /odometry/filtered      # ~24Hz measured 2026-08-03
 
 # Inspect EKF output
 ros2 topic echo /odometry/filtered --once

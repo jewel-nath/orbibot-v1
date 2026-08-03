@@ -58,10 +58,13 @@ Verified working, not just installed:
 | URDF xacro expands | 13 links, 16 joints, `base_footprint` present |
 | Frontend `npm run build` | 816 K `dist/` |
 
-**Hardware: nothing attached.** No LiDAR, no `/dev/motordriver`, no camera. The
-Beelink is on a bench running from its own mains adapter, and **Stage 0 has not
-been done at all** — the converter is not set, the fuse is not wired, and the
-adapter label has not been read.
+**Hardware: nothing attached.** No LiDAR, no `/dev/motordriver`, no camera.
+
+**Stage 0 is part-done.** The adapter label is read (**19 V / 3.42 A**) and the
+operator has wired the fuse and the battery/converter/ROSMaster harness. Still
+outstanding, and in this order: **set the converter output to 19.0 V with a
+multimeter before the Beelink is connected to it**, then P-1…P-5. Until then
+the Beelink runs from its mains brick.
 
 Group membership (`dialout`, `plugdev`, `video`) is applied in `/etc/group` but
 needs a re-login to take effect in a running shell.
@@ -90,12 +93,11 @@ mounted.** Getting the voltage wrong here destroys a mini PC in under a second.
 
 ### The load
 
-> **Unverified — read the Beelink's power adapter label and confirm before
-> wiring.** Everything below assumes **19 V / 3.42 A (65 W)**. Some Beelink
-> models ship a 12 V brick, and if this one does, the boost converter is the
-> wrong part and the whole stage changes.
+> **Confirmed 2026-08-03.** The Beelink's adapter is labelled **19 V / 3.42 A
+> (65 W)**. The boost converter is the correct part — a 12 V model would have
+> made it the wrong one.
 
-Assuming 19 V / 65 W, at ~90 % converter efficiency:
+At 19 V / 65 W and ~90 % converter efficiency:
 
 | | Value |
 |---|---|
@@ -120,7 +122,7 @@ power-on inrush will nuisance-trip a fast one.
 2. Connect the battery. The converter's LED lights.
 3. **Measure the output with a multimeter.** The multi-turn pot ships at an
    arbitrary setting — it could be 35 V.
-4. Turn the pot until the output reads **19.0 V** (or whatever the label says).
+4. Turn the pot until the output reads **19.0 V** (the label figure).
    Multi-turn: it takes many rotations, and it is meant to.
 5. Re-measure. Confirm it is stable and did not drift.
 6. **Only now** connect the Beelink.
@@ -433,7 +435,8 @@ Only after Stages 0–7 pass on the bench.
 
 ## Gate — Phase 0 is done when
 
-- [ ] Adapter label read; converter output set and verified at that voltage
+- [x] Adapter label read — **19 V / 3.42 A**, 2026-08-03
+- [ ] Converter output set to 19.0 V with a multimeter **before** the Beelink is connected
 - [ ] P-1 … P-5 measured and recorded in `test-report.md`
 - [ ] `colcon build` clean, 12 packages
 - [ ] `/dev/motordriver` and `/dev/lidar` appear on boot

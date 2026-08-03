@@ -40,15 +40,68 @@ measure everything else against, not a workload figure.
 | `colcon build --symlink-install`, 12 packages | **17.9 s** |
 | Frontend `npm run build` | 3.4 s → 816 K `dist/`, 742 kB JS (222 kB gzipped) |
 
+### Stack up — robot elevated, motors disabled
+
+Same day, `robot.launch.py` running with the real hardware attached: ROSMaster
+board, RPLidar A1, RealSense connected. Robot on a stool, wheels free, motors
+**disabled**.
+
+| Parameter | Value |
+|---|---|
+| CPU | **98.6 % idle** — the whole base stack costs ~1.3 % |
+| Load average | 0.26 |
+| CPU temperature | 52.5 °C (idle was 49.8) |
+| RAM | 2086 MiB of 11880 |
+
+Per process, as a share of **one** core:
+
+| Node | CPU |
+|---|---|
+| `hardware_node` | 11.6 % |
+| `ekf_node` | 1.8 % |
+| `robot_state_publisher` | 0.8 % |
+| `rplidar_composition` | 0.6 % |
+
+`hardware_node` is the largest consumer by an order of magnitude — a Python
+node polling a 115200 baud serial link. On 16 threads that is 0.7 % of the
+machine and irrelevant; it is recorded because it is the thing that would
+matter first if this ever became tight again.
+
+### Topic rates measured the same session
+
+| Topic | Measured | Documented | Verdict |
+|---|---|---|---|
+| `/odometry/filtered` | **24.0–24.5 Hz** | 25 configured | Within 4 %. HW-BUG-1's ~2.5 Hz does not occur here |
+| `/scan` | **7.9 Hz** | 10 Hz | ⚠️ **below spec** — open |
+| `/imu/data_raw` | **40–45 Hz** | 50 Hz | ⚠️ **below spec** — open |
+| `/odom` | 1.95 Hz | on-change + 0.5 s heartbeat | ✅ correct — robot stationary, so heartbeat only |
+
+The `/odom` figure is the one that looks wrong and is not: 1.95 Hz is the 0.5 s
+heartbeat, and a stationary robot has no changes to report.
+
+`/scan` and `/imu/data_raw` both run below their documented rates and neither
+is explained. This is **not** a CPU problem — the machine is 98.6 % idle. Likely
+candidates are the RPLidar scan mode (`Express`, 3.9K points) and the firmware's
+50 Hz IMU report interleaving. Both need chasing before Phase 4 tunes anything
+against them, because a filter fed at 45 Hz while told it gets 50 Hz will be
+quietly wrong.
+
 ### What is still missing from this baseline
 
-The Phase 0 gate asks for **idle and driving**. Only idle exists, because the
-Beelink is not mounted and no hardware is attached. Still to record, and Phases
-3, 5 and 6 cannot set real CPU targets until they are:
+The Phase 0 gate asks for **idle and driving**. Idle and stack-up now exist.
+Everything involving wheels turning does not, and Phases 3, 5 and 6 cannot set
+real CPU targets until it does:
 
-- Whole stack up, robot stationary
-- Driving under teleop
-- Driving with Nav2 + SLAM + depth
+- [x] Bare machine idle
+- [x] Whole stack up, robot stationary
+- [ ] Driving under teleop
+- [ ] Driving with Nav2 + SLAM + depth
+- [ ] **P-1…P-5** — rail behaviour with motors drawing current
+
+The last one is the important one and it is not merely a CPU measurement. The
+battery reads 12.90–13.00 V with the Beelink idle on the shared rail, which is
+healthy — but no motor has drawn current yet, and that is the entire question
+the converter's 0.5 V margin poses.
 
 > `powersave` is the governor the installer left. On `amd-pstate` that is not
 > the old ondemand behaviour and is probably fine, but it has **not** been

@@ -31,8 +31,9 @@ Measured on the machine itself, 2026-08-03, on a bench.
 | Network | WiFi `wlo1` up; Gigabit Ethernet `enp1s0` present, unused |
 | Firmware | SER5HU01, 2024-10-28 |
 
-**Not yet installed:** ROS 2, `colcon`, `rosdep`, `gcc`/`cmake`, `node`,
-PlatformIO. See [[computer-setup]].
+**Software installed and verified 2026-08-03** — ROS 2 Jazzy, Nav2,
+slam_toolbox, rosbridge, twist-mux, RealSense, PlatformIO, Node 20; workspace
+builds 12 packages in 17.9 s. See [[computer-setup]] and [[baseline-results]].
 
 ### Replacing the Raspberry Pi 5
 
@@ -64,8 +65,9 @@ The Beelink cannot.
 | Current | 6 A rated, 10 A with cooling |
 | Protection | 10 A fuse, **battery positive lead, input side** |
 
-> ⚠️ The 19 V target is **assumed from a 65 W Beelink brick and not yet
-> verified against the adapter label**. Confirm before wiring.
+> The 19 V target is **confirmed**: the Beelink's adapter is labelled
+> **19 V / 3.42 A (65 W)**, read 2026-08-03. The boost converter is the right
+> part and the load figures below are the real ones.
 
 Load, at ~90 % efficiency and 19 V / 65 W: **3.4 A out**, **5.6 A in** at
 12.8 V, rising to **~6.9 A** as the battery sags to 10.5 V. The fuse sits on
@@ -103,7 +105,7 @@ time, not memory. See [[firmware-architecture]] and [[rosmaster-board]].
 | 4 × AM2857 H-bridge | **used** | 20 kHz PWM, period 3600, deadzone 1600 |
 | 4 × JGB37-520 motors | **used** | 30:1 gearbox, 333 RPM no-load @ 12 V |
 | 4 × quadrature encoders | **used** | 1320 CPR; **directions verified 2026-08-02** |
-| ICM-20948 IMU (SPI2) | **used** | ±500 dps, ±2 g, AK09916 magnetometer |
+| ICM-20948 IMU (SPI2) | **used, 6-axis** | ±500 dps, ±2 g. The AK09916 magnetometer is on the die but **disabled** — removed 2026-04-28 |
 | Battery ADC | **used** | 4S LiFePO4, divider 4.03, sampled 1 Hz |
 | Buzzer (PC5) | **used** | |
 | SSD1306 OLED 128×64 | **partly used** | Firmware draws it; no serial command exists (`0x41` undefined) |
@@ -161,15 +163,15 @@ USB 3-rated cable.
 
 ## Missing software the hardware implies
 
-The Beelink is a **fresh Ubuntu Server install — none of this exists yet**,
-including ROS 2 itself. Full sequence in [[computer-setup]]. What matters
-beyond the obvious:
+Installed 2026-08-03 by `scripts/setup_computer.sh`. What matters beyond the
+obvious:
 
 | Package | State | Consequence |
 |---|---|---|
-| ROS 2 Jazzy + `ros-dev-tools` | **not installed** | Nothing runs. Stage 2 of [[computer-setup]] |
-| `ros-jazzy-twist-mux` | **not installed — needed** | No arbitration between the four `/cmd_vel` publishers — see [[command-pipeline]]. This was the gap on the Pi too; install it this time |
-| `ros-jazzy-realsense2-camera` | **not installed — now wanted** | Depth is enabled by decision; on the Pi this driver was deliberately bypassed |
+| ROS 2 Jazzy + `ros-dev-tools` | **installed** | |
+| `ros-jazzy-twist-mux` | **installed** | Closes the gap that existed for the Pi's whole life — four `/cmd_vel` publishers with nothing arbitrating. Configuring it is Phase 2, see [[command-pipeline]] |
+| `ros-jazzy-realsense2-camera` | **installed** | Depth is enabled by decision; on the Pi this driver was deliberately bypassed |
+| `python3-anthropic`, `python3-mcp` | **pip, not apt** | No apt candidate on 24.04. Installed with `pip --user`; see `orbibot_agent/agent-issues.md` |
 | `ros-jazzy-joy` | not installed — **not needed** | `orbibot_teleop` declares it and subscribes to `/joy`, so that package is dormant. Teleop is web-only by decision; leave it uninstalled |
 | `ros-jazzy-foxglove-bridge` | not installed | Optional; relevant to [[dashboard-design]] |
 

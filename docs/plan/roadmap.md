@@ -94,7 +94,7 @@ has an operating system and nothing else.
 
 | # | Task | Where |
 |---|---|---|
-| 0.1 | Confirm the Beelink's supply voltage **from the adapter label** | bench |
+| ~~0.1~~ | ~~Confirm supply voltage from the adapter label~~ — **done: 19 V / 3.42 A** | bench |
 | 0.2 | Set the boost converter output with a multimeter *before* connecting it | bench |
 | 0.3 | Install ROS 2 Jazzy, toolchain, `twist_mux`, RealSense driver | — |
 | 0.4 | `rosdep` + `colcon build` — 12 packages clean on x86_64 | — |
@@ -110,7 +110,7 @@ Full procedure, including the wiring order that matters: [[computer-setup]].
 
 **Gate**
 
-- Adapter label read; converter output verified at that voltage before load
+- ~~Adapter label read~~ — **done, 19 V / 3.42 A**. Converter output verified at 19.0 V before the Beelink is connected
 - Battery rail stays **> 11.5 V** and converter output **> 18 V** through a
   four-motor full-speed burst
 - Ten motor start/stop cycles with the Beelink logged in: **no reboot**, no

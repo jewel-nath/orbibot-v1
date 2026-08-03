@@ -24,8 +24,9 @@ off this machine; the rest are vendor specification and should be confirmed.
 | Storage | 457 GB NVMe SSD, 425 GB free | measured |
 | OS | Ubuntu 24.04.4 LTS Server | measured |
 | BIOS | SER5HU01, 2024-10-28 | measured |
-| Input Voltage | **19V DC — verify against the adapter label** | assumed |
-| Power Consumption | ~15W idle, ~65W peak | assumed |
+| Input Voltage | **19V DC** | adapter label, 2026-08-03 |
+| Supply current rating | **3.42A (65W)** | adapter label, 2026-08-03 |
+| Power Consumption | ~15W idle, ~65W peak | vendor estimate |
 
 #### Connectivity & I/O
 - **Wireless:** Intel AX200 — WiFi 6 + Bluetooth 5.2 *(BT controller measured)*
@@ -258,7 +259,7 @@ the Beelink needs ~19V at up to 65W, which no existing rail provides.
 | | Value |
 |---|---|
 | Input | 12.8V nominal (10.5V BMS cutoff – 14.6V full charge) |
-| Output | **19V — pending confirmation against the adapter label** |
+| Output | **19V** — confirmed against the adapter label 2026-08-03 (19V / 3.42A) |
 | Output current | ~3.4A (65W ÷ 19V) — 57% of the 6A rating |
 | Input current | ~5.6A at 12.8V; ~6.9A at 10.5V |
 | Efficiency assumed | ~90% |
