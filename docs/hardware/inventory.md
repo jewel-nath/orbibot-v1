@@ -81,17 +81,20 @@ in [[computer-setup]] settle this; none have been taken.
 
 STM32F103RCT6, Cortex-M3 @ 72 MHz, **no FPU**. FreeRTOS, 4 tasks.
 
+Rebuilt on the Beelink 2026-08-03, GCC 12.3.1 (`arm-none-eabi`), 89 s:
+
 | Resource | Used | Free |
 |---|---|---|
-| Flash 256 KB | 28.4 KB (10.9 %) | **~228 KB** |
-| RAM 48 KB | 19.9 KB (40.4 %) | ~29 KB |
+| Flash 256 KB | 24.7 KB (9.7 %) | **~231 KB** |
+| RAM 48 KB | 21.6 KB (45.1 %) | ~26 KB |
 
-Measured with GCC 12.3 on the Pi, before the migration. The figures are the
-STM32's and do not change with the host — but re-confirm them once the
-firmware builds on the Beelink's PlatformIO toolchain, since the ARM
-cross-compiler version may differ. There is a lot of room for new firmware
-features; the binding constraint is CPU time, not memory. See
-[[firmware-architecture]] and [[rosmaster-board]].
+The previous entry read 28.4 KB flash / 19.9 KB RAM, measured on the Pi. Flash
+went **down** and RAM **up** since then — the toolchain version is the same, so
+that is the firmware source changing, not the host. Nothing here depends on
+which computer does the compiling; the numbers are the STM32's.
+
+There is a lot of room for new firmware features; the binding constraint is CPU
+time, not memory. See [[firmware-architecture]] and [[rosmaster-board]].
 
 ### Board peripherals
 

@@ -43,12 +43,28 @@ Roughly **4–6× the CPU**, and the architecture change matters as much as the
 speed: on x86_64, librealsense, Nav2 and most ROS binaries are first-class
 rather than an ARM afterthought.
 
-**Done:** Ubuntu Server 24.04.4 installed, WiFi up (`wlo1`, 192.168.0.20),
-GitHub SSH authenticating, repo cloned to `~/orbibot_ws`.
+**Software: done, 2026-08-03.** `./scripts/setup_computer.sh verify` passes
+clean. ROS 2 Jazzy, Nav2, slam_toolbox, rosbridge, **twist-mux**, RealSense
+driver, PlatformIO, Node 20. Workspace builds — **12 packages in 17.9 s**.
+`joy` deliberately absent. Baseline in [[baseline-results]].
 
-**Not done:** everything else. No ROS 2, no `colcon`, no `rosdep`, no
-`gcc`/`cmake`, no `node`/`npm`, no PlatformIO. No robot hardware attached — no
-LiDAR, no `/dev/motordriver`, no camera.
+Verified working, not just installed:
+
+| Check | Result |
+|---|---|
+| `ros2 pkg list` | 12 orbibot packages visible |
+| `ros2 interface list` | `orbibot_msgs` messages and services generated |
+| `ros2 pkg executables twist_mux` | resolvable |
+| URDF xacro expands | 13 links, 16 joints, `base_footprint` present |
+| Frontend `npm run build` | 816 K `dist/` |
+
+**Hardware: nothing attached.** No LiDAR, no `/dev/motordriver`, no camera. The
+Beelink is on a bench running from its own mains adapter, and **Stage 0 has not
+been done at all** — the converter is not set, the fuse is not wired, and the
+adapter label has not been read.
+
+Group membership (`dialout`, `plugdev`, `video`) is applied in `/etc/group` but
+needs a re-login to take effect in a running shell.
 
 **Decisions taken 2026-08-03** (see [[roadmap]]):
 
@@ -162,9 +178,21 @@ failure resumes rather than repeating:
 The stages below explain **what it does and why**. Read them; the script is
 deliberately not self-explanatory about the decisions baked into it.
 
-> `sudo` is in the deny list in `.claude/settings.json`, so Claude Code cannot
-> run this — the operator does. That block was added when Claude Code ran on
-> the live robot and is worth keeping.
+> **On sudo.** `.claude/settings.json` denied `Bash(sudo:*)` outright, which is
+> the right default once the robot is live. For the 2026-08-03 setup that deny
+> was replaced with scoped allows, plus a temporary
+> `/etc/sudoers.d/99-orbibot-setup` granting passwordless sudo.
+>
+> Scoping the sudoers entry to `apt-get` would have been theatre — installing a
+> package runs maintainer scripts as root — so it was granted plainly and
+> **removed when setup finished**:
+>
+> ```bash
+> sudo rm /etc/sudoers.d/99-orbibot-setup
+> ```
+>
+> If you are reading this before a future re-setup: grant it, then remove it.
+> Do not leave it in place once the robot can move.
 
 ---
 
