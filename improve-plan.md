@@ -1,273 +1,207 @@
-# OrbiBot — Improvement Plan (from lgdxrobot2 Study)
+# OrbiBot — Improvement Plan
 
-Reference: `lgdxrobot2` open-source project (ICM-20948, mecanum wheels, STM32F411)
-Last updated: 2026-03-23
+What to improve, why, and what is already settled. Originally written
+2026-03-23 as a comparison against `lgdxrobot2` (an open-source mecanum robot
+on an STM32F411 with the same ICM-20948 IMU).
 
----
+**Rewritten 2026-08-03.** Much of the original was overtaken by events: the
+magnetometer was deleted, an accelerometer fault was found and fixed, and the
+robot's computer was replaced. The comparison is still useful and is kept. The
+conclusions drawn from it in March were not all correct, and the wrong ones are
+corrected below rather than quietly dropped.
 
-## Full Comparison: OrbiBot vs lgdxrobot2
-
-### Architecture
-
-| Feature | OrbiBot | lgdxrobot2 | কোনটা ভালো |
-|---------|---------|-----------|-----------|
-| **MCU** | STM32F103RCT6 (72MHz) | STM32F411 (100MHz) | lgdx (faster) |
-| **RTOS** | FreeRTOS (4 tasks, priorities) | Bare-metal (timer ISR) | **OrbiBot** (safer) |
-| **Communication** | UART 115200 baud (~11.5 KB/s) | USB CDC (~12 Mbps) | **lgdxrobot2** (faster) |
-| **Main loop** | 4 FreeRTOS tasks at different rates | Single timer ISR (100Hz all-in-one) | **OrbiBot** (isolated) |
-| **Watchdog** | IWDG via task_monitoring | None | **OrbiBot** |
-| **ROS2 agent** | Python (rclpy) | C++ (rclcpp) | **lgdxrobot2** (faster) |
-
-### PID & Motor Control
-
-| Feature | OrbiBot | lgdxrobot2 | কোনটা ভালো |
-|---------|---------|-----------|-----------|
-| **PID type** | Incremental PID | Positional PID | Both valid |
-| **PID levels** | Single (all speeds) | 3-level speed-dependent interpolation | lgdx (more flexible) |
-| **Per-motor gains** | Same gains for all 4 | Different gains per motor × per level | **lgdxrobot2** |
-| **Per-motor max speed** | Assumed uniform | Measured: {12.85, 12.06, 11.74, 10.47} rad/s | **lgdxrobot2** |
-| **Anti-windup** | Conditional integral clamp | Back-calculation (undo trapezoidal) | Both good |
-| **PID tuning tool** | ROS2 topic-based (`/orbibot/pid_params`) | Qt GUI with real-time chart | **lgdxrobot2** |
-| **Flash persistence** | ✅ PID in flash | ✅ PID + mag + max speed in flash | Both |
-| **Velocity ramp** | Asymmetric (instant accel, gradual decel) | Symmetric (`MOTOR_SPEED_RAMP=0.1` rad/s/tick) | **OrbiBot** (smoother) |
-| **Yaw PID** | ✅ Heading drift compensation from IMU | None | **OrbiBot** |
-| **Encoder anomaly filter** | ✅ Discard > MAX_WHEEL_SPEED_MMS | Discard > max_speed (use last valid) | **Both** (now matched) |
-| **PID output normalization** | Raw PWM counts | Normalized by max_speed before PWM | lgdx (more portable) |
-| **Command timeout** | ✅ CRIT-3 safety stop | None in firmware | **OrbiBot** |
-
-### Odometry
-
-| Feature | OrbiBot | lgdxrobot2 | কোনটা ভালো |
-|---------|---------|-----------|-----------|
-| **Integration method** | RK2 (midpoint) | Euler | **OrbiBot** (less drift) |
-| **Covariance** | Adaptive (grows with distance, decays) | None | **OrbiBot** |
-| **Position tracking** | Firmware-side + EKF | Firmware-side + EKF | Both |
-| **Heartbeat re-publish** | ✅ (late-joiner support) | No | **OrbiBot** |
-| **Deduplication** | ✅ (skip unchanged frames) | No | **OrbiBot** |
-
-### IMU & Sensors
-
-| Feature | OrbiBot | lgdxrobot2 | কোনটা ভালো |
-|---------|---------|-----------|-----------|
-| **Gyro calibration** | 1000 samples | 500 samples | **OrbiBot** |
-| **Accel calibration** | ✅ X/Y bias at startup | X/Y/Z bias + gravity removal | **Both** |
-| **Covariance** | ✅ Firmware startup Welford variance + ROS2 script | Firmware rolling 500-sample variance | **OrbiBot** (stationary = correct noise) |
-| **Mag calibration** | ✅ Python yaml + ellipsoid fit option | Flash (3x3 matrix + ellipsoid fit) | **Both** (OrbiBot now has ellipsoid) |
-| **Madgwick `zeta`** | 0.001 (drift correction) | 0.0 (none) | **OrbiBot** |
-| **Madgwick `orientation_stddev`** | 0.05 (~3°) | 0.0 ("perfect") | **OrbiBot** |
-| **EKF frequency** | ✅ 25Hz | 50Hz | lgdx (faster, C++ node) |
-| **Firmware attitude** | Complementary filter (debug) | None | **OrbiBot** |
-
-### E-Stop & Safety
-
-| Feature | OrbiBot | lgdxrobot2 | কোনটা ভালো |
-|---------|---------|-----------|-----------|
-| **Software e-stop** | ✅ | ✅ | Both |
-| **Hardware e-stop** | Battery lockout | GPIO pin + DRxSTBY | **lgdxrobot2** (dedicated pin) |
-| **Battery low e-stop** | ✅ (critical voltage lockout) | ✅ (separate e-stop type) | Both |
-| **Watchdog** | IWDG + task alive kicks | None | **OrbiBot** |
-| **Command timeout** | ✅ (configurable) | None | **OrbiBot** |
+Execution order lives in [[roadmap]]. This document is the *why*.
 
 ---
 
-## ✅ Completed (2026-03-23)
+## Corrections — things this document previously got wrong
 
-| # | Item | Where Fixed | Changelog |
-|---|------|------------|-----------|
-| 4 | Fix misleading `imu0_relative` comments | `ekf_params.yaml` | `localization-changelog.md` |
-| 3 | EKF frequency 15→25Hz | `ekf_params.yaml` | `localization-changelog.md` |
-| 5 | Madgwick params → yaml file | `madgwick_params.yaml` + `localization.launch.py` | `localization-changelog.md` |
-| 1 | Firmware accel X/Y bias calibration | `imu_driver.c` + `imu_driver.h` | `firmware-changelog.md` |
-| 2a | IMU noise measurement script (ROS2 side) | `measure_imu_noise.py` + `setup.py` | `localization-changelog.md` |
-| 2b | Firmware startup variance (Welford) | `imu_driver.c` + `imu_driver.h` | `firmware-changelog.md` |
-| 11 | IMU topic architecture docs | `hardware/README.md` | `hardware-changelog.md` |
-| 12 | Encoder anomaly detection | `task_control.c` + `orbibot_config.h` | `firmware-changelog.md` |
-| 13 | Per-axis IMU covariance | `hardware_node.py` + `hardware_params.yaml` | `hardware-changelog.md` |
-| 14 | Mag calibration architecture cleanup | `hardware_node.py` + `hardware_params.yaml` | `hardware-changelog.md` |
-| 15 | Ellipsoid fitting for mag calibration | `calibrate_magnetometer.py` | `localization-changelog.md` |
-| 16 | PID tuning procedure documentation | `firmware/README.md` | `firmware-changelog.md` |
-| 17 | Per-motor max speed test — 0.1% variation (excellent) | `test_motor_max_speed.py` | this file |
-| 18 | Measured real IMU noise covariance | `hardware_params.yaml` | `hardware-changelog.md` |
-| 19 | Fixed measure_imu_noise QoS mismatch | `measure_imu_noise.py` | `localization-changelog.md` |
+Kept visible on purpose. `.claude/rules/docs-sync.md` exists because a
+confidently wrong note is worse than no note, and three of these shipped as
+fact for months.
 
----
+### ✗ "Motors are uniform — per-motor max speed config not needed"
 
-## Hardware Test Results (2026-03-24)
+**This conclusion does not follow from the test that produced it.**
 
-### Per-Motor Max Speed Measurement — ✅ DONE
-
-**Result: 0.1% variation — lgdxrobot2 এর 23% এর তুলনায় excellent!**
+The March measurement drove each motor to a **commanded 1000 mm/s with PID
+closing the loop**, and all four landed within ±10 mm/s:
 
 ```
-Motor          Avg (mm/s)  Avg (rad/s)   Max (mm/s)
-M1 (FL)            1000.4        20.01       1021.5
-M2 (BL)            1001.3        20.03       1021.5
-M3 (FR)            1001.3        20.03       1023.9
-M4 (BR)            1000.7        20.01       1018.9
+M1 (FL) 1000.4    M2 (BL) 1001.3    M3 (FR) 1001.3    M4 (BR) 1000.7  mm/s
 ```
 
-- Firmware velocity clamp (1.0 m/s) prevents reaching absolute max
-- PID achieves target speed ±10 mm/s on all motors — excellent tuning
-- **Per-motor max speed config NOT needed** — motors are uniform
-- Current `MAX_WHEEL_SPEED_MMS = 3500` is fine (2× theoretical)
+That is a measurement of **closed-loop tracking at a speed all four motors can
+comfortably reach** — not of maximum speed. The same section noted that the
+firmware's 1.0 m/s clamp prevented any motor from reaching full PWM, and then
+concluded uniformity anyway.
 
-### IMU Noise Covariance — ✅ MEASURED
+On 2026-04-19, `firmware-issue.md` recorded the opposite from the other
+direction: **M4 reports 12–15 % fewer encoder ticks than M1–M3 across every
+motion type**, with the PID compensating by feeding it more PWM. Both
+observations are true. A motor that needs more PWM for the same speed has less
+headroom, and the test that "proved uniformity" was structurally incapable of
+seeing it.
+
+**Status: open.** Roadmap 1.7 — measure at full PWM, wheels free, per wheel.
+If M4 is >10 % down at no load, it is mechanical: bearings, gear mesh, or wheel
+alignment.
+
+### ✗ "Accel Z reads 15.35 m/s² — investigate the scale factor"
+
+**Resolved 2026-08-03, and the original diagnosis was the expensive kind of
+wrong.** It was not a scale factor. A register was left misconfigured, and a
+compensation factor derived from the wrong explanation shipped for four months
+— making two axes worse while making the third look right.
+
+Now verified: `|a| = 9.802 m/s²`, ratio to g **0.9995** (`test-report.md` §9.4).
+
+The lesson is Principle 3 in [[roadmap]]: fix the cause, not the reading.
+
+### ✗ Everything about the magnetometer
+
+Items 14, 15 and "mag calibration flash persistence" are **void**. The
+magnetometer was removed on 2026-04-28 across firmware, driver and messages —
+indoors, steel and motor currents made heading worse than useless. Madgwick
+runs `use_mag: false`. Do not propose bringing it back.
+
+`orbibot_localization/README.md` still describes it — [[backlog-moc]] CC-4.
+
+### ⚠ The measured IMU noise covariances are suspect
 
 ```
 Accel variance: X=0.000081 Y=0.000053 Z=0.000041 (m/s²)²
 Gyro  variance: X=0.000001 Y=0.000026 Z=0.000001 (rad/s)²
 ```
 
-- Previous hardcoded: accel=0.01, gyro=0.0025 (100× too high!)
-- Measured values now in hardware_params.yaml → EKF will trust IMU much more
-- Gyro Y axis noisier than X/Z (PCB mounting / manufacturing)
+Measured 2026-03-24 and written into `hardware_params.yaml`. They were taken
+**through the faulty accelerometer path**, and through a raw-IMU path that a
+length check was silently dropping. Re-measure — [[backlog-moc]] CC-3, roadmap
+4.1.
 
-**Note:** Accel Z mean = 15.35 m/s² (expected ~9.81) — investigate accel scale factor
+### ⚠ Every CPU-justified conclusion
 
----
-
-## Remaining Items
-
-### [MEDIUM] Madgwick `gain` Tuning (hardware required)
-
-Test `gain: 0.05` vs `0.1` on actual robot — compare orientation stability at stop.
-
-### [MEDIUM] Accel Z Scale Investigation
-
-Accel Z mean = 15.35 m/s² instead of 9.81. Possible causes:
-- Firmware accel scale factor wrong (±2G range → scale = 16384 LSB/g, check)
-- Robot not level during measurement
-- Need to verify with `test_imu.py` while robot confirmed level
-
-### [LOW] Mag Calibration Flash Persistence (hardware required)
-
-Move mag correction from Python yaml to firmware flash (like lgdxrobot2).
+"EKF 25 Hz — lgdxrobot2 is faster because it uses a C++ node" and similar were
+really about the Pi running out of cores. The Pi is gone. Re-derive from a
+measured baseline rather than rescaling — roadmap 4.5.
 
 ---
 
-## Remaining Items — PID & Motor Control (NEW from lgdxrobot2 study)
+## Comparison with lgdxrobot2
 
-### ✅ [DONE] Per-Motor Max Speed Measurement
+Corrected where the March version was wrong. Still the most useful external
+reference this project has.
 
-**Result:** OrbiBot motors vary only 0.1% (vs lgdxrobot2's 23%). No per-motor config needed.
-Test script: `tests/test_motor_max_speed.py`
+### Architecture
 
-### [MEDIUM] PID Tuning WebGUI Page (future feature)
+| Feature | OrbiBot | lgdxrobot2 | Better |
+|---------|---------|-----------|--------|
+| **MCU** | STM32F103RCT6 (72 MHz) | STM32F411 (100 MHz) | lgdx |
+| **RTOS** | FreeRTOS, 4 tasks, priorities | Bare-metal timer ISR | **OrbiBot** |
+| **Host link** | UART 115200 (~11.5 KB/s) | USB CDC (~12 Mbps) | **lgdx** |
+| **Main loop** | 4 tasks at different rates | Single 100 Hz ISR | **OrbiBot** |
+| **Watchdog** | IWDG + task alive kicks | None | **OrbiBot** |
+| **ROS 2 node** | Python (rclpy) | C++ (rclcpp) | lgdx |
 
-Single PID যথেষ্ট — systematic tuning procedure documented in `firmware/README.md` (✅ done).
+The 115200 baud link is the one real architectural deficit and it is **not**
+fixed by the new computer — it is a firmware and cabling property. Worth
+revisiting only if telemetry rate becomes a measured bottleneck.
 
-**Remaining:** `orbibot_webgui` তে PID tuning page (step response graph) যোগ করলে
-visual tuning সহজ হবে। lgdxrobot2 এর chassistuner Qt app এর মতো — target velocity set →
-real-time motor response graph দেখো → P, I, D adjust করো live।
+### PID and motor control
 
-**Effort:** 4-6h (webgui scope)
+| Feature | OrbiBot | lgdxrobot2 | Better |
+|---------|---------|-----------|--------|
+| **PID type** | Incremental | Positional | Both valid |
+| **PID levels** | Single | 3-level speed-interpolated | lgdx |
+| **Per-motor gains** | Same for all 4 | Per motor × per level | lgdx |
+| **Per-motor max speed** | ⚠ **unmeasured** — see Corrections | Measured: {12.85, 12.06, 11.74, 10.47} rad/s | **lgdx** |
+| **Anti-windup** | Conditional integral clamp | Back-calculation | Both good |
+| **Tuning tool** | ROS 2 topic | Qt GUI, live chart | lgdx |
+| **Flash persistence** | ✅ PID | ✅ PID + max speed | Both |
+| **Velocity ramp** | Asymmetric — instant accel, gradual decel | Symmetric 0.1 rad/s/tick | **OrbiBot** |
+| **Yaw PID** | ✅ IMU heading compensation | None | **OrbiBot** |
+| **Command timeout** | ✅ 2 s, verified live | None | **OrbiBot** |
 
-### [MEDIUM] PID Output Normalization
+### Odometry
 
-**lgdxrobot2 `motor.c:426`:**
-```c
-pid_output[i] = roundf(((pid_p + pid_i + pid_d) / motor_max_speed[i]) * pwm_counter_max);
-```
+| Feature | OrbiBot | lgdxrobot2 | Better |
+|---------|---------|-----------|--------|
+| **Integration** | RK2 midpoint | Euler | **OrbiBot** |
+| **Covariance** | Adaptive | None | **OrbiBot** |
+| **Heartbeat re-publish** | ✅ late joiners | No | **OrbiBot** |
+| **Deduplication** | ✅ skip unchanged | No | **OrbiBot** |
 
-PID output কে motor max speed দিয়ে normalize করে PWM এ convert করে।
-এতে PID gains speed-independent থাকে — motor পরিবর্তন করলেও gains একই থাকে।
+RK2 matters when rotation and translation happen together — Euler accumulates
+real error on arcs. `odometry.c` takes the midpoint of the heading change
+before projecting, which costs one extra multiply.
 
-**OrbiBot:** PID output সরাসরি PWM count (incremental PID, no normalization)।
-Current approach কাজ করছে, কিন্তু gains motor-specific (motor/gear ratio পরিবর্তন করলে re-tune লাগবে)।
+### Safety
 
-**Verdict:** Low priority — current single PID working fine. Consider only if motors are replaced.
+| Feature | OrbiBot | lgdxrobot2 | Better |
+|---------|---------|-----------|--------|
+| **Software e-stop** | ✅ | ✅ | Both |
+| **Hardware e-stop** | Battery lockout only | Dedicated GPIO + DRxSTBY | **lgdx** |
+| **Battery low e-stop** | ✅ critical voltage lockout | ✅ | Both |
+| **Watchdog** | IWDG | None | **OrbiBot** |
+| **Command timeout** | ✅ | None | **OrbiBot** |
 
-### [LOW] Speed Ramp Tuning
-
-**lgdxrobot2:** `MOTOR_SPEED_RAMP = 0.1` rad/s per tick (symmetric, both accel and decel)
-**OrbiBot:** `MOTOR_DECEL_RAMP_MMS = 10.0` mm/s per tick (asymmetric — instant accel, gradual decel)
-
-OrbiBot এর asymmetric approach আসলে বেটার — responsive acceleration with smooth deceleration।
-lgdxrobot2 এর symmetric ramp acceleration কে ও slow করে দেয়।
-
-**তবে decel rate ঠিক কিনা verify করো:**
-- Current: 10 mm/s per 100Hz tick = 1000 mm/s² deceleration
-- At 0.5 m/s: stop in 0.5s — reasonable
-- At 0.3 m/s (typical indoor nav): stop in 0.3s — good
-
-**Verdict:** No change needed. OrbiBot's asymmetric ramp is better than lgdxrobot2's symmetric.
-
----
-
-## Remaining Items — Odometry (NEW from lgdxrobot2 study)
-
-### [LOW] Firmware Odometry — Already Better Than lgdxrobot2
-
-**lgdxrobot2 `motor.c:477-479` (Euler integration):**
-```c
-transform[0] += (vx * cos(theta) - vy * sin(theta)) * dt;
-transform[1] += (vx * sin(theta) + vy * cos(theta)) * dt;
-transform[2] += (omega * dt);
-```
-
-**OrbiBot `odometry.c:42-48` (RK2 midpoint integration):**
-```c
-float mid_theta = odom->theta + delta_theta * 0.5f;  // ← midpoint trick
-float delta_x = (vx * cosf(mid_theta) - vy * sinf(mid_theta)) * dt;
-```
-
-RK2 তে rotation + translation simultaneous হলে drift কম। lgdxrobot2 এর Euler method
-circular arc motion এ significant error দেয়। OrbiBot already better — no change needed.
+lgdx's dedicated e-stop pin is the one safety feature OrbiBot lacks. The
+**unused PD2 user button** is the obvious answer and costs no new parts —
+roadmap 2.6.
 
 ---
 
-## OrbiBot Advantages Summary (no change needed)
+## Open items
 
-| Feature | Why OrbiBot is better |
-|---------|----------------------|
-| `orientation_stddev: 0.05` | lgdxrobot2 uses 0.0 — tells EKF "perfect IMU" (wrong) |
-| `zeta: 0.001` | lgdxrobot2 uses 0.0 — no gyro drift correction at all |
-| `imu0_relative: true` | Safer for indoor SLAM — no startup jumps |
-| FreeRTOS 4-task isolation | lgdxrobot2 single bare-metal ISR — less robust |
-| Watchdog (IWDG) | lgdxrobot2 has none |
-| Command timeout (CRIT-3) | lgdxrobot2 has no timeout safety |
-| 1000 gyro calibration samples | lgdxrobot2 uses 500 |
-| IMU driver error handling | WHO_AM_I, timeouts, retries — lgdxrobot2 has none |
-| RK2 odometry integration | lgdxrobot2 uses basic Euler — more drift |
-| Adaptive odometry covariance | lgdxrobot2 sends none |
-| Asymmetric velocity ramp | lgdxrobot2 symmetric ramp slows acceleration |
-| Yaw PID heading compensation | lgdxrobot2 has no yaw control |
-| Odometry deduplication + heartbeat | lgdxrobot2 sends every frame regardless |
+Ordered by what blocks what, and mapped to [[roadmap]].
 
----
+| Item | Why | Phase |
+|---|---|---|
+| **Per-motor max speed, at full PWM** | The March test measured tracking, not capability. M4 is suspect | 1.7 |
+| **Re-tune PID under the new mass** | The Beelink and converter change mass and CG. Existing gains were tuned against the Pi's | 1.6 |
+| **Re-measure IMU noise** | Existing values came through a faulty accel path | 4.1 |
+| **Madgwick `gain` / `zeta`** | With `use_mag: false`, `zeta` is the only thing fighting gyro bias | 4.2 |
+| **Accel X/Y scale under real acceleration** | Z is verified static; X and Y read ~0 either way, and those are the axes a ground robot uses | 1.5 (CC-2) |
+| **Hardware e-stop on PD2** | The one safety feature lgdxrobot2 has and this does not | 2.6 |
+| **`MAX_WHEEL_SPEED_MMS` from measurement** | 3500 is 2× theoretical; too generous a threshold lets EMI spikes through | 1.7 (FW-ISSUE-4) |
+| **Firmware IMU variance → ROS 2** | Firmware computes it via Welford and nothing reads the getter | 4.1 (FW-ISSUE-7) |
+| **PID tuning page in the dashboard** | lgdx's Qt chassistuner, but in the browser. Now affordable | 3 |
 
-## Priority Summary
+### Deliberately not doing
 
-| Priority | Item | Category | Status |
-|----------|------|----------|--------|
-| ~~HIGH~~ | ~~Per-motor max speed measurement~~ | PID/Motor | ✅ Done (0.1% variation) |
-| ~~HIGH~~ | ~~IMU noise measurement~~ | IMU | ✅ Done (yaml updated) |
-| **MEDIUM** | Madgwick gain tuning test | IMU/Localization | ⏳ Hardware required |
-| **MEDIUM** | Accel Z scale investigation | Firmware/IMU | ⏳ Needs verification |
-| **MEDIUM** | PID tuning webgui page | PID/UX | Future feature |
-| **LOW** | Mag flash persistence | Firmware | ⏳ Hardware required |
+| Item | Why |
+|---|---|
+| **PID output normalisation** | lgdx divides PID output by per-motor max speed so gains are motor-independent. Only worth it if motors are replaced |
+| **Symmetric velocity ramp** | OrbiBot's asymmetric ramp — instant accel, 10 mm/s/tick decel — is better. lgdx's symmetric ramp slows acceleration for no gain |
+| **Euler → anything** | Already RK2, already better |
+| **Magnetometer, in any form** | Deleted by decision. See Corrections |
 
 ---
 
-## Test Commands
+## Test commands
 
 ```bash
-# IMU noise measurement (robot stationary, flat, 30 seconds)
-ros2 run orbibot_localization measure_imu_noise
+# EKF rate
+ros2 topic hz /odometry/filtered
 
-# Verify EKF frequency
-ros2 topic hz /odometry/filtered  # Should be ~25Hz
-
-# Check accel bias (X,Y should be near 0 after firmware update)
+# Accel bias (X, Y should sit near 0 on a level robot)
 ros2 topic echo /imu/data_raw --field linear_acceleration --once
 
-# Madgwick config override test
-ros2 launch orbibot_localization localization.launch.py \
-  madgwick_config:=/path/to/custom_madgwick.yaml
+# IMU noise (robot stationary, level, 30 s) — re-run, old values are suspect
+ros2 run orbibot_localization measure_imu_noise
 
-# PID step response test (enable motors first)
+# Per-motor max speed — ROBOT ELEVATED, wheels free, full PWM
+cd src/orbibot_rosmaster_firmware/tests
+python3 test_motor_max_speed.py --port /dev/motordriver
+
+# PID step response — robot on the ground, ≥2 m clear
 ros2 service call /orbibot/set_motor_enable orbibot_msgs/srv/SetMotorEnable '{enable: true}'
-ros2 topic pub --once /cmd_vel geometry_msgs/msg/Twist \
-  "linear: {x: 0.3}, angular: {z: 0.0}"
-# Watch /odom velocity response — should reach 0.3 m/s within 1-2 seconds
+ros2 topic pub --once /cmd_vel geometry_msgs/msg/Twist "linear: {x: 0.3}, angular: {z: 0.0}"
 ```
+
+Read `.claude/rules/robot-safety.md` before any of the last two.
+
+## Related
+
+[[roadmap]] · [[beelink-bringup]] · [[backlog-moc]] · [[lgdxrobot2]] ·
+[[firmware-architecture]]

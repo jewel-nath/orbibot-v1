@@ -23,6 +23,13 @@ should be `1.5 × measured worst-case max`.
 wheel (robot elevated), record steady-state encoder velocity, pick the
 largest and multiply by 1.5.
 
+> ⚠️ **This has been "measured" once already, incorrectly.** A 2026-03-24 run
+> reported 0.1 % variation between motors and concluded per-motor config was
+> unnecessary. That run commanded 1000 mm/s with the PID closing the loop, and
+> the firmware's 1.0 m/s clamp meant **no motor ever reached full PWM** — it
+> measured tracking, not capability, and could not have detected a weak motor.
+> Full PWM, open loop, per wheel. See `improve-plan.md` § Corrections.
+
 ---
 
 ### FW-ISSUE-7: IMU variance never transmitted to ROS 2
