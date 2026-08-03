@@ -130,7 +130,7 @@ If P-2 or P-3 fails, the fixes in order of preference: bulk capacitance across
 the converter input, thicker/shorter battery leads, or raising the software
 low-voltage warning well above 10.5 V.
 
-Record results in `test-report.md`, dated. See [[robot-safety]].
+Record results in `test-report.md`, dated. See `.claude/rules/robot-safety.md`.
 
 ### Runtime
 
@@ -332,7 +332,7 @@ cd ~/orbibot_ws/src/orbibot_rosmaster_firmware
 
 Flashing still needs the manual BOOT0 jumper and RESET — the board has no
 auto-bootloader circuit. That has not changed with the computer. See
-[[robot-safety]].
+`.claude/rules/robot-safety.md`.
 
 ---
 
@@ -392,4 +392,4 @@ back, and they cannot be re-derived without a baseline.
 ## Related
 
 [[roadmap]] · [[inventory]] · [[system-overview]] · [[dashboard-design]] ·
-[[command-pipeline]] · [[robot-safety]]
+[[command-pipeline]] · `.claude/rules/robot-safety.md`

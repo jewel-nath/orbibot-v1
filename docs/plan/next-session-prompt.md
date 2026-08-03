@@ -8,53 +8,92 @@ tags:
 
 # Next Session Prompt
 
-Paste the block below into a fresh Claude Code session (Fable 5) on the robot's
-Pi. Everything else it needs — the phases, the protocol, the measured history —
-it will read for itself.
+Paste the block below into a fresh Claude Code session on the robot's computer.
+Everything else it needs — the phases, the protocol, the measured history — it
+will read for itself.
+
+Rewritten 2026-08-03, when the compute was replaced.
 
 ---
 
 ## The prompt
 
 ```text
-আমরা OrbiBot-এ Phase 1 শুরু করব।
+আমরা OrbiBot-এ Phase 0 চালিয়ে যাচ্ছি — নতুন কম্পিউটার সেটাপ।
 
 শুরু করার আগে পড়ে নাও:
-  docs/plan/roadmap.md            — ধাপগুলো আর প্রতিটার gate
-  .claude/rules/robot-safety.md   — রোবট ছোঁয়ার নিয়ম
-  docs/moc/backlog-moc.md         — খোলা finding কোথায় কোথায় আছে
-  src/orbibot_rosmaster_firmware/test-report.md — এ পর্যন্ত যা মাপা হয়েছে
+  docs/operations/computer-setup.md — এই মুহূর্তের কাজ, ধাপে ধাপে
+  docs/plan/roadmap.md              — নয়টা phase আর প্রতিটার gate
+  .claude/rules/robot-safety.md     — রোবট আর পাওয়ার ছোঁয়ার নিয়ম
+  docs/moc/backlog-moc.md           — খোলা finding কোথায় কোথায় আছে
 
-Phase 1-এর কাজগুলো একটা একটা করে ধরবে, লাফ দেবে না।
-প্রতিটার পরে: হার্ডওয়্যারে টেস্ট → সংখ্যা লিখে রাখো → commit করো।
-Phase 1-এর gate না মিটলে Phase 2-এ যাবে না।
+অবস্থা: Raspberry Pi 5 বাদ দেওয়া হয়েছে — যেকোনো real workload-এ
+চারটা কোরই 100% হয়ে যেত। এখন Beelink SER5 Pro (Ryzen 7 PRO 5800H,
+8C/16T, x86_64, 11.6 GiB, 457G NVMe)।
+
+Beelink এখনো রোবটে লাগানো হয়নি — টেবিলে, নিজের charger-এ চলছে।
+কোনো হার্ডওয়্যার লাগানো নেই: motor board নেই, LiDAR নেই, camera নেই।
+মানে এখন কোনো কমান্ডে চাকা ঘুরবে না — কিন্তু অপারেটর যেকোনো সময়
+তার লাগিয়ে দিতে পারে, আর তোমাকে বলা হবে না। ধরে নেবে না;
+/dev/motordriver আছে কিনা দেখে নেবে।
+
+তোমার sudo নেই — .claude/settings.json এ deny করা আছে, ইচ্ছে করেই।
+ইনস্টলের কাজ অপারেটর করবে: ./scripts/setup_computer.sh
+তুমি স্ক্রিপ্ট লিখবে/ঠিক করবে, আর ./scripts/setup_computer.sh verify
+দিয়ে কী হয়েছে কী বাকি দেখবে।
 
 আমি রোবটের পাশে আছি। যা করতে বলবে করব — কিন্তু আমাকে
-স্পষ্ট করে বলতে হবে, একবারে একটা কাজ, তারপর অপেক্ষা করবে:
+স্পষ্ট করে বলতে হবে, একবারে একটা কাজ, তারপর অপেক্ষা করবে।
 
-  - firmware flash করার আগে: BOOT0 jumper কোন দিকে, RESET কখন চাপব
-  - মোটর চালানোর আগে: রোবট উপরে (চাকা ফাঁকা) নাকি নিচে দরকার
-  - জায়গা লাগলে: কতটুকু ফাঁকা লাগবে
+পাঁচটা জিনিস মনে রাখবে:
+  - Power: এক ব্যাটারি থেকেই সব। 12.8V → RBD-2767 boost → 19V → Beelink,
+    আর সেই একই পয়েন্ট থেকে ROSMaster board। 10A fuse ইনপুট দিকে।
+    Beelink লাগানোর আগে multimeter দিয়ে converter output মাপতেই হবে।
+  - CPU দিয়ে justify করা প্রতিটা tuning value এখন অচল — nav2_params,
+    slam_params, dashboard budget। ওগুলো TODO দিয়ে মার্ক করা আছে।
+    scale করবে না, নতুন করে মেপে বের করবে।
+  - Magnetometer নেই, ইচ্ছে করেই বাদ। ফেরত আনার প্রস্তাব দেবে না।
+  - Teleop শুধু web dashboard থেকে — joy ইনস্টল করবে না।
+  - `raspberry_pi` branch হল Pi-যুগের ব্যাকআপ। ছোঁবে না, merge করবে না,
+    আর কখনো force-push করবে না।
 
-রোবট এখন একটা টুলের উপরে, চাকা ফাঁকা। নিচে নামাতে হলে বলো।
-
-তিনটে জিনিস মনে রাখবে:
-  - Magnetometer নেই, ইচ্ছে করেই বাদ দেওয়া। ফেরত আনার প্রস্তাব দেবে না।
-  - Teleop শুধু web dashboard থেকে — Pi-তে gamepad/joy লাগবে না।
-  - `restructure-aug03` branch আর `pre-reconcile-aug03` tag ব্যাক-আপ,
-    পুরোনো একটা ইতিহাসের। ওগুলো ছোঁবে না, merge করবে না,
-    আর কখনো force-push করবে না। `main` GitHub-এর সাথে মিলে আছে।
-
-আরেকটা কাজ আছে: docs/ আর src/<pkg>/README.md আমি আগের সেশনে
-কোড পড়ে লিখেছি, কিন্তু ক্রস-চেক করা হয়নি। কোনো package-এ কাজ
-করার আগে ওর ডক আর কোড মিলিয়ে দেখো — না মিললে কোড জেতে,
-ডকটা বাগ, ঠিক করে দাও।
-
-কাজ শুরুর আগে বলো: Phase 1-এর কোন কাজটা প্রথমে ধরছ আর কেন,
-আর তার জন্য রোবট কোন অবস্থায় লাগবে।
+কাজ শুরুর আগে বলো: Phase 0-এর কোন ধাপটা এখন বাকি আর কেন,
+আর তার জন্য আমাকে কী করতে হবে।
 ```
 
 ---
+
+## Where things stand — 2026-08-03
+
+- **The computer changed today.** Pi 5 → Beelink SER5 Pro. Roughly 4–6× the
+  CPU, and x86_64 instead of aarch64. The Pi's state is on the `raspberry_pi`
+  branch; do not delete or merge it.
+- **The Beelink is on a bench, on its own charger.** Nothing is wired to it and
+  ROS 2 is not installed. `./scripts/setup_computer.sh verify` reports what is
+  present.
+- **The operator is mid-way through the electronics.** Boost converter and 10 A
+  fuse are bought; wiring is not finished.
+- **The firmware is unaffected.** Everything verified in `test-report.md` is
+  STM32-side and survived the host swap — that is the two-computer split in
+  [[system-overview]] working as designed.
+
+### Decisions taken today
+
+| Decision | Consequence |
+|---|---|
+| One battery for robot and computer | 12.8 V node feeds ROSMaster *and* the boost converter. Motor transients land on the computer's rail |
+| Pi 5 removed entirely, not kept | No multi-machine DDS setup to maintain |
+| RealSense depth **enabled** | The driver is back in the graph; the v4l2 bypass in [[dashboard-design]] is superseded |
+| Simulation optional, not now | Possible on this hardware, but off the critical path |
+
+### Open, and blocking
+
+| # | What | Why it blocks |
+|---|---|---|
+| 1 | **Beelink adapter label unread** | The whole 19 V power design assumes 65 W. Some Beelink models are 12 V, which would make the boost converter the wrong part |
+| 2 | P-1…P-5 power measurements | The converter's 10 V minimum sits 0.5 V below the BMS cutoff. A brown-out during an NVMe write corrupts the filesystem |
+| 3 | Robot not re-weighed | Phase 1 calibration against the old mass is wasted work |
+| 4 | No CPU baseline | Phases 3, 5 and 6 have nothing to budget against |
 
 ## What the agent already knows
 
@@ -63,57 +102,23 @@ It does not need telling — these load automatically or it will read them:
 | Source | Gives it |
 |---|---|
 | `CLAUDE.md` | Architecture, build commands, conventions, the docs map |
-| `.claude/rules/robot-safety.md` | BOOT0 sequence, elevated vs ground, stopping, reporting |
+| `.claude/rules/robot-safety.md` | Power/wiring order, BOOT0 sequence, elevated vs ground |
 | `.claude/rules/docs-sync.md` | Which document a change makes untrue |
-| `docs/plan/roadmap.md` | Seven phases and every gate |
+| `docs/operations/computer-setup.md` | The current runbook, stage by stage |
+| `docs/plan/roadmap.md` | Nine phases and every gate |
 | `test-report.md` | What has been verified live, and when |
-| `firmware-issue.md` | What is still open on the board |
 
-## Where things stand — 2026-08-03
+## Phase 0 gate
 
-Read this before wondering why the repo looks the way it does.
-
-- **The board runs firmware built from this branch.** Flashed and verified
-  today: `|a| = 9.802 m/s²`, ratio to g **0.9995**; raw IMU 50 Hz in 12-byte
-  packets. `test-report.md` §9.4 and §9.5.
-- **The workspace builds clean** — 12 packages, ~40 s. The 13th is the firmware,
-  which carries `COLCON_IGNORE`.
-- **`main` is in sync with GitHub.** Today reconciled two histories that had
-  diverged: this Pi's clone had gone stale in March while ~90 commits of work
-  were pushed from elsewhere. GitHub's line won; the verified work from the
-  stale line was replayed on top.
-- **`restructure-aug03` and the tag `pre-reconcile-aug03` are backups** of the
-  stale line. Leave them alone. Do not merge them, and do not force-push.
-
-## Phase 1 at a glance
-
-1.8 and 1.9 need no robot. 1.7 starts **elevated** and finishes on the ground.
-Everything else needs the robot **on the ground**.
-
-| # | Task | Robot state |
-|---|---|---|
-| 1.1 | Wheel radius / encoder CPR — drive a measured 2 m | ground, ~3 m clear |
-| 1.2 | Rotation — 10 × 360° in place | ground, ~1.5 m clear |
-| 1.3 | Yaw drift rate, stationary, 10 min | ground, still |
-| 1.4 | Forward/backward velocity asymmetry | ground |
-| 1.5 | Accel X/Y scale under known acceleration | ground |
-| 1.6 | Re-tune motor PID under load, save to flash | ground |
-| 1.7 | Real max wheel speed per motor; M4's 12–15 % deficit | elevated, then ground |
-| 1.8 | Host-side unit tests | none |
-| 1.9 | One source of truth for the protocol table | none |
-
-**Start with 1.8 and 1.9** — no hardware, and 1.9 removes the class of bug that
-once cost a whole sensor. Then 1.1–1.5 together in one clear-floor session.
-
-## Gate before Phase 2
-
-- Straight 2 m: odometry error **< 3 %**, forward and backward
-- 10 × 360°: accumulated yaw error **< 5°** total
-- Yaw drift, stationary, 10 min: recorded
-- Forward and backward at equal commanded speed agree within **5 %**
-- `|a|` within **1 %** of g through a slow tilt, all three axes
-- Unit tests green with no hardware attached
+- [ ] Adapter label read; converter output set and verified before load
+- [ ] Rail **> 11.5 V** and converter output **> 18 V** through a four-motor burst
+- [ ] Ten motor start/stop cycles, computer logged in: no reboot, no `dmesg` reset
+- [ ] `colcon build` clean, **12 packages**
+- [ ] `/dev/motordriver` and `/dev/lidar` on boot
+- [ ] RealSense at **5000 Mbps**, depth + colour together
+- [ ] New mass and footprint in [[inventory]]
+- [ ] CPU baseline recorded
 
 ## Related
 
-[[roadmap]] · [[backlog-moc]] · [[docs/README|Docs home]]
+[[roadmap]] · [[computer-setup]] · [[backlog-moc]] · [[docs/README|Docs home]]
