@@ -10,35 +10,48 @@ tags:
 
 ## 1. Core Computing Platform
 
-### Raspberry Pi 5 (8GB RAM)
+### Beelink SER5 Pro
 
-| Specification | Value |
-|--------------|-------|
-| Model | Raspberry Pi 5 - 8GB RAM |
-| CPU | 2.4GHz Quad-core 64-bit ARM Cortex-A76 |
-| RAM | 8GB LPDDR4X-4267 |
-| GPU | VideoCore VII (OpenGL ES 3.1, Vulkan 1.2) |
-| Input Voltage | 5V DC |
-| Power Consumption | 15-27W (typical 15-20W) |
-| Maximum Current | 5A |
-| Weight | 45g |
-| Dimensions | 85 × 56 × 17mm |
+Replaced the Raspberry Pi 5 on 2026-08-03. Values marked *measured* were read
+off this machine; the rest are vendor specification and should be confirmed.
+
+| Specification | Value | Source |
+|--------------|-------|--------|
+| CPU | AMD Ryzen 7 PRO 5800H — 8 cores / 16 threads | measured |
+| Architecture | x86_64 | measured |
+| RAM | 11.6 GiB usable (some carved out for the iGPU) | measured |
+| GPU | AMD Radeon Vega (Cezanne), integrated | measured |
+| Storage | 457 GB NVMe SSD, 425 GB free | measured |
+| OS | Ubuntu 24.04.4 LTS Server | measured |
+| BIOS | SER5HU01, 2024-10-28 | measured |
+| Input Voltage | **19V DC — verify against the adapter label** | assumed |
+| Power Consumption | ~15W idle, ~65W peak | assumed |
 
 #### Connectivity & I/O
-- **Wireless:** Dual-band 802.11ac Wi-Fi, Bluetooth 5.0/BLE
-- **Wired:** Gigabit Ethernet
-- **USB Ports:** 2× USB 3.0, 2× USB 2.0
-- **GPIO:** 40-pin header (26 GPIO pins)
-- **Camera:** 2× MIPI CSI connectors
-- **Display:** 2× MIPI DSI connectors
-- **Expansion:** PCIe 2.0 x1 interface
+- **Wireless:** Intel AX200 — WiFi 6 + Bluetooth 5.2 *(BT controller measured)*
+- **Wired:** Gigabit Ethernet (`enp1s0`, present and unused)
+- **USB Ports:** USB 3.2 and USB 2.0; two USB 3.0 root hubs seen by `lsusb`
+- **Display:** HDMI + DisplayPort *(unused — headless server)*
 
-#### Key Features
-- Dual 4K display output with HDR support
-- Real-time clock with battery backup
-- Power Delivery support via USB-C
-- Hardware video encode/decode
-- Secure boot capability
+#### Why it replaced the Pi 5
+
+The Pi 5 saturated all four cores under any real workload — SLAM, Nav2, the
+dashboard or the camera — which made the robot uncontrollable, not just slow.
+
+| | Pi 5 | Beelink SER5 Pro |
+|---|---|---|
+| Cores / threads | 4 / 4 | 8 / 16 |
+| Architecture | aarch64 | x86_64 |
+| RAM | 7.8 GiB | 11.6 GiB |
+| Storage | 58 GB SD card | 457 GB NVMe |
+| Powered from | 5V, ROSMaster Type-C | 19V via DC-DC boost |
+
+The architecture change matters as much as the core count: on x86_64,
+librealsense, Nav2 and most ROS 2 binaries are first-class rather than an ARM
+afterthought. This is what makes RealSense depth viable — see [[inventory]].
+
+**Cost:** roughly 20–25W more draw, and the ROSMaster board can no longer power
+the computer. Both are addressed in §5.
 
 ---
 
@@ -53,7 +66,7 @@ tags:
 | Flash Memory | 256KB |
 | SRAM | 48KB |
 | Input Voltage | 12V DC (9-16V range) |
-| Output Voltage | 5.1V/5A (Type-C to Raspberry Pi) |
+| Output Voltage | 5.1V/5A (Type-C) — **unused since the Pi was removed** |
 | Motor Channels | 4-channel with encoder support |
 | Maximum Current | 10A total (5A per channel) |
 | Board Power | 3-5W |
@@ -73,7 +86,7 @@ tags:
 - Over-current protection
 
 #### Communication Interfaces
-- **Primary:** USB Serial (to Raspberry Pi)
+- **Primary:** USB Serial to the host computer (`/dev/motordriver`, 115200 baud)
 - **Secondary:** CAN bus
 - **RC Control:** SBUS receiver support
 - **GPIO:** 51 programmable I/O pins
@@ -225,6 +238,68 @@ tags:
 | Temperature Protection | Auto thermal monitoring | Prevents thermal runaway |
 | Reverse Polarity | Included | Protection from incorrect wiring |
 
+### DC-DC Boost Converter: RBD-2767
+
+Added 2026-08-03. The Pi 5 ran on 5V from the ROSMaster board's Type-C output;
+the Beelink needs ~19V at up to 65W, which no existing rail provides.
+
+| Specification | Value |
+|--------------|-------|
+| Type | Step-up (boost) — output must exceed input |
+| Rated Power | 150W |
+| Input Range | 10–32V DC |
+| Output Range | 12–35V DC, adjustable via multi-turn potentiometer |
+| Output Current | 6A continuous, 10A peak with cooling |
+| Cooling | Dual heatsinks, toroidal inductor |
+| Terminals | Screw terminals, LED power indicator |
+
+#### Operating point
+
+| | Value |
+|---|---|
+| Input | 12.8V nominal (10.5V BMS cutoff – 14.6V full charge) |
+| Output | **19V — pending confirmation against the adapter label** |
+| Output current | ~3.4A (65W ÷ 19V) — 57% of the 6A rating |
+| Input current | ~5.6A at 12.8V; ~6.9A at 10.5V |
+| Efficiency assumed | ~90% |
+
+#### Protection
+
+**10A fuse, slow-blow, in the battery positive lead on the input side.** The
+input carries 5.6–6.9A, so 10A is a meaningful threshold there. On the output
+side only 3.4A ever flows and a 10A fuse would never blow.
+
+⚠️ **The output voltage must be set with a multimeter before the Beelink is
+connected.** The multi-turn pot ships at an arbitrary position and its range
+reaches 35V.
+
+⚠️ **Margin warning:** the converter's 10V minimum input is only 0.5V below the
+BMS cutoff at 10.5V. Motor transients could brown out the Beelink, and a
+brown-out during an NVMe write corrupts the filesystem. Measurements P-1…P-5
+in [[beelink-bringup]] settle this. None have been taken.
+
+### Power Distribution
+
+```
+4S LiFePO4 12.8V ──┬── 10A fuse ── RBD-2767 boost ── 19V ── Beelink SER5 Pro
+   198.4 Wh        │
+                   └── ROSMaster V3.0 board ──┬── 4× JGB37-520 motors
+                                              ├── 5V rail ── RPLidar A1
+                                              └── STM32 + ICM-20948
+```
+
+The RealSense D435 draws its 1.5–3W from the Beelink's USB 3 port.
+
+#### Energy budget — estimates, not measured
+
+| State | Estimated draw | Estimated runtime on 198.4Wh |
+|---|---|---|
+| Idle, stack up, not driving | ~30W | ~6.5h |
+| Driving with Nav2 + SLAM + dashboard | ~85W | ~2.3h |
+
+The Beelink costs roughly 20–25W more than the Pi did. Plan sessions around
+~2h of active driving until these are replaced with measurements.
+
 ---
 
 ## 6. Mechanical Specifications
@@ -244,3 +319,15 @@ tags:
 - **Width:** 10 inch (254mm)
 - **Height:** 4 inch (101.6mm)
 - **LIDAR Height:** 6 inch (152.4mm)
+
+> ⚠️ **Stale as of 2026-08-03.** These figures, and the ~6kg total mass in
+> [[inventory]], were measured with the Raspberry Pi 5 fitted. The Beelink and
+> its boost converter are heavier and bulkier. Mass and centre of gravity feed
+> traction, PID response and odometry directly, so **re-weigh and re-measure
+> after mounting and before Phase 1 calibration** — see [[roadmap]].
+
+---
+
+## Related
+
+[[inventory]] · [[rosmaster-board]] · [[beelink-bringup]] · [[roadmap]]
