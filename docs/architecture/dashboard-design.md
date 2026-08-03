@@ -10,8 +10,21 @@ tags:
 # Dashboard Design
 
 A dashboard that shows everything and controls everything, while leaving the
-Pi 5 enough CPU to run Nav2. The constraint is not rendering — that happens in
-the operator's browser — it is **what the Pi has to serialise and send**.
+robot's computer enough CPU to run Nav2. The constraint is not rendering — that
+happens in the operator's browser — it is **what the robot has to serialise and
+send**.
+
+> **Rewritten in part on 2026-08-03**, when the Raspberry Pi 5 was replaced by
+> a Beelink SER5 Pro — see [[beelink-bringup]].
+>
+> Much of this document was written against a machine with four cores that was
+> already at 100 %. Some of that advice was really about CPU and is now
+> obsolete; some of it was about **network bytes, browser work and having an
+> explicit data contract**, and survives untouched. They are marked below, and
+> the distinction is worth respecting — deleting the second kind because "we
+> have CPU now" would be a mistake.
+>
+> **Every number in the budget section is void.** They were fitted to the Pi.
 
 ---
 
@@ -25,7 +38,11 @@ Everything expensive falls into one of these:
 
 Each has a different right answer, so they get separate channels.
 
-## Channel 1 — Telemetry (low rate, JSON is fine)
+## Channel 1 — Telemetry (low rate, JSON is fine) · **still correct**
+
+Not a CPU workaround. Fifteen rosbridge subscriptions is fifteen independent
+serialisations *and* fifteen scattered places where the dashboard's data
+contract lives. The extra cores fix the first problem and not the second.
 
 Battery, motor state, safety flags, odom pose, IMU roll/pitch/yaw, CPU, RAM,
 temperature, active `cmd_vel` source, Nav2 state.
@@ -46,7 +63,10 @@ It also decouples display rate from sensor rate: the IMU can run at 50 Hz for
 the EKF while the dashboard sees 10 Hz, which is already faster than anyone can
 read.
 
-## Channel 2 — Visualisation (needs shaping, never raw)
+## Channel 2 — Visualisation (needs shaping, never raw) · **still correct**
+
+The cost here is bytes on the wire and JSON parsing **in the operator's
+browser**, over WiFi. A faster robot computer changes neither.
 
 **LiDAR.** `/scan` is ~360 floats at 10 Hz. As JSON that is tens of KB per
 second of pure serialisation and parse. Send a **decimated, quantised** scan
@@ -62,41 +82,64 @@ array of every cell.
 **Robot pose** rides in the telemetry channel; the map does not need to move
 for the robot to move.
 
-## Channel 3 — Camera (never through ROS)
+## Channel 3 — Camera · **superseded — the premise changed**
 
-The camera is used as a **plain webcam** — colour only. Depth stays off until
-the robot has a machine that can afford it.
+This section previously said: never put the camera through ROS, bypass
+`realsense2_camera`, read `/dev/videoN` with v4l2 inside the WebRTC server. It
+was right for a four-core Pi on a USB 2.0 link with depth switched off.
 
-Today's path is expensive:
+**Depth was enabled by decision on 2026-08-03**, and that invalidates the
+bypass — for a reason that has nothing to do with CPU.
 
-```
-D435 → realsense2_camera → /camera/color/image_raw → WebRTC node → browser
-```
+### The conflict
 
-At 640×480 that topic is 921,600 bytes per frame; at 15 Hz it is **~14 MB/s
-pushed through DDS** purely to hand frames to a node that re-encodes them.
-
-**Do instead**: read the D435's UVC node directly with v4l2/GStreamer inside
-the WebRTC server, and drop `realsense2_camera` from the graph entirely.
+A V4L2 device has **one owner**. When `realsense2_camera` opens the D435 to
+produce depth, librealsense claims the UVC nodes, and a second process cannot
+grab `/dev/videoN` for colour. So this is not available:
 
 ```
-D435 (/dev/videoN, UVC) → GStreamer → WebRTC → browser
+D435 ──► realsense2_camera ──► /camera/depth/*      (perception)
+    └──► v4l2 ──► WebRTC ──► browser                ✗ device already claimed
 ```
 
-The D435 already exposes `/dev/video0`–`/dev/video5`. Confirm which one carries
-colour before wiring it:
+Wanting depth means the driver is in the graph, and everything that wants
+pixels — including the dashboard — has to go through it.
 
-```bash
-sudo apt install v4l-utils
-for v in /dev/video{0..5}; do echo "--- $v"; v4l2-ctl -d $v --list-formats; done
+### What to do instead
+
+```
+D435 ──► realsense2_camera ──┬──► /camera/depth/*        perception, Phase 6
+                             └──► /camera/color/*  ──►  WebRTC ──► browser
 ```
 
-If ROS ever needs an image — the agent's planned vision tools — add an
-**on-demand snapshot service**, not a continuous stream.
+The old objection was that this pushes ~14 MB/s through DDS at 640×480/15 Hz.
+That number is unchanged, but its meaning is: it was a large fraction of a Pi
+and is a small fraction of a Ryzen 7 with 16 threads. Two things make it
+cheaper still, and both are worth doing:
 
-> The camera being on a 480 Mbps link (see [[inventory]]) does not block this.
-> USB 2.0 is fine for a single colour stream. Moving it to a blue port is
-> worth doing when convenient, and becomes required only if depth is revived.
+- **Run the WebRTC encoder as a composable node in the driver's container**, so
+  intra-process comms hands over a pointer instead of copying a frame.
+- **Failing that, subscribe via `image_transport`** and let the driver publish
+  compressed — the browser needs re-encoded frames regardless.
+
+**Unchanged and still right:** do not serialise image topics through rosbridge
+as JSON. WebRTC exists for exactly this. And if ROS needs a still — the agent's
+vision tools — use an **on-demand snapshot service**, not another continuous
+subscriber.
+
+### Alternative worth considering
+
+If the dashboard's video and the perception pipeline end up fighting for
+frame rate or latency, **a second cheap USB webcam for the dashboard** cleanly
+separates them and costs less than the engineering to share one device. The
+Beelink has the USB bandwidth and the CPU. Not needed yet; note it before
+building something clever.
+
+### Prerequisite
+
+Depth needs a real USB 3 link. Confirm **5000 Mbps**, not 480 — blue port,
+USB 3-rated cable, and check with the snippet in [[inventory]]. Below that the
+driver silently drops stream combinations, and this whole section is moot.
 
 ## Serving the frontend
 
@@ -107,8 +150,10 @@ a way to serve a robot dashboard. Build once and serve the static bundle:
 npm run build          # tsc -b && vite build  →  dist/
 ```
 
-Serve `dist/` from any static server. The Pi then spends nothing on the
-frontend; it only answers rosbridge and WebRTC.
+Serve `dist/` from any static server. The robot then spends nothing on the
+frontend; it only answers rosbridge and WebRTC. **This rule survives the
+hardware change** — it was never really about CPU. A dev server on a robot is a
+file watcher and a rebuild loop wired into the control path.
 
 ## Controls the dashboard must own
 
@@ -152,21 +197,44 @@ Requirements that follow from the network being in the control loop:
 `orbibot_teleop` (Pi-side `/joy`) is deliberately not wired up — see
 [[command-pipeline]].
 
-## Budget to hold
+## Budget to hold — **void, pending a new baseline**
 
-Measure, do not assume. Targets on the Pi 5 while driving:
+The table that used to be here read *"< 40 % of 4 cores"*, *"< 75 %"*,
+*"throttled=0x0"*. Every one of those was a Pi 5 number, and the last is a
+`vcgencmd` idiom that does not exist on x86 at all.
+
+**Do not translate them.** A budget derived by scaling old numbers by a guessed
+core ratio is worse than no budget: it looks measured and is not. The Phase 0
+gate in [[beelink-bringup]] requires a fresh baseline on the Beelink — stack
+idle, and stack driving — and the real targets get written here from that.
+
+What survives, because it is about the operator and not the hardware:
 
 | | Target |
 |---|---|
-| Total CPU with dashboard + teleop | < 40 % of 4 cores |
-| Total CPU with dashboard + Nav2 + SLAM | < 75 % |
-| Dashboard's own share | < 10 % |
 | Telemetry latency, sensor → screen | < 200 ms |
 | Camera latency | < 300 ms |
-| Temperature under load | < 70 °C, `throttled=0x0` |
+| Stick released → robot stopped | < 0.3 s |
+
+Latency budgets are perceptual. They did not change because the computer did.
+
+The CPU and thermal rows to be filled in once measured:
+
+| | Measured | Target |
+|---|---|---|
+| Whole stack idle | — | — |
+| Dashboard + teleop | — | — |
+| Dashboard + Nav2 + SLAM + depth | — | — |
+| Dashboard's own share | — | — |
+| CPU package temperature under load | — | — |
+
+Thermals on this machine are read with `sensors` (`lm-sensors`) or
+`/sys/class/thermal/thermal_zone*/temp`, and sustained-clock behaviour from
+`/proc/cpuinfo` — not `vcgencmd`.
 
 Record real numbers as they are measured — a budget nobody checks is decoration.
 
 ## Related
 
-[[roadmap]] · [[command-pipeline]] · [[orbibot_webgui]] · [[inventory]]
+[[roadmap]] · [[beelink-bringup]] · [[command-pipeline]] · [[orbibot_webgui]] ·
+[[inventory]]
