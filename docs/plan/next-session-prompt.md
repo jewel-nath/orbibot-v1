@@ -38,9 +38,12 @@ Phase 1-এর gate না মিটলে Phase 2-এ যাবে না।
 
 রোবট এখন একটা টুলের উপরে, চাকা ফাঁকা। নিচে নামাতে হলে বলো।
 
-দুটো জিনিস মনে রাখবে:
+তিনটে জিনিস মনে রাখবে:
   - Magnetometer নেই, ইচ্ছে করেই বাদ দেওয়া। ফেরত আনার প্রস্তাব দেবে না।
   - Teleop শুধু web dashboard থেকে — Pi-তে gamepad/joy লাগবে না।
+  - `restructure-aug03` branch আর `pre-reconcile-aug03` tag ব্যাক-আপ,
+    পুরোনো একটা ইতিহাসের। ওগুলো ছোঁবে না, merge করবে না,
+    আর কখনো force-push করবে না। `main` GitHub-এর সাথে মিলে আছে।
 
 আরেকটা কাজ আছে: docs/ আর src/<pkg>/README.md আমি আগের সেশনে
 কোড পড়ে লিখেছি, কিন্তু ক্রস-চেক করা হয়নি। কোনো package-এ কাজ
@@ -66,10 +69,26 @@ It does not need telling — these load automatically or it will read them:
 | `test-report.md` | What has been verified live, and when |
 | `firmware-issue.md` | What is still open on the board |
 
+## Where things stand — 2026-08-03
+
+Read this before wondering why the repo looks the way it does.
+
+- **The board runs firmware built from this branch.** Flashed and verified
+  today: `|a| = 9.802 m/s²`, ratio to g **0.9995**; raw IMU 50 Hz in 12-byte
+  packets. `test-report.md` §9.4 and §9.5.
+- **The workspace builds clean** — 12 packages, ~40 s. The 13th is the firmware,
+  which carries `COLCON_IGNORE`.
+- **`main` is in sync with GitHub.** Today reconciled two histories that had
+  diverged: this Pi's clone had gone stale in March while ~90 commits of work
+  were pushed from elsewhere. GitHub's line won; the verified work from the
+  stale line was replayed on top.
+- **`restructure-aug03` and the tag `pre-reconcile-aug03` are backups** of the
+  stale line. Leave them alone. Do not merge them, and do not force-push.
+
 ## Phase 1 at a glance
 
-Everything needs the robot **on the ground** except 1.8 and 1.9, which need no
-robot at all.
+1.8 and 1.9 need no robot. 1.7 starts **elevated** and finishes on the ground.
+Everything else needs the robot **on the ground**.
 
 | # | Task | Robot state |
 |---|---|---|
