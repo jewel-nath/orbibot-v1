@@ -1,5 +1,31 @@
 # Hardware Node Changelog
 
+## [Unreleased] — 2026-08-03
+
+### Fixed
+
+- **`system_monitor.py` reported the WiFi card's temperature as the CPU's.**
+  `get_cpu_temperature()` read `/sys/class/thermal/thermal_zone0/temp`
+  unconditionally. On the Raspberry Pi 5 that zone was the CPU. On the Beelink
+  SER5 Pro, which replaced it on 2026-08-03, the *only* thermal zone is
+  `iwlwifi_1` — the WiFi adapter. The node would have published ~50 °C as a CPU
+  temperature, and nothing downstream could have told it was the wrong chip.
+
+  Thermal-zone ordering is not stable across machines and carries no meaning.
+  The sensor is now identified **by name**, not position:
+
+  1. `/sys/class/hwmon/*` matched against `k10temp` (AMD), `coretemp` (Intel),
+     `cpu_thermal` (Pi) — first match wins
+  2. `/sys/class/thermal/*` with the zone's `type` checked before its `temp`
+  3. `psutil.sensors_temperatures()` as a last resort, same driver names
+
+  Verified on the Beelink: 44.4 °C from `k10temp`/`Tctl`, and the thermal-zone
+  path correctly declines the WiFi sensor rather than returning it.
+
+  This is the failure mode `.claude/rules/docs-sync.md` is about, in code
+  rather than prose — a plausible number from the wrong source is worse than
+  no number, because it does not look broken.
+
 ## [Unreleased] — 2026-03-25
 
 ### Refactoring

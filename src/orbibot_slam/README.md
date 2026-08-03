@@ -6,7 +6,7 @@ SLAM (Simultaneous Localization and Mapping) for OrbiBot using `slam_toolbox`. S
 
 This package wraps `slam_toolbox` with OrbiBot-specific configurations optimized for:
 - **RPLidar A1** (360°, 8m range, 10Hz)
-- **Raspberry Pi 5** (CPU-efficient parameters)
+- **Beelink SER5 Pro** (parameters still inherited from a Raspberry Pi 5 — see roadmap Phase 5)
 - **Mecanum wheel odometry** (velocity-only fusion via EKF)
 
 Two modes are supported:

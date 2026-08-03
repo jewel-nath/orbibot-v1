@@ -1,6 +1,6 @@
 # OrbiBot Agent
 
-AI agent for OrbiBot — a Mecanum-wheeled ROS 2 mobile robot (Raspberry Pi 5 + Yahboom ROSMaster V3.0). Supports multiple LLM providers (Gemini, Claude, Kimi, Ollama) and exposes 62 robot tools through three interfaces: HTTP API, terminal CLI, and MCP server.
+AI agent for OrbiBot — a Mecanum-wheeled ROS 2 mobile robot (Beelink SER5 Pro + Yahboom ROSMaster V3.0). Supports multiple LLM providers (Gemini, Claude, Kimi, Ollama) and exposes 62 robot tools through three interfaces: HTTP API, terminal CLI, and MCP server.
 
 ## What This Package Does
 

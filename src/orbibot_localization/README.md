@@ -8,7 +8,7 @@ This package implements a two-stage sensor fusion pipeline:
 1. **Madgwick Filter** (50Hz): Fuses raw IMU + magnetometer → drift-free orientation
 2. **EKF** (20Hz): Fuses wheel velocities + Madgwick orientation → smooth odometry
 
-This architecture provides better yaw accuracy than EKF alone while maintaining computational efficiency on Raspberry Pi 5.
+This architecture provides better yaw accuracy than EKF alone while maintaining computational efficiency.
 
 ---
 
@@ -76,7 +76,7 @@ The EKF is configured with `odom0_config` positions=false. This prevents wheel e
 - **Madgwick** runs at 50Hz on raw IMU data with magnetometer → produces drift-free orientation
 - **EKF** fuses this with wheel odometry at 20Hz → smooth, computationally efficient
 
-This provides better yaw accuracy than EKF alone while keeping CPU usage low on Raspberry Pi 5.
+This provides better yaw accuracy than EKF alone while keeping CPU usage low.
 
 ---
 

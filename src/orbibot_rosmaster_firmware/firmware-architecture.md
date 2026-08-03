@@ -203,7 +203,7 @@ cycle, five report types are emitted 4ms apart.
 
 ### Serial Interface
 - **Port**: USART1 (115200 baud, 8N1)
-- **Connection**: USB-C (CH340N) to Raspberry Pi 5
+- **Connection**: USB-C (CH340N) to the onboard computer
 - **Format**: Yahboom-compatible binary protocol
 
 ### Packet Structure

@@ -147,6 +147,27 @@ not the Pi's numbers.
 
 ---
 
+## Stages 1–7 are scripted
+
+Everything from here to the mounting stage is in `scripts/setup_computer.sh`.
+Run it rather than pasting commands — it is idempotent, so re-running after a
+failure resumes rather than repeating:
+
+```bash
+./scripts/setup_computer.sh          # everything, in order
+./scripts/setup_computer.sh ros      # one stage
+./scripts/setup_computer.sh verify   # what is present, what is missing
+```
+
+The stages below explain **what it does and why**. Read them; the script is
+deliberately not self-explanatory about the decisions baked into it.
+
+> `sudo` is in the deny list in `.claude/settings.json`, so Claude Code cannot
+> run this — the operator does. That block was added when Claude Code ran on
+> the live robot and is worth keeping.
+
+---
+
 ## Stage 1 — Base system
 
 ```bash

@@ -4,7 +4,9 @@ Sensor integration for OrbiBot: RPLidar A1 2D LiDAR and Intel RealSense D435 RGB
 
 ## Overview
 
-This package provides sensor drivers and launch configurations for OrbiBot's perception stack. The RPLidar A1 is the primary navigation sensor, while the RealSense D435 provides visual data for advanced applications (optional, disabled by default on Raspberry Pi due to CPU load).
+This package provides sensor drivers and launch configurations for OrbiBot's perception stack. The RPLidar A1 is the primary navigation sensor, while the RealSense D435 provides colour and depth.
+
+> **Depth was enabled by decision on 2026-08-03.** It was previously off: on the Raspberry Pi 5 the D435 sat on a 480 Mbps link with no CPU to spare, so the camera ran colour-only as a plain webcam. Both limits went with the Pi. The parameter defaults below have not yet caught up — see the note in the camera section.
 
 ---
 
@@ -70,12 +72,25 @@ ros2 launch orbibot_sensors sensors.launch.py sensors:=both enable_camera_to_sca
 | `camera_name` | `camera` | Namespace prefix for topics |
 | `enable_color` | `true` | Enable RGB stream |
 | `enable_depth` | `true` | Enable depth stream |
-| `enable_pointcloud` | `false` | Enable PointCloud2 (high CPU on RPi) |
+| `enable_pointcloud` | `false` | Enable PointCloud2 |
 | `color_width` | `424` | RGB frame width |
 | `color_height` | `240` | RGB frame height |
 | `color_fps` | `15` | RGB frame rate |
 
-**RPi Optimization**: Default settings (424×240@15fps, no pointcloud) are tuned for Raspberry Pi 5. Higher resolutions will impact SLAM performance.
+> ⚠️ **These defaults are inherited from the Raspberry Pi 5 and are not
+> current.** 424×240@15fps with no pointcloud was chosen to survive a
+> four-core machine that was already saturated. The Pi was replaced on
+> 2026-08-03 by a Beelink SER5 Pro (8C/16T, x86_64), and **full depth is
+> enabled by decision**.
+>
+> The values have deliberately **not** been raised yet: raising them without
+> measuring would repeat the mistake in the other direction. Re-derive from
+> the Phase 0 CPU baseline — see `docs/plan/roadmap.md` Phase 6, and
+> `docs/architecture/dashboard-design.md` for why the driver is now in the
+> graph rather than bypassed.
+>
+> Depth also needs a **5000 Mbps USB 3 link**. Below that the driver silently
+> drops stream combinations, whatever this config says.
 
 ### `sensors.launch.py` — Meta-Launcher
 

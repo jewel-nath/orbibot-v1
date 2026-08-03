@@ -7,21 +7,21 @@ Replaces the closed-source Yahboom firmware with an open, OrbiBot-specific imple
 
 ## 1. What This Firmware Does
 
-The firmware runs on a **dedicated microcontroller** (STM32, separate from the Raspberry Pi 5)
+The firmware runs on a **dedicated microcontroller** (STM32, separate from the onboard computer)
 and handles all **real-time hardware control**:
 
 - Drives 4 mecanum wheel motors with PID speed control at 100Hz
 - Reads quadrature encoders and computes wheel odometry
 - Reads the ICM-20948 9-axis IMU (gyro, accelerometer, magnetometer) at 50Hz
 - Monitors battery voltage with safety lockout
-- Streams all sensor data to the Raspberry Pi over USB serial
+- Streams all sensor data to the onboard computer over USB serial
 
 **The firmware is a black box from the ROS 2 perspective.** The `orbibot_hardware` ROS 2 package
 talks to it over a serial protocol. You send velocity commands in, you get sensor data out.
 
 ```
 ┌─────────────────────┐   USB Serial (115200)   ┌────────────────────────┐
-│  STM32 Firmware      │ ◄─────────────────────► │  Raspberry Pi 5        │
+│  STM32 Firmware      │ ◄─────────────────────► │  Onboard computer      │
 │  (this package)      │                          │  orbibot_hardware node │
 │                      │                          │                        │
 │  - Motor PID (100Hz) │  ── cmd_vel ──►          │  - /cmd_vel subscriber │
@@ -134,7 +134,7 @@ talks to it over a serial protocol. You send velocity commands in, you get senso
 | IMU | 1 | ICM-20948: 3-axis gyro + 3-axis accel + 3-axis magnetometer |
 | Battery sensor | 1 | ADC with voltage divider (4S LiFePO4, 10.5V–14.6V) |
 | Buzzer | 1 | Active buzzer for battery warnings |
-| USB serial | 1 | CH340N bridge to Raspberry Pi (115200 baud) |
+| USB serial | 1 | CH340N bridge to the onboard computer (115200 baud) |
 
 ### Motor positions (mecanum ABBA layout)
 

@@ -19,7 +19,9 @@ slam_toolbox:
     use_map_saver: true
     mode: mapping
 
-    # Performance Parameters - Optimized for Raspberry Pi 5
+    # Performance Parameters
+    # TODO(phase-5): re-derive. These were fitted to a Raspberry Pi 5, replaced
+    # 2026-08-03 by a Beelink SER5 Pro (8C/16T). Inherited, not measured.
     debug_logging: false
     throttle_scans: 1
     transform_publish_period: 0.05  # Reduced from 0.02 - 20Hz is sufficient
@@ -43,7 +45,9 @@ slam_toolbox:
     width: 20
     height: 20
 
-    # Mapping Parameters - Optimized for Raspberry Pi CPU efficiency
+    # Mapping Parameters
+    # TODO(phase-5): re-derive. Traded map quality for CPU on hardware that is
+    # no longer fitted — see docs/plan/roadmap.md Phase 5.
     use_scan_matching: true
     use_scan_barycenter: true
     minimum_travel_distance: 0.35  # Balanced: responsive but CPU-efficient (not 0.5 - too slow)
