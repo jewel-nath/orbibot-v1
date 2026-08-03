@@ -5,8 +5,14 @@ EKF sensor fusion for OrbiBot using `robot_localization`. Fuses wheel odometry w
 ## Overview
 
 This package implements a two-stage sensor fusion pipeline:
-1. **Madgwick Filter** (50Hz): Fuses raw IMU + magnetometer → drift-free orientation
-2. **EKF** (20Hz): Fuses wheel velocities + Madgwick orientation → smooth odometry
+1. **Madgwick Filter** (50 Hz): gyro + accel → orientation. **6-DoF, `use_mag: false`**
+2. **EKF** (25 Hz): wheel velocities + Madgwick orientation → smooth odometry
+
+**Yaw is not absolute and not drift-free.** The magnetometer was removed on
+2026-04-28 — indoors, steel and motor currents made heading worse than dead
+reckoning. The EKF takes IMU yaw in *relative* mode (`imu0_relative: true`),
+and absolute heading is the map's job: slam_toolbox or AMCL correct it through
+`map → odom`.
 
 This architecture provides better yaw accuracy than EKF alone while maintaining computational efficiency.
 
@@ -15,54 +21,29 @@ This architecture provides better yaw accuracy than EKF alone while maintaining 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    SENSOR FUSION PIPELINE                        │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                   │
-│   ┌──────────────┐      ┌──────────────────┐                     │
-│   │ /imu/data_raw │      │ /imu/mag         │                     │
-│   │ (accel, gyro) │      │ (magnetometer)   │                     │
-│   └──────┬───────┘      └────────┬─────────┘                     │
-│          │                       │                                │
-│          └───────────┬───────────┘                                │
-│                      ▼                                            │
-│           ┌─────────────────────┐                                 │
-│           │ imu_filter_madgwick │  50 Hz                          │
-│           │   (mag + gyro +     │                                 │
-│           │    accel fusion)    │                                 │
-│           └──────────┬──────────┘                                 │
-│                      │                                            │
-│                      ▼                                            │
-│           ┌─────────────────────┐                                 │
-│           │ /imu/data_filtered  │────────┐                        │
-│           │ (quaternion, drift- │        │                        │
-│           │  free yaw)          │        │                        │
-│           └─────────────────────┘        │                        │
-│                                          │                        │
-│   ┌──────────────┐                       │                        │
-│   │ /odom        │───────────────────────┤                        │
-│   │ (wheel vel)  │                       │                        │
-│   └──────────────┘                       │                        │
-│                                          ▼                        │
-│                              ┌──────────────────┐                 │
-│                              │ EKF (robot_      │  20 Hz           │
-│                              │  localization)   │                 │
-│                              │                  │                 │
-│                              │ • Fuses vx, vy   │                 │
-│                              │ • Fuses yaw,     │                 │
-│                              │   vyaw           │                 │
-│                              └────────┬─────────┘                 │
-│                                       │                           │
-│                                       ▼                           │
-│                    ┌─────────────────────────────────┐            │
-│                    │ /odometry/filtered              │            │
-│                    │ + odom → base_footprint TF      │            │
-│                    │                                 │            │
-│                    │  Drift-corrected odometry       │            │
-│                    │  for SLAM and Navigation        │            │
-│                    └─────────────────────────────────┘            │
-│                                                                   │
-└─────────────────────────────────────────────────────────────────┘
+SENSOR FUSION PIPELINE
+
+  /imu/data_raw            50 Hz   gyro + accel. No magnetometer.
+        │
+        ▼
+  imu_filter_madgwick      50 Hz   use_mag: false  → 6-DoF
+        │                          gain 0.1 · zeta 0.0 · stddev 0.05
+        ▼
+  /imu/data_filtered       50 Hz   orientation quaternion
+        │                          yaw is RELATIVE and drifts
+        │
+        │   /odom          20 Hz   wheel velocities, from orbibot_hardware
+        │        │
+        └────────┴──► EKF (robot_localization)      25 Hz
+                        │   fuses vx, vy from /odom
+                        │   fuses yaw, vyaw from the IMU
+                        │   imu0_relative: true  — first reading becomes zero
+                        ▼
+                  /odometry/filtered
+                  + TF  odom → base_footprint
+
+Absolute heading comes from neither of these. slam_toolbox or AMCL
+corrects yaw further up, through map → odom.
 ```
 
 ---
@@ -73,8 +54,8 @@ This architecture provides better yaw accuracy than EKF alone while maintaining 
 The EKF is configured with `odom0_config` positions=false. This prevents wheel encoder position drift from accumulating in the filter state. Only velocities are fused, with IMU providing absolute yaw correction.
 
 ### Madgwick + EKF (Two-Stage)
-- **Madgwick** runs at 50Hz on raw IMU data with magnetometer → produces drift-free orientation
-- **EKF** fuses this with wheel odometry at 20Hz → smooth, computationally efficient
+- **Madgwick** runs at 50 Hz on gyro + accel → orientation (6-DoF, no magnetometer)
+- **EKF** fuses this with wheel odometry at 25 Hz → smooth, computationally efficient
 
 This provides better yaw accuracy than EKF alone while keeping CPU usage low.
 
@@ -110,7 +91,6 @@ ros2 launch orbibot_localization localization.launch.py log_level:=debug
 | Topic | Type | Source | Rate | Description |
 |-------|------|--------|------|-------------|
 | `/imu/data_raw` | `sensor_msgs/Imu` | `orbibot_hardware` | 50 Hz | Raw accelerometer + gyroscope |
-| `/imu/mag` | `sensor_msgs/MagneticField` | `orbibot_hardware` | 50 Hz | Magnetometer (AK09916) |
 | `/odom` | `nav_msgs/Odometry` | `orbibot_hardware` | 20 Hz | Wheel odometry (velocities) |
 
 ### Published
@@ -118,7 +98,7 @@ ros2 launch orbibot_localization localization.launch.py log_level:=debug
 | Topic | Type | Rate | Description |
 |-------|------|------|-------------|
 | `/imu/data_filtered` | `sensor_msgs/Imu` | 50 Hz | Madgwick-filtered IMU with orientation quaternion |
-| `/odometry/filtered` | `nav_msgs/Odometry` | 20 Hz | EKF-fused odometry for Nav2/SLAM |
+| `/odometry/filtered` | `nav_msgs/Odometry` | **25 Hz configured** | EKF-fused odometry for Nav2/SLAM. ⚠️ Measured ~2.5 Hz — see `orbibot_hardware/hardware-issue.md` HW-BUG-1 |
 
 ### TF Published
 
@@ -148,7 +128,7 @@ ros2 launch orbibot_localization localization.launch.py log_level:=debug
 | Variable | Fused | Reason |
 |----------|-------|--------|
 | roll, pitch | No | Planar robot (two_d_mode) |
-| yaw | **Yes** | Absolute heading from magnetometer |
+| yaw | **Yes** | Madgwick yaw, **relative** (`imu0_relative: true`) — not absolute |
 | vx, vy, vz | No | Not provided by IMU |
 | vroll, vpitch, vyaw | **Yes** | Gyroscope rates |
 | ax, ay, az | **No** | Disabled — mecanum vibration causes noise |
@@ -157,8 +137,8 @@ ros2 launch orbibot_localization localization.launch.py log_level:=debug
 
 | Parameter | Value | Description |
 |-----------|-------|-------------|
-| `frequency` | 20.0 Hz | EKF output rate (was 25Hz, reduced to prevent timing overruns on RPi5) |
-| `sensor_timeout` | 0.15 s | Max wait before prediction-only (increased from 0.1s for 20Hz rate) |
+| `frequency` | 25.0 Hz | EKF output rate. Set for a Raspberry Pi 5 that has since been replaced — re-derive, see roadmap 4.5 |
+| `sensor_timeout` | 0.15 s | Max wait before prediction-only |
 | `two_d_mode` | true | Planar robot — ignore z/roll/pitch |
 | `imu0_differential` | false | Use absolute yaw (not differentiated) |
 | `imu0_relative` | true | Yaw starts at 0 regardless of initial heading |
@@ -201,36 +181,36 @@ map (world frame, from SLAM)
 
 ## Tuning Guide
 
-### Magnetometer Calibration
-
-Mag correction runs in `hardware_node` before publishing `/imu/mag` (Madgwick receives pre-corrected data).
+### IMU Noise Measurement
 
 ```bash
-# Run calibration tool — rotate robot 2-3 full 360° turns, then Ctrl+C
-ros2 run orbibot_localization calibrate_magnetometer
-
-# Copy output values to hardware_params.yaml (imu section):
-#   mag_hard_iron_x/y/z  — constant offset from motors/battery
-#   mag_soft_iron_scale_x/y  — axis scale to restore circular response
-#
-# Verify localization.launch.py has mag_bias_x/y/z = 0.0 (bias moved to hardware_node)
+# Robot stationary and level, 30 s
+ros2 run orbibot_localization measure_imu_noise
 ```
+
+Writes measured accel/gyro variances for the EKF covariance diagonals. The
+values currently in `hardware_params.yaml` were taken through a faulty
+accelerometer path and are **suspect** — re-measure before trusting them. See
+`docs/moc/backlog-moc.md` CC-3.
+
+> There is no magnetometer calibration. `calibrate_magnetometer` was deleted
+> along with magnetometer support on 2026-04-28.
 
 ### Madgwick Filter (`localization.launch.py`)
 
 | Parameter | Default | Effect |
 |-----------|---------|--------|
 | `gain` | 0.1 | Higher = faster convergence, more noise sensitivity |
-| `zeta` | 0.001 | Gyro drift compensation via magnetometer (slow) |
-| `use_mag` | true | Enable magnetometer for absolute yaw |
+| `zeta` | 0.0 | Gyro bias drift correction. Disabled — with `use_mag: false` there is no absolute reference to drive it |
+| `use_mag` | false | Magnetometer removed 2026-04-28. Do not re-enable |
 | `frequency` | 50.0 | Must match IMU publish rate |
-| `mag_bias_x/y/z` | 0.0 | Kept 0.0 — hard-iron correction applied in hardware_node |
+| `orientation_stddev` | 0.05 | ~3° — how much the EKF trusts Madgwick yaw |
 
 ### When to Tune EKF
 
 | Symptom | Adjustment |
 |---------|------------|
-| Yaw drifts slowly | Check magnetometer calibration; increase Madgwick `gain` |
+| Yaw drifts slowly | Expected without a magnetometer. Bound it (roadmap 1.3); correction is SLAM/AMCL's job |
 | Yaw jumps/jitters | Decrease Madgwick `gain`; increase `imu0_pose_rejection_threshold` |
 | Position drifts | Normal for wheel odometry — ensure loop closure in SLAM |
 | Position jumps | Increase `odom0_twist_rejection_threshold` |
@@ -245,10 +225,9 @@ ros2 run orbibot_localization calibrate_magnetometer
 ```bash
 # Check all topics are publishing
 ros2 topic hz /imu/data_raw           # ~50Hz
-ros2 topic hz /imu/mag                # ~50Hz
 ros2 topic hz /imu/data_filtered      # ~50Hz
 ros2 topic hz /odom                   # ~20Hz
-ros2 topic hz /odometry/filtered      # ~20Hz
+ros2 topic hz /odometry/filtered      # should be ~25Hz; HW-BUG-1 reports ~2.5Hz
 
 # Inspect EKF output
 ros2 topic echo /odometry/filtered --once
@@ -276,7 +255,7 @@ ros2 topic echo /diagnostics
 | Issue | Cause | Solution |
 |-------|-------|----------|
 | No `/odometry/filtered` | Missing inputs | Check `/odom` and `/imu/data_filtered` publishing |
-| Yaw drifts continuously | Magnetometer not working | Check `/imu/mag` values; calibrate if needed |
+| Yaw drifts continuously | Expected — gyro-only heading | Only `map → odom` fixes this. Check slam_toolbox/AMCL is running |
 | Position jumps | Wheel slip | Increase `odom0_twist_rejection_threshold` |
 | TF extrapolation errors | Timing issues | Check `transform_timeout` and `sensor_timeout` |
 | High covariance | Poor sensor agreement | Check IMU vs odometry consistency |

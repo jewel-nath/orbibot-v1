@@ -55,7 +55,9 @@ int flash_storage_load(void);
 /**
  * @brief Save current configuration to flash
  *
- * Collects current PID gains and mag calibration, then writes to flash.
+ * Collects current PID gains, then writes to flash. Magnetometer calibration
+ * was also stored here until 2026-04-28; the magic byte moved 0xA5 -> 0xA6
+ * when it was dropped.
  * Erases the storage page first (2KB), then writes half-words.
  *
  * @return 0 on success, -1 on failure

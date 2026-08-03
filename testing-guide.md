@@ -62,7 +62,7 @@ ls -la /dev/motordriver /dev/lidar  # Should show accessible devices
 cd src/orbibot_rosmaster_firmware
 
 # Build firmware
-~/.platformio/penv/bin/pio run
+~/.platformio-venv/bin/pio run
 
 # Expected output:
 # RAM:   [====      ]  ~40% (used ~19,560 bytes from 49,152 bytes)
@@ -76,7 +76,7 @@ cd src/orbibot_rosmaster_firmware
 3. Press RESET button on ROSMaster board
 4. Run upload command:
   ```bash
-   ~/.platformio/penv/bin/pio run --target upload
+   ~/.platformio-venv/bin/pio run --target upload
   ```
 5. Set BOOT0 jumper to LOW (connect to GND)
 6. Press RESET button again
@@ -85,7 +85,7 @@ cd src/orbibot_rosmaster_firmware
 
 ```bash
 # Monitor serial output (115200 baud)
-~/.platformio/penv/bin/pio device monitor --baud 115200
+~/.platformio-venv/bin/pio device monitor --baud 115200
 
 # Expected startup messages:
 # [OrbiBot] v2.0.0

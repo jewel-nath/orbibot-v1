@@ -12,7 +12,7 @@ and handles all **real-time hardware control**:
 
 - Drives 4 mecanum wheel motors with PID speed control at 100Hz
 - Reads quadrature encoders and computes wheel odometry
-- Reads the ICM-20948 9-axis IMU (gyro, accelerometer, magnetometer) at 50Hz
+- Reads the ICM-20948 IMU in **6-axis mode** (gyro, accelerometer) at 50Hz
 - Monitors battery voltage with safety lockout
 - Streams all sensor data to the onboard computer over USB serial
 
@@ -44,7 +44,7 @@ talks to it over a serial protocol. You send velocity commands in, you get senso
     /cmd_vel (Twist)
            │
            ▼
-  orbibot_hardware node (RPi 5)   ◄── ROS 2 layer
+  orbibot_hardware node            ◄── ROS 2 layer (Beelink SER5 Pro)
            │
        USB Serial                  ◄── binary protocol @ 115200 baud
            │
@@ -62,8 +62,8 @@ talks to it over a serial protocol. You send velocity commands in, you get senso
 | Motor PID control | 100Hz | 4 independent PID loops, one per wheel |
 | Encoder reading | 100Hz | Quadrature decoding via hardware timers |
 | Odometry integration | 100Hz | Midpoint (RK2) method for mecanum kinematics |
-| IMU acquisition | 50Hz | ICM-20948: gyro + accel + magnetometer via SPI |
-| Attitude estimation | 50Hz | Complementary filter (gyro + magnetometer) |
+| IMU acquisition | 50Hz | ICM-20948: gyro + accel via SPI — 6-axis |
+| Attitude estimation | 50Hz | Roll/pitch from accel; yaw from gyro Z integration |
 | Battery monitoring | 1Hz | ADC with EMA filter, safety lockout |
 | Data streaming | 50Hz per type | 5 report types, interleaved over serial |
 
@@ -94,7 +94,7 @@ talks to it over a serial protocol. You send velocity commands in, you get senso
 | What | ROS 2 Topic | Rate | Content |
 |------|-------------|------|---------|
 | Wheel odometry | `/odom` | 50Hz | Position (x, y, theta) + velocity (vx, vy, omega) |
-| IMU raw | `/imu/data_raw` | 50Hz | Gyro (rad/s), accel (m/s^2), magnetometer (uT) |
+| IMU raw | `/imu/data_raw` | 50Hz | Gyro (rad/s), accel (m/s^2) — 12-byte packet, 6 x int16 |
 | IMU attitude | `/imu/data` | 50Hz | Roll, pitch, yaw (rad) |
 | Encoder counts | `/orbibot/encoders` | 50Hz | Raw tick counts for all 4 motors |
 | Battery + speed | `/orbibot/system_status` | 50Hz | Battery voltage, measured wheel speeds |
@@ -114,7 +114,7 @@ talks to it over a serial protocol. You send velocity commands in, you get senso
                     │     │       │             │
   Motor PWM ──────► │  Encoders ──► Forward Kin │  ──► /odom
                     │                           │
-  IMU (SPI) ──────► │  Gyro + Accel + Mag       │  ──► /imu/data_raw
+  IMU (SPI) ──────► │  Gyro + Accel             │  ──► /imu/data_raw
                     │  Complementary Filter      │  ──► /imu/data
                     │                           │
   Battery (ADC) ──► │  EMA filter + threshold   │  ──► /system_status
@@ -131,7 +131,7 @@ talks to it over a serial protocol. You send velocity commands in, you get senso
 |-----------|----------|-------------|
 | Mecanum motors | 4 | JGB37-520, 12V, 333 RPM max, 30:1 gear ratio |
 | Encoders | 4 | Hall-effect quadrature, 1320 counts per wheel revolution |
-| IMU | 1 | ICM-20948: 3-axis gyro + 3-axis accel + 3-axis magnetometer |
+| IMU | 1 | ICM-20948: 3-axis gyro + 3-axis accel. The AK09916 magnetometer is on the chip but **not used** |
 | Battery sensor | 1 | ADC with voltage divider (4S LiFePO4, 10.5V–14.6V) |
 | Buzzer | 1 | Active buzzer for battery warnings |
 | USB serial | 1 | CH340N bridge to the onboard computer (115200 baud) |
@@ -171,9 +171,16 @@ per-wheel target speeds, runs 4 independent PID controllers, and outputs PWM to 
 motor drivers. Also integrates odometry at 100Hz using midpoint (RK2) method.
 
 ### IMU Acquisition (`task_imu.c`)
-Runs at 50Hz. Reads the ICM-20948 over SPI. Computes roll/pitch from accelerometer
-and yaw from gyro integration with magnetometer correction (complementary filter).
-All data is cached thread-safely for the communication task to read.
+Runs at 50Hz. Reads the ICM-20948 over SPI. Computes roll/pitch from the
+accelerometer and yaw from **pure gyro Z integration** — there is no
+magnetometer correction, so firmware yaw drifts and is only a debug estimate.
+Heading is corrected higher up by the EKF and slam_toolbox. All data is cached
+thread-safely for the communication task to read.
+
+> **Magnetometer support was removed on 2026-04-28.** Indoors, steel, motor
+> currents and battery currents distorted the field enough to make heading
+> worse than dead reckoning. Madgwick runs `use_mag: false` on the ROS 2 side.
+> Do not propose bringing it back — see `firmware-changelog.md`.
 
 ### Communication (`task_communication.c`)
 Handles bidirectional serial protocol. Parses incoming commands (velocity, PID tuning,
@@ -273,10 +280,10 @@ If you need to add new data from firmware to ROS 2:
 cd src/orbibot_rosmaster_firmware
 
 # Build
-~/.platformio/penv/bin/pio run
+~/.platformio-venv/bin/pio run
 
 # Upload (set BOOT0=HIGH on board, press RESET, then run)
-~/.platformio/penv/bin/pio run --target upload
+~/.platformio-venv/bin/pio run --target upload
 
 # After upload: set BOOT0=LOW, press RESET to run firmware
 ```

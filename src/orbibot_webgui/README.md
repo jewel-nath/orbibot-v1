@@ -62,7 +62,6 @@ SettingsProvider        — persists all config to localStorage
 /odometry/filtered              ──► EKF-fused odometry
 /imu/data                       ──► IMU orientation + angular velocity (filtered)
 /imu/data_raw                   ──► Raw IMU (gyro + accel)
-/imu/mag                        ──► Magnetometer field
 /joint_states                   ──► Per-wheel velocity (rad/s), position (rad)
 /scan                           ──► LiDAR 2D scan
 /map                            ──► SLAM occupancy grid
@@ -92,7 +91,7 @@ SettingsProvider        — persists all config to localStorage
 ```
 /orbibot/get_firmware_version  ◄── Read STM32 firmware version string
 /orbibot/set_motor_enable      ◄── Enable / disable motors
-/orbibot/calibrate_imu         ◄── Magnetometer calibration
+/orbibot/calibrate_imu         ◄── Gyro/accel bias calibration
 /orbibot/reset_encoders        ◄── Zero encoder counts
 /orbibot/reset_odometry        ◄── Zero odometry pose
 /navigate_to_pose/_action/cancel_goal ◄── Cancel Nav2 goal
@@ -175,7 +174,7 @@ Tab-based comprehensive testing, analysis, calibration, and tuning workbench:
 | **Overview** | Safety status, firmware version, motor enable/buzzer test, battery voltage chart (5 min), connection health table (topic Hz + staleness) |
 | **Motors** | Per-motor encoder counts, velocity (rad/s), position; 4-channel wheel velocity time-series; commanded vs actual Vx/Vy charts |
 | **Odometry** | XY path trace (raw dashed / filtered solid), 3-channel Vx/Vy/Wz comparison chart |
-| **IMU** | Attitude indicator, compass rose, 3-channel gyro + accel time-series (30 s), magnetometer XY scatter with circle-fit overlay, IMU calibration |
+| **IMU** | Attitude indicator, compass rose, 3-channel gyro + accel time-series (30 s), IMU calibration |
 | **PID Tuning** | Motor PID sliders (Apply / Flash), yaw PID sliders, PID response graph (8 s record) |
 | **Tools** | LiDAR scan view + statistics, data export recorder (CSV), 3-step wheel calibration wizard |
 
@@ -312,7 +311,6 @@ The launch file currently hard-codes these values; pass them as arguments to ove
 | `/scan` | `sensor_msgs/LaserScan` | LiDAR view + diagnostics stats |
 | `/imu/data` | `sensor_msgs/Imu` | IMU widget, attitude indicator |
 | `/imu/data_raw` | `sensor_msgs/Imu` | Gyro/accel time-series (diagnostics) |
-| `/imu/mag` | `sensor_msgs/MagneticField` | Magnetometer scatter plot |
 | `/joint_states` | `sensor_msgs/JointState` | Per-wheel velocity + position |
 | `/map` | `nav_msgs/OccupancyGrid` | SLAM map |
 | `/orbibot/system_status` | `orbibot_msgs/SystemStatus` | Battery, motor status |
@@ -346,7 +344,7 @@ The launch file currently hard-codes these values; pass them as arguments to ove
 |---------|------|---------|
 | `/orbibot/get_firmware_version` | `orbibot_msgs/GetFirmwareVersion` | Display firmware version |
 | `/orbibot/set_motor_enable` | `orbibot_msgs/SetMotorEnable` | Motor enable/disable toggle |
-| `/orbibot/calibrate_imu` | `orbibot_msgs/CalibrateIMU` | Magnetometer calibration |
+| `/orbibot/calibrate_imu` | `orbibot_msgs/CalibrateIMU` | Gyro/accel bias calibration |
 | `/orbibot/reset_encoders` | `orbibot_msgs/ResetEncoders` | Zero encoder counts |
 | `/orbibot/reset_odometry` | `orbibot_msgs/ResetOdometry` | Zero odometry pose |
 | `/navigate_to_pose/_action/cancel_goal` | `action_msgs/CancelGoal` | Cancel navigation |
@@ -397,7 +395,6 @@ orbibot_webgui/
     │   ├── useEncoders.ts       # Encoder counts
     │   ├── useIMU.ts            # IMU data (orientation, angular velocity)
     │   ├── useRawIMU.ts         # Raw IMU (gyro + accel)
-    │   ├── useMagnetometer.ts   # Magnetometer field
     │   ├── useJointStates.ts    # Per-wheel velocity + position from /joint_states
     │   ├── useCmdVelMonitor.ts  # Read-only /cmd_vel subscriber
     │   ├── useLidarScan.ts      # LaserScan data
@@ -430,7 +427,6 @@ orbibot_webgui/
     │   │   ├── FirmwareInfoPanel.tsx
     │   │   ├── IMUDetailPanel.tsx
     │   │   ├── LidarDiagnosticsPanel.tsx
-    │   │   ├── MagnetometerPanel.tsx
     │   │   ├── MotorDetailPanel.tsx
     │   │   ├── OdometryComparisonChart.tsx
     │   │   ├── OdometryPathTrace.tsx

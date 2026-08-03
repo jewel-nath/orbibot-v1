@@ -361,7 +361,7 @@ here**, do not leave the Pi's path in the docs.
 
 ```bash
 cd ~/orbibot_ws/src/orbibot_rosmaster_firmware
-<pio> run          # build only; toolchain downloads on first run
+~/.platformio-venv/bin/pio run          # build only; toolchain downloads on first run
 ```
 
 Flashing still needs the manual BOOT0 jumper and RESET — the board has no

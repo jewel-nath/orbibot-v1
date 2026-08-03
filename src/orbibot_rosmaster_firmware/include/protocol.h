@@ -194,7 +194,10 @@ void protocol_send_packet(uint8_t func_code, const uint8_t *data, uint8_t data_l
 void protocol_send_motion_data(void);
 
 /**
- * @brief Send raw IMU data (gyro, accel, mag)
+ * @brief Send raw IMU data (gyro, accel) — 12 bytes, 6 x int16
+ *
+ * Magnetometer fields were removed 2026-04-28; see protocol.c and
+ * firmware-changelog.md. The packet is 6-axis, not 9.
  */
 void protocol_send_imu_raw_data(void);
 

@@ -74,7 +74,7 @@ void task_control_init(void)
     // Initialize firmware odometry
     odometry_init(&firmware_odom);
 
-    // Load PID and mag calibration from flash (overrides defaults if valid)
+    // Load PID gains from flash (overrides defaults if valid)
     flash_storage_load();
 }
 

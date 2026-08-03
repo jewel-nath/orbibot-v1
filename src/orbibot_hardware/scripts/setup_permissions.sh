@@ -13,10 +13,17 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# Check if running as root for udev rules
+# Run as your normal user — NOT with sudo.
+#
+# This script calls sudo itself for the three things that need root (the udev
+# rules file, usermod, udevadm). It also reads $USER to decide which account
+# joins dialout/plugdev/video, and under sudo that resolves to root — which
+# would add the wrong account and leave the real one still unable to open
+# /dev/motordriver.
 if [[ $EUID -eq 0 ]]; then
-   echo -e "${RED}This script should not be run as root (except for udev rules)${NC}"
-   echo "Run: sudo ./setup_permissions.sh"
+   echo -e "${RED}Do not run this with sudo.${NC}"
+   echo "Run it as your normal user: ./setup_permissions.sh"
+   echo "It will prompt for sudo where it actually needs root."
    exit 1
 fi
 
@@ -60,46 +67,42 @@ sudo udevadm trigger
 
 echo -e "${GREEN}✓ Udev rules reloaded${NC}"
 
-# Check for ROSMaster_Lib
-echo -e "${YELLOW}Checking for ROSMaster_Lib...${NC}"
-
-if python3 -c "import Rosmaster_Lib" 2>/dev/null; then
-    echo -e "${GREEN}✓ ROSMaster_Lib is already installed${NC}"
-else
-    echo -e "${RED}✗ ROSMaster_Lib not found${NC}"
-    echo -e "${YELLOW}Please install ROSMaster_Lib manually:${NC}"
-    echo "1. Download from: http://www.yahboom.net/study/ros-driver-board"
-    echo "2. Extract and run: sudo python3 setup.py install"
-    echo "3. Or install via pip if available"
-fi
-
 # Check Python dependencies
+#
+# Import name and apt package name differ, which is what made the old version
+# of this check report a false failure: it ran `import pyserial`, but the
+# module is `serial` — `pyserial` is only the distribution name. It reported
+# "Failed to install pyserial" on a machine where pyserial 3.5 was installed
+# and working.
 echo -e "${YELLOW}Checking Python dependencies...${NC}"
 
-PYTHON_DEPS=("pyserial" "numpy")
+# "import name:apt package"
+PYTHON_DEPS=("serial:python3-serial" "numpy:python3-numpy")
 
-for dep in "${PYTHON_DEPS[@]}"; do
-    if python3 -c "import $dep" 2>/dev/null; then
-        echo -e "${GREEN}✓ $dep is installed${NC}"
+for entry in "${PYTHON_DEPS[@]}"; do
+    module="${entry%%:*}"
+    apt_pkg="${entry##*:}"
+
+    if python3 -c "import $module" 2>/dev/null; then
+        echo -e "${GREEN}✓ $module ($apt_pkg) is installed${NC}"
+        continue
+    fi
+
+    echo -e "${YELLOW}Installing $apt_pkg via apt...${NC}"
+    sudo apt-get install -y "$apt_pkg"
+
+    if python3 -c "import $module" 2>/dev/null; then
+        echo -e "${GREEN}✓ $module installed successfully${NC}"
     else
-        echo -e "${YELLOW}Installing $dep via apt...${NC}"
-        # Try apt first (Ubuntu 24.04 preferred method)
-        if [ "$dep" = "pyserial" ]; then
-            sudo apt install -y python3-serial
-        elif [ "$dep" = "numpy" ]; then
-            sudo apt install -y python3-numpy
-        fi
-        
-        # Verify installation
-        if python3 -c "import $dep" 2>/dev/null; then
-            echo -e "${GREEN}✓ $dep installed successfully${NC}"
-        else
-            echo -e "${RED}✗ Failed to install $dep${NC}"
-            echo -e "${YELLOW}You may need to install manually:${NC}"
-            echo "  sudo apt install python3-$dep"
-        fi
+        echo -e "${RED}✗ $module still not importable after installing $apt_pkg${NC}"
     fi
 done
+
+# NOTE: Yahboom's Rosmaster_Lib is deliberately NOT required. This project
+# talks to the board with its own driver, orbibot_hardware/rosmaster_driver.py,
+# which reimplements the protocol rather than wrapping the vendor library.
+# An earlier version of this script told the operator to download and install
+# Rosmaster_Lib from yahboom.net; nothing imports it.
 
 # Check connected devices
 echo -e "${YELLOW}Checking connected devices...${NC}"
@@ -126,8 +129,8 @@ echo ""
 echo -e "${GREEN}=== Setup Complete ===${NC}"
 echo -e "${YELLOW}Important Notes:${NC}"
 echo "1. Log out and log back in (or reboot) for group changes to take effect"
-echo "2. Verify ROSMaster_Lib installation before running hardware node"
-echo "3. Connect your OrbiBot hardware before launching"
+echo "   (check with: id -nG  — dialout, plugdev and video must be listed)"
+echo "2. Connect your OrbiBot hardware before launching"
 echo ""
 echo -e "${YELLOW}If Python dependency installation failed:${NC}"
 echo "  sudo apt update"

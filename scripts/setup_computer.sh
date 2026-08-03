@@ -140,8 +140,13 @@ stage_build() {
     fi
     rosdep update
 
+    # ROS setup.bash reads unset variables (AMENT_TRACE_SETUP_FILES and
+    # friends) by design, so it cannot be sourced under `set -u` — it aborts on
+    # the first one. Drop nounset across the source only.
+    set +u
     # shellcheck disable=SC1090
     source "/opt/ros/${ROS_DISTRO_NAME}/setup.bash"
+    set -u
 
     cd "$WS_DIR"
 
@@ -179,7 +184,10 @@ stage_pip() {
 
 stage_devices() {
     info "Device rules and group membership"
-    sudo "$WS_DIR/src/orbibot_hardware/scripts/setup_permissions.sh"
+    # Deliberately NOT via sudo. The script calls sudo itself where it needs
+    # to, refuses to run as root, and reads $USER to pick the account to add
+    # to dialout/plugdev/video — under sudo that would resolve to root.
+    "$WS_DIR/src/orbibot_hardware/scripts/setup_permissions.sh"
     ok "udev rules installed"
     warn "Log out and back in for the dialout/plugdev/video groups to apply."
 }

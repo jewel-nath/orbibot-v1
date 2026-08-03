@@ -56,7 +56,7 @@ void task_communication(void *params)
         // 2. Auto-report data if enabled (50Hz per type = 20ms cycle)
         // Timing slots for interleaved reporting:
         // - count 1:  Motion/Speed (Vx, Vy, Vz, Battery)
-        // - count 5:  IMU Raw (gyro, accel, mag) — 50Hz for Madgwick filter quality
+        // - count 5:  IMU Raw (gyro, accel) — 50Hz for Madgwick filter quality
         // - count 9:  IMU Attitude (roll, pitch, yaw)
         // - count 13: Encoders (4 motor counts)
         // - count 17: Firmware Odometry (x, y, theta, vx, vy, omega)

@@ -92,15 +92,13 @@ project and is never built by colcon. The toolchain is pinned in
 
 ```bash
 cd src/orbibot_rosmaster_firmware
-<pio> run                  # build first, always
-<pio> run --target upload  # needs BOOT0 — see the rules file
-<pio> device monitor       # 115200
+~/.platformio-venv/bin/pio run                  # build first, always
+~/.platformio-venv/bin/pio run --target upload  # needs BOOT0 — see the rules file
+~/.platformio-venv/bin/pio device monitor       # 115200
 ```
 
-> `<pio>` was `~/.platformio/penv/bin/pio` on the Pi. PlatformIO is **not yet
-> installed on the Beelink** — once it is, replace `<pio>` here and in
-> `src/orbibot_rosmaster_firmware/README.md` with the real path. Do not leave
-> the Pi's path in the docs.
+> PlatformIO lives in its own venv — `~/.platformio-venv/bin/pio`, installed
+> 2026-08-03. The Pi used `~/.platformio/penv/bin/pio`; that path is gone.
 
 ```bash
 # base: description + hardware + LiDAR + EKF
