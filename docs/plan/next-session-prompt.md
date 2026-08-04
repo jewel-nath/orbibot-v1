@@ -12,35 +12,43 @@ Paste the block below into a fresh Claude Code session on the robot's computer.
 Everything else it needs — the phases, the protocol, the measured history — it
 will read for itself.
 
-Rewritten 2026-08-03, when the compute was replaced.
+Rewritten **2026-08-04**. The previous version was written on 2026-08-03 before
+the software bring-up and described a bench machine with no ROS 2 and no
+hardware attached. All of that is now false, which is exactly the failure mode
+`.claude/rules/docs-sync.md` exists to prevent: a confidently wrong document
+that the next agent trusts. **Rewrite this file whenever the machine's state
+changes, not when someone notices.**
 
 ---
 
 ## The prompt
 
 ```text
-আমরা OrbiBot-এ Phase 0 চালিয়ে যাচ্ছি — নতুন কম্পিউটার সেটাপ।
+আমরা OrbiBot-এ কাজ করছি — Phase 0 শেষ পর্যায়ে, Phase 2 চলছে।
 
 শুরু করার আগে পড়ে নাও:
-  docs/operations/computer-setup.md — এই মুহূর্তের কাজ, ধাপে ধাপে
   docs/plan/roadmap.md              — নয়টা phase আর প্রতিটার gate
   .claude/rules/robot-safety.md     — রোবট আর পাওয়ার ছোঁয়ার নিয়ম
   docs/moc/backlog-moc.md           — খোলা finding কোথায় কোথায় আছে
+  docs/operations/computer-setup.md — মেশিন সেটাপ + পাওয়ার runbook
 
-অবস্থা: Raspberry Pi 5 বাদ দেওয়া হয়েছে — যেকোনো real workload-এ
-চারটা কোরই 100% হয়ে যেত। এখন Beelink SER5 Pro (Ryzen 7 PRO 5800H,
-8C/16T, x86_64, 11.6 GiB, 457G NVMe)।
+কম্পিউটার: Beelink SER5 Pro (Ryzen 7 PRO 5800H, 8C/16T, x86_64,
+11.6 GiB, 457G NVMe)। Raspberry Pi 5 বাদ — যেকোনো real workload-এ
+চারটা কোরই 100% হয়ে যেত। Pi-যুগ `raspberry_pi` branch-এ রাখা আছে;
+ছোঁবে না, merge করবে না, force-push করবে না।
 
-Beelink এখনো রোবটে লাগানো হয়নি — টেবিলে, নিজের charger-এ চলছে।
-কোনো হার্ডওয়্যার লাগানো নেই: motor board নেই, LiDAR নেই, camera নেই।
-মানে এখন কোনো কমান্ডে চাকা ঘুরবে না — কিন্তু অপারেটর যেকোনো সময়
-তার লাগিয়ে দিতে পারে, আর তোমাকে বলা হবে না। ধরে নেবে না;
-/dev/motordriver আছে কিনা দেখে নেবে।
+সফটওয়্যার তৈরি: ROS 2 Jazzy আছে, ১২টা প্যাকেজ build হয়, udev rule
+কাজ করে (/dev/motordriver, /dev/lidar), PlatformIO আছে
+(~/.platformio-venv/bin/pio — পুরনো ~/.platformio/penv পথটা আর নেই)।
 
-তোমার sudo নেই — .claude/settings.json এ deny করা আছে, ইচ্ছে করেই।
-ইনস্টলের কাজ অপারেটর করবে: ./scripts/setup_computer.sh
-তুমি স্ক্রিপ্ট লিখবে/ঠিক করবে, আর ./scripts/setup_computer.sh verify
-দিয়ে কী হয়েছে কী বাকি দেখবে।
+হার্ডওয়্যার লাগানো আছে: ROSMaster board, RPLidar A1, RealSense D435।
+মানে **কমান্ডে চাকা ঘুরতে পারে**। কিন্তু Beelink এখনো রোবটে মাউন্ট করা
+হয়নি — সেটা Phase 0-এর বাকি কাজ। কোনো অবস্থা ধরে নেবে না, দেখে নেবে।
+
+তোমার sudo নেই — passwordless grant তুলে নেওয়া হয়েছে, ইচ্ছে করেই।
+sudo দিলে password prompt-এ আটকে যাবে। ইনস্টলের কাজ অপারেটরের:
+./scripts/setup_computer.sh <stage>। তুমি স্ক্রিপ্ট লিখবে/ঠিক করবে,
+আর ./scripts/setup_computer.sh verify দিয়ে কী আছে কী নেই দেখবে।
 
 আমি রোবটের পাশে আছি। যা করতে বলবে করব — কিন্তু আমাকে
 স্পষ্ট করে বলতে হবে, একবারে একটা কাজ, তারপর অপেক্ষা করবে।
@@ -48,52 +56,71 @@ Beelink এখনো রোবটে লাগানো হয়নি — ট�
 পাঁচটা জিনিস মনে রাখবে:
   - Power: এক ব্যাটারি থেকেই সব। 12.8V → RBD-2767 boost → 19V → Beelink,
     আর সেই একই পয়েন্ট থেকে ROSMaster board। 10A fuse ইনপুট দিকে।
-    Beelink লাগানোর আগে multimeter দিয়ে converter output মাপতেই হবে।
-  - CPU দিয়ে justify করা প্রতিটা tuning value এখন অচল — nav2_params,
-    slam_params, dashboard budget। ওগুলো TODO দিয়ে মার্ক করা আছে।
-    scale করবে না, নতুন করে মেপে বের করবে।
+    P-1…P-5 এখনো সবগুলো হয়নি — test-report.md §9.6 দেখো।
+  - CPU দিয়ে justify করা প্রতিটা tuning value অচল — nav2_params,
+    slam_params, dashboard budget। scale করবে না, নতুন করে মেপে বের করবে।
   - Magnetometer নেই, ইচ্ছে করেই বাদ। ফেরত আনার প্রস্তাব দেবে না।
   - Teleop শুধু web dashboard থেকে — joy ইনস্টল করবে না।
-  - `raspberry_pi` branch হল Pi-যুগের ব্যাকআপ। ছোঁবে না, merge করবে না,
-    আর কখনো force-push করবে না।
+  - কার্নেল লগ পড়তে `journalctl -k`, `dmesg` নয় — dmesg_restrict চালু,
+    dmesg কিছুই পড়তে পারে না অথচ grep -c আত্মবিশ্বাসের সাথে 0 দেয়।
 
-কাজ শুরুর আগে বলো: Phase 0-এর কোন ধাপটা এখন বাকি আর কেন,
-আর তার জন্য আমাকে কী করতে হবে।
+কাজ শুরুর আগে বলো: এখন কোন ধাপটা বাকি আর কেন, আর আমাকে কী করতে হবে।
 ```
 
 ---
 
-## Where things stand — 2026-08-03
+## Where things stand — 2026-08-04
 
-- **The computer changed today.** Pi 5 → Beelink SER5 Pro. Roughly 4–6× the
-  CPU, and x86_64 instead of aarch64. The Pi's state is on the `raspberry_pi`
-  branch; do not delete or merge it.
-- **The Beelink is on a bench, on its own charger.** Nothing is wired to it and
-  ROS 2 is not installed. `./scripts/setup_computer.sh verify` reports what is
-  present.
-- **The operator is mid-way through the electronics.** Boost converter and 10 A
-  fuse are bought; wiring is not finished.
-- **The firmware is unaffected.** Everything verified in `test-report.md` is
-  STM32-side and survived the host swap — that is the two-computer split in
-  [[system-overview]] working as designed.
+### Done, and verified on this machine
 
-### Decisions taken today
+| | Evidence |
+|---|---|
+| ROS 2 Jazzy, toolchain, `twist_mux`, RealSense driver installed | `setup_computer.sh verify` |
+| **12 packages** build clean on x86_64 — 17.9 s (Pi took ~40 s) | `colcon build` |
+| udev: `/dev/motordriver` → `ttyUSB0`, `/dev/lidar` → `ttyUSB1` | present across reboots |
+| Firmware builds: 24.7 KB flash (9.7 %), 21.6 KB RAM (45.1 %), 89 s | `pio run` |
+| Frontend builds: 816 K `dist/` | `npm run build` |
+| Full stack launches; `/odom`, `/imu/*`, `/scan`, TF all publishing | 2026-08-03 live run |
+| CPU + thermal baseline, idle and stack-up | [[baseline-results]] |
+| P-5 — no brown-out or reset through a motor run | `test-report.md` §9.6 |
+
+### Not done — Phase 0's remaining gate
+
+| # | What | Who |
+|---|---|---|
+| 0.6 | RealSense at **5000 Mbps** — stuck at 480, original cable being fitted | operator |
+| 0.8 | **Mount the Beelink, converter and fuse on the robot** | operator |
+| 0.9 | Re-weigh, re-measure the footprint | operator |
+| 0.10 | P-1, P-2, P-4 (multimeter, converter temperature); **P-3 on the ground** | operator, then together |
+| 0.11 | CPU baseline *while driving* — the idle half is recorded | together |
+
+**0.8 is the critical path.** Nothing in Phase 1 can be measured before it,
+because mounting changes mass and centre of gravity, and every Phase 1 number
+depends on both.
+
+### Open findings
+
+| ID | What | Where |
+|---|---|---|
+| SENS-2 | RealSense enumerates at 480 Mbps, blocking the depth decision | `sensors-issue.md` |
+| SENS-1 | `/scan` runs at 7.9 Hz, documented as 10 | `sensors-issue.md` |
+| BRINGUP-1 | Killing the bringup leaves an orphaned, respawning LiDAR | `bringup-issue.md` |
+| HW-BUG-8 | `/imu` at 40–45 Hz; the firmware sends 52.5 | `hardware-issue.md` |
+| CC-1 | Four unarbitrated `/cmd_vel` publishers — Phase 2 | [[command-pipeline]] |
+| CC-2 | Accel X/Y scale unconfirmed under real acceleration | [[backlog-moc]] |
+
+Fixed 2026-08-03: **HW-BUG-9** — the launch armed all four motors six seconds
+after start. `motors_enabled` now defaults to `false`.
+
+### Decisions that hold
 
 | Decision | Consequence |
 |---|---|
-| One battery for robot and computer | 12.8 V node feeds ROSMaster *and* the boost converter. Motor transients land on the computer's rail |
+| One battery for robot and computer | Motor transients land on the computer's rail. P-1…P-5 exist for this |
 | Pi 5 removed entirely, not kept | No multi-machine DDS setup to maintain |
-| RealSense depth **enabled** | The driver is back in the graph; the v4l2 bypass in [[dashboard-design]] is superseded |
-| Simulation optional, not now | Possible on this hardware, but off the critical path |
-
-### Open, and blocking
-
-| # | What | Why it blocks |
-|---|---|---|
-| 1 | **Beelink adapter label unread** | The whole 19 V power design assumes 65 W. Some Beelink models are 12 V, which would make the boost converter the wrong part |
-| 2 | P-1…P-5 power measurements | The converter's 10 V minimum sits 0.5 V below the BMS cutoff. A brown-out during an NVMe write corrupts the filesystem |
-| 3 | Robot not re-weighed | Phase 1 calibration against the old mass is wasted work |
-| 4 | No CPU baseline | Phases 3, 5 and 6 have nothing to budget against |
+| RealSense depth **enabled** | The driver owns the device; the v4l2 bypass in [[dashboard-design]] is superseded |
+| Simulation possible, not now | Off the critical path — see *Optional* in [[roadmap]] |
+| Phase 2 pulled ahead of Phase 1 | Phase 1 is the first driving on the floor. It should not happen on an unarbitrated `/cmd_vel` with no e-stop |
 
 ## What the agent already knows
 
@@ -104,21 +131,26 @@ It does not need telling — these load automatically or it will read them:
 | `CLAUDE.md` | Architecture, build commands, conventions, the docs map |
 | `.claude/rules/robot-safety.md` | Power/wiring order, BOOT0 sequence, elevated vs ground |
 | `.claude/rules/docs-sync.md` | Which document a change makes untrue |
-| `docs/operations/computer-setup.md` | The current runbook, stage by stage |
 | `docs/plan/roadmap.md` | Nine phases and every gate |
 | `test-report.md` | What has been verified live, and when |
+| `src/<pkg>/<pkg>-issue.md` | What is open, per package |
 
-## Phase 0 gate
+## Traps this project has already fallen into
 
-- [ ] Adapter label read; converter output set and verified before load
-- [ ] Rail **> 11.5 V** and converter output **> 18 V** through a four-motor burst
-- [ ] Ten motor start/stop cycles, computer logged in: no reboot, no `dmesg` reset
-- [ ] `colcon build` clean, **12 packages**
-- [ ] `/dev/motordriver` and `/dev/lidar` on boot
-- [ ] RealSense at **5000 Mbps**, depth + colour together
-- [ ] New mass and footprint in [[inventory]]
-- [ ] CPU baseline recorded
+Written down because each one cost real time, and each one looked like a pass:
+
+- **`dmesg` reads nothing here.** `kernel.dmesg_restrict` is set, so
+  `dmesg | grep -c` returns a confident `0` having read no log. Use
+  `journalctl -k`.
+- **Reading the node is not reading the launch.** `hardware_node.py` never
+  enables motors; `hardware.launch.py` did, on a timer. The answer you get
+  depends on which file you opened — open both.
+- **A power test with the charger plugged in measures the charger.** P-3 was run
+  that way once and had to be thrown away.
+- **A compensation factor can hide a misconfigured register for four months.**
+  Fix the cause, not the reading — see Principle 3 in [[roadmap]].
 
 ## Related
 
-[[roadmap]] · [[computer-setup]] · [[backlog-moc]] · [[docs/README|Docs home]]
+[[roadmap]] · [[computer-setup]] · [[backlog-moc]] · [[command-pipeline]] ·
+[[baseline-results]] · [[docs/README|Docs home]]

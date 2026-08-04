@@ -46,8 +46,10 @@ working as designed — see [[system-overview]].
 
 **Not solid:**
 
-- **The Beelink is not mounted and not set up.** No ROS 2, no toolchain, no
-  hardware attached. [[computer-setup]] is Phase 0.
+- **The Beelink is set up but not mounted.** ROS 2, the toolchain and all 12
+  packages are working, and the motor board, LiDAR and camera are attached —
+  so commands now reach wheels. What remains is physical: bolting the computer,
+  converter and fuse to the robot. [[computer-setup]] is Phase 0.
 - **The robot's mass and centre of gravity are about to change.** Every Phase 1
   number must be taken *after* the Beelink and its converter are bolted on.
 - Nothing on this robot has been calibrated **on the ground**. Every motion
@@ -89,24 +91,27 @@ ratio.
 
 ## Phase 0 — The new machine ⬅ **you are here**
 
-Nothing else can start. The computer is on a bench, not on the robot, and it
-has an operating system and nothing else.
+The software half is done. What remains is physical, and it gates Phase 1.
 
-| # | Task | Where |
-|---|---|---|
-| ~~0.1~~ | ~~Confirm supply voltage from the adapter label~~ — **done: 19 V / 3.42 A** | bench |
-| 0.2 | Set the boost converter output with a multimeter *before* connecting it | bench |
-| 0.3 | Install ROS 2 Jazzy, toolchain, `twist_mux`, RealSense driver | — |
-| 0.4 | `rosdep` + `colcon build` — 12 packages clean on x86_64 | — |
-| 0.5 | udev rules; `/dev/motordriver` and `/dev/lidar` appear on boot | — |
-| 0.6 | RealSense enumerates at **5000 Mbps**, depth + colour together | — |
-| 0.7 | PlatformIO toolchain; firmware builds; fix the `pio` path in the docs | — |
-| 0.8 | Mount the Beelink, converter and fuse on the robot | robot |
-| 0.9 | **Re-weigh the robot and re-measure the footprint** | robot |
-| 0.10 | Power measurements P-1…P-5 — sag, thermals, brown-out | robot |
-| 0.11 | **Record a CPU and thermal baseline** — stack idle, and stack driving | robot |
+| # | Task | Where | State |
+|---|---|---|---|
+| 0.1 | Confirm supply voltage from the adapter label | bench | ✅ **19 V / 3.42 A** |
+| 0.2 | Set the boost converter output with a multimeter *before* connecting it | bench | ⬜ P-1 |
+| 0.3 | Install ROS 2 Jazzy, toolchain, `twist_mux`, RealSense driver | — | ✅ |
+| 0.4 | `rosdep` + `colcon build` — 12 packages clean on x86_64 | — | ✅ 17.9 s |
+| 0.5 | udev rules; `/dev/motordriver` and `/dev/lidar` appear on boot | — | ✅ |
+| 0.6 | RealSense enumerates at **5000 Mbps**, depth + colour together | — | ⬜ 480 — SENS-2 |
+| 0.7 | PlatformIO toolchain; firmware builds; fix the `pio` path in the docs | — | ✅ 89 s |
+| 0.8 | **Mount the Beelink, converter and fuse on the robot** | robot | ⬜ |
+| 0.9 | **Re-weigh the robot and re-measure the footprint** | robot | ⬜ |
+| 0.10 | Power measurements P-1…P-5 — sag, thermals, brown-out | robot | ◐ P-5 only |
+| 0.11 | **Record a CPU and thermal baseline** — stack idle, and stack driving | robot | ◐ idle only |
 
 Full procedure, including the wiring order that matters: [[computer-setup]].
+
+**0.8 is the critical path.** Mounting changes mass and centre of gravity, and
+every Phase 1 number depends on both — so calibrating first is wasted work, not
+early work.
 
 **Gate**
 
@@ -114,10 +119,12 @@ Full procedure, including the wiring order that matters: [[computer-setup]].
 - Battery rail stays **> 11.5 V** and converter output **> 18 V** through a
   four-motor full-speed burst
 - Ten motor start/stop cycles with the Beelink logged in: **no reboot**, no
-  reset in `dmesg`
-- `colcon build` clean, **12 packages**
-- `ros2 launch orbibot_bringup robot.launch.py` runs: `/scan` at 10 Hz, `/odom`
-  publishing
+  under-voltage or reset event in `journalctl -k` (**not** `dmesg` — this
+  machine has `dmesg_restrict` set and an unprivileged `dmesg` reads nothing)
+- ~~`colcon build` clean, **12 packages**~~ — **done**
+- ~~`ros2 launch orbibot_bringup robot.launch.py` runs~~ — **done**; `/odom`
+  publishing, `/scan` at **7.9 Hz not 10** — SENS-1 decides whether the rate or
+  the documentation is wrong
 - RealSense at **5000 Mbps** with depth and colour streaming together
 - New mass and footprint written into [[inventory]]
 - CPU baseline recorded — Phases 3 and 6 have nothing to budget against without it
@@ -133,9 +140,15 @@ Full procedure, including the wiring order that matters: [[computer-setup]].
 Everything above this reads odometry and IMU. If they lie, so does everything
 else.
 
-**Prerequisite: 0.8 and 0.9.** Calibrating before the Beelink is bolted on
-produces numbers that are wrong the moment the robot is assembled — mass and
-centre of gravity feed traction, PID response and odometry directly.
+**Prerequisite: 0.8, 0.9, and Phase 2.** Calibrating before the Beelink is
+bolted on produces numbers that are wrong the moment the robot is assembled —
+mass and centre of gravity feed traction, PID response and odometry directly.
+
+Phase 2 was moved ahead of this phase on 2026-08-04. Tasks 1.1–1.7 are the
+first time this robot drives on the floor under the new computer, and today
+four nodes can write `/cmd_vel` with no arbitration and no e-stop. That is
+precisely the risk Phase 2 removes, and Phase 2 needs no hardware — so it costs
+nothing to do it first and it makes the whole calibration session safer.
 
 | # | Task | Robot state |
 |---|---|---|
@@ -166,14 +179,18 @@ Then 1.6 and 1.7.
 
 ---
 
-## Phase 2 — Safe command pipeline
+## Phase 2 — Safe command pipeline ⬅ **doing this now, ahead of Phase 1**
 
 Teleop is web-only, so **the network is the control path**. A dropped wifi link
 must not be a runaway robot.
 
+Pulled ahead of Phase 1 on 2026-08-04: it needs no hardware, so it fits in the
+time Phase 0's physical tasks take, and it is the difference between Phase 1's
+floor session running with an e-stop and running without one.
+
 | # | Task |
 |---|---|
-| 2.1 | `apt install ros-jazzy-twist-mux` — **not** `joy`; teleop is web-only |
+| 2.1 | ~~`apt install ros-jazzy-twist-mux`~~ — **installed 2026-08-03**. Not `joy`; teleop is web-only |
 | 2.2 | Move all four publishers off `/cmd_vel` onto their own topics |
 | 2.3 | Configure priorities and **per-input timeouts** |
 | 2.4 | An e-stop topic at top priority, wired to the dashboard |
