@@ -1,5 +1,37 @@
 # Hardware Node Changelog
 
+## [Unreleased] — 2026-08-04
+
+### Investigated — HW-BUG-8 has a cause, and it is not the firmware
+
+No code changed in this package yet; the fix is scoped and pending. What changed
+is that the bug is finally characterised correctly, after two wrong attempts.
+
+- **The board was exonerated in fifteen seconds.** `.claude/scripts/rate_decay_log.py`
+  reads the ROSMaster's serial stream with no ROS stack running: **49.98 Hz on
+  all five report types at 2 h 41 min of board uptime**, battery 12.5 V. Nine
+  minutes earlier, at a *shorter* uptime, ROS `/imu/data_raw` had read 39.0 Hz.
+  "Decays with board uptime" was therefore impossible, and the three-hour
+  measurement planned to test it was cancelled before it ran.
+- **The cause is `/cmd_vel` traffic.** Bisecting one launch file at a time:
+  hardware alone 50.0 Hz, plus localization 50.0, plus lidar 50.0, plus
+  twist_mux **37.4**. Replacing twist_mux with a bare
+  `ros2 topic pub -r 20 /cmd_vel` still reproduced it at **32.4 Hz**, which
+  clears twist_mux and points at this node's own subscription path.
+- **The cost is in the executor, not the callback.** Per-thread CPU under 20 Hz
+  of `/cmd_vel`: main/executor thread 6.0 % → **55.3 %**, serial receive thread
+  **2.0 % → 2.0 %**. That is ~24.5 ms of main-thread CPU per message, with
+  `motors_enabled: false`, where `_cmd_vel_callback` takes two locks and returns
+  without touching the serial port. The 24.5 ms is **not yet explained** and no
+  explanation is being written down until it is measured.
+- **Severity raised to HIGH.** The old framing — a rate that sags on a parked
+  robot — was cosmetic. The real behaviour is that odometry and IMU drop by a
+  third *while the robot is being driven*, since teleop, the agent and Nav2 all
+  command at ~20 Hz. Phase 4 filter tuning is blocked until this is fixed.
+
+Fix plan, measurements and a 90-second reproduction: `hardware-issue.md`,
+HW-BUG-8. Regression guard: `.claude/scripts/topic_rate_log.py`.
+
 ## [Unreleased] — 2026-08-03
 
 ### Fixed

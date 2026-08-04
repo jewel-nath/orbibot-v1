@@ -73,11 +73,22 @@ matter first if this ever became tight again.
 |---|---|---|---|
 | `/odometry/filtered` | **24.0–24.5 Hz** | 25 configured | Within 4 %. HW-BUG-1's ~2.5 Hz does not occur here |
 | `/scan` | **8.0 Hz** | 8 Hz | ✅ device rate — SENS-1 resolved 2026-08-04 |
-| `/imu/data_raw` | **40–45 Hz** | 50 Hz | ⚠️ **HW-BUG-8 open** — 50.0 Hz within 10 min of a board power cycle, 39–44 Hz after 2.5 h. Decays with board uptime |
+| `/imu/data_raw` | **40–45 Hz** | 50 Hz | ⚠️ **HW-BUG-8 open** — cause found 2026-08-04: 20 Hz of `/cmd_vel` costs the node a third of its rate. 50.0 Hz with `/cmd_vel` quiet, **32.4 Hz** under it. Nothing to do with board uptime |
 | `/odom` | 1.95 Hz | on-change + 0.5 s heartbeat | ✅ correct — robot stationary, so heartbeat only |
 
 The `/odom` figure is the one that looks wrong and is not: 1.95 Hz is the 0.5 s
 heartbeat, and a stationary robot has no changes to report.
+
+> **Both were chased, and neither guess above was right.** `/scan` at 8.0 Hz is
+> the RPLidar A1's actual device rate, not a scan-mode setting — the 10 Hz in the
+> docs was the datasheet maximum (SENS-1, resolved). `/imu/data_raw` is not the
+> firmware's report interleaving either: measured at the serial layer the board
+> delivers **49.98 Hz**. The loss is in `hardware_node`'s executor thread and is
+> caused by incoming `/cmd_vel` traffic (HW-BUG-8).
+>
+> The paragraph below is kept as written on 2026-08-03. Both of its "likely
+> candidates" were plausible, cheap to write down, and wrong — which is the
+> reason this file records measurements rather than explanations.
 
 `/scan` and `/imu/data_raw` both run below their documented rates and neither
 is explained. This is **not** a CPU problem — the machine is 98.6 % idle. Likely

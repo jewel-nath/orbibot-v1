@@ -21,6 +21,13 @@ went quiet, not at the driver's backstop.
 
 Stop latency becomes: that source's timeout + at most one idle period.
 For the dashboard that is 0.3 s + 50 ms.
+
+**Do not lower this rate to "fix" a sensor-rate problem.** Adding this node made
+`/cmd_vel` busy on a parked robot for the first time, and that revealed that
+`orbibot_hardware`'s node loses a third of its 50 Hz publish rate under 20 Hz of
+`/cmd_vel` (HW-BUG-8). Turning this rate down would hide the defect while
+leaving it in the path of teleop, the agent and Nav2 — all of which command at
+about this rate — and would lengthen stop latency in exchange for nothing.
 """
 
 import rclpy

@@ -7,7 +7,9 @@
 
 ## 🔴 Open
 
-*HW-BUG-8 is **reopened** — see below; closing it this morning was wrong.
+*HW-BUG-8 has a **cause**, found 2026-08-04: 20 Hz of `/cmd_vel` costs the node a
+third of its 50 Hz sensor rate, in the executor thread. It is neither a firmware
+fault nor a decay, and both earlier characterisations were wrong.
 HW-BUG-9 is fixed and HW-BUG-1 does not reproduce.*
 
 ### HW-BUG-9: `robot.launch.py` silently arms the motors 6 s after startup
@@ -63,10 +65,15 @@ turned out to be wrong; see the corrected measurements there.
 
 ---
 
-### HW-BUG-8: serial-derived topics decay from 50 Hz with board uptime
-**Opened:** 2026-08-03 · **Closed wrongly, then REOPENED 2026-08-04**
-**Severity:** MEDIUM — Madgwick and the EKF are fed by this
-**Files:** `hardware_node.py`; firmware `task_communication.c`
+### HW-BUG-8: `/cmd_vel` traffic collapses the 50 Hz sensor rate — the executor, not the board
+**Opened:** 2026-08-03 · closed wrongly, reopened, **CAUSE FOUND 2026-08-04 17:30**
+**Severity:** MEDIUM → **HIGH** — it bites hardest exactly while the robot is being driven
+**File:** `hardware_node.py` (**not** the firmware, and **not** `task_communication.c`)
+
+> **Read the resolution at the bottom before the history.** The title above is
+> the third characterisation of this bug. The first two — "not reproducible",
+> then "decays with board uptime" — were both wrong, and the history is kept
+> because *how* they were wrong is the transferable part.
 
 Measured on the Beelink, `robot.launch.py` up, robot elevated, motors disabled:
 
@@ -148,25 +155,94 @@ interval it varies on.
   timeouts or serial errors. The link is not failing, it is *slowing*.
 - **A power cycle restores it**, which is how the 14:45 numbers were obtained.
 
-**Leading hypothesis, untested:** something in the firmware's report scheduling
-drifts with uptime — the five report types are interleaved 1 ms apart on a link
-close to its limit (`task_communication.c`). A counter, timer or buffer that
-degrades over hours would produce exactly this. **This is a hypothesis. Do not
-write it down as the cause until it is measured.**
+**Leading hypothesis at the time, untested:** something in the firmware's report
+scheduling drifting with uptime. It was labelled a hypothesis, and it was wrong.
+The plan written here — power-cycle the board and measure for three hours — was
+aimed at a layer that turned out to be innocent, and it was abandoned before it
+was run. See below.
 
-**How to resolve:**
-1. **Characterise the curve.** Power-cycle the board, then measure
-   `/imu/data_raw` every 15 min for 3 h. Is the decay linear, or a step?
-2. Measure at the serial layer, below ROS — `tests/test_data_rate.py` — to
-   separate firmware scheduling from the driver's read loop
-3. Check whether traffic *volume* matters: does it decay faster with the ROS 2
-   stack running than with the board idle?
-4. Only then look at `task_communication.c`
+---
+
+### CAUSE FOUND — 2026-08-04 17:30. Not the board. Not uptime. `/cmd_vel` traffic.
+
+The three-hour experiment above was never run, because the *first fifteen
+seconds* of measuring one layer lower made it pointless. `rate_decay_log.py`
+talks to the ROSMaster directly with no ROS stack up:
+
+| layer | board uptime | rate |
+|---|---|---|
+| firmware, raw serial | **2 h 41 min** | **49.98 Hz**, all five report types, battery 12.5 V |
+| ROS `/imu/data_raw`, 9 min earlier | 2 h 32 min | 39.0 Hz |
+
+Same board, same uptime, *longer* uptime for the good reading. **The firmware
+was never the problem**, so "board uptime" could not be the variable. That
+killed both the hypothesis and the experiment designed to test it.
+
+**Bisect — one co-running launch file at a time, 40 s each, motors disabled:**
+
+| what was running | `/imu/data_raw` | `hardware_node` CPU |
+|---|---|---|
+| `hardware.launch.py` alone | **50.00 Hz** | 11.7 % |
+| \+ `localization.launch.py` (EKF 50 Hz + Madgwick) | 50.00 Hz | 11.9 % |
+| \+ `lidar.launch.py` | 50.00 Hz | 11.6 % |
+| \+ `twist_mux.launch.py` | **37.4 Hz** | **51.7 %** |
+| \+ a bare `ros2 topic pub -r 20 /cmd_vel`, no twist_mux | **32.4 Hz** | **60.0 %** |
+
+The last row is the one that matters: **twist_mux is not involved.** Twenty
+`Twist` messages per second on `/cmd_vel`, from anything at all, cost the node a
+third of its publish rate.
+
+**Per-thread CPU inside `hardware_node`, idle vs 20 Hz on `/cmd_vel`:**
+
+| thread | idle | loaded |
+|---|---|---|
+| **main / executor** | 6.0 % | **55.3 %** |
+| serial receive thread | 2.0 % | **2.0 %** |
+| the other four | ~3.4 % | ~3.1 % |
+| total | 11.4 % | 60.4 % |
+
+The serial reader does not move. The whole cost lands on the executor thread:
+**~24.5 ms of main-thread CPU per `/cmd_vel` message** — and `motors_enabled`
+was `false` throughout, so `_cmd_vel_callback` took two locks and returned
+without touching the serial port. The work is not in the callback body. It is in
+the single-threaded `rclpy` executor that also owns the 50 Hz sensor timer.
+
+**Why it looked like decay.** `cmd_vel_idle` — added the same day, in Phase 2,
+to make "silence means stop" true — publishes zeros at 20 Hz forever. Before
+that node existed, nothing published `/cmd_vel` while the robot sat idle, and
+the rate read 49.998 Hz. After it, `/cmd_vel` is never quiet. The 14:45 and
+17:09 measurements straddled that change, and elapsed time was a coincidence
+sitting on top of it. **This regression is mine.**
+
+**Why it is more serious than the original report.** A rate that sags while the
+robot is parked is cosmetic. This one is triggered *by being driven*: teleop,
+the agent and Nav2 all publish `cmd_vel` at ~20 Hz, so odometry and IMU drop by
+a third at exactly the moment localisation is being asked to work hardest. The
+old framing hid that, because it blamed a clock nobody was driving.
+
+**How to resolve — the fix is in `hardware_node.py`:**
+1. Give the 50 Hz sensor timer its own `MutuallyExclusiveCallbackGroup` and run
+   the node on a `MultiThreadedExecutor`, so `/cmd_vel` arrivals cannot delay
+   publishing. Measure the same table again — it is 40 s per row.
+2. If that is not enough, find out *what* costs 24.5 ms per message. That number
+   is far too large for a wait-set rebuild and is not yet explained. **Do not
+   write an explanation into this file until it is measured.**
+3. Re-check with the full `robot.launch.py`, which is the configuration the
+   operator actually runs.
 
 **Consequence meanwhile:** Madgwick is configured `frequency: 50.0` and the EKF
-now runs at 50 Hz. Both are being fed ~40 Hz after a few hours. Phase 4 must not
-tune `gain`/`zeta` against an input rate that depends on how long ago someone
-power-cycled the board.
+now runs at 50 Hz. Both are fed ~50 Hz parked and ~35 Hz under teleop. Phase 4
+must not tune `gain`/`zeta` until this is fixed — the input rate currently
+depends on whether anyone is driving.
+
+**Reproduce in 90 seconds:**
+
+```bash
+ros2 launch orbibot_hardware hardware.launch.py &
+python3 .claude/scripts/topic_rate_log.py -w 15 -d 15 -t /imu/data_raw   # 50 Hz
+ros2 topic pub -r 20 /cmd_vel geometry_msgs/msg/Twist "{}" &             # zeros only
+python3 .claude/scripts/topic_rate_log.py -w 15 -d 15 -t /imu/data_raw   # ~32 Hz
+```
 
 ---
 

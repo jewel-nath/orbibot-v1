@@ -54,6 +54,16 @@ done
 `.claude/scripts/stop.sh` does this. Cost: one truncated cleanup that left six
 orphaned nodes.
 
+**This has now cost three separate sessions**, and the third one was not a
+`pkill` at all — it was a `/proc` scan written *to avoid* `pgrep`, which then
+made the same mistake by matching the full command line. It reported the `bash`
+wrapper as `hardware_node` and measured it at **0.0 % CPU**, which reads exactly
+like "the node is idle" rather than "you are measuring the wrong process".
+
+Whenever you match a process by name, **match `argv[0]`, not the command line** —
+and treat a suspiciously clean `0.0 %` as a sign you found a shell.
+`.claude/scripts/topic_rate_log.py` has the Python version of the filter.
+
 ### ROS `setup.bash` cannot be sourced under `set -u`
 
 It reads unset variables and aborts the script with `AMENT_TRACE_SETUP_FILES:
@@ -198,20 +208,61 @@ asserts agreement over a refactor that merges them — merging C built by
 PlatformIO with Python installed by colcon trades a naming problem for a
 build-system one. `test_protocol_table_agreement.py`.
 
-### "Not reproducible" needs a measurement spread over the fault's own timescale
+### "Nothing changed but elapsed time" is a claim, and it is usually false
 
-HW-BUG-8 was closed on four `/imu/data_raw` windows reading 49.99 Hz with a
-0.012 Hz spread. Convincing — and wrong. All four were taken within ten minutes
-of a board power cycle, and the fault decays with **uptime**: the same stack
-measured 39–44 Hz two and a half hours later, on the same day, with nothing
-changed but elapsed time.
+HW-BUG-8 was characterised three times in one day and the first two were wrong.
 
-Four samples in ten minutes measured what a freshly powered board does, not
-whether the fault was gone.
+It was closed on four `/imu/data_raw` windows reading 49.99 Hz — spread
+0.012 Hz, thoroughly convincing. Two and a half hours later the same stack read
+39–44 Hz, so it was reopened as *"decays with board uptime"*, on the reasoning
+that **nothing had changed but elapsed time**.
 
-Before closing an intermittent fault, ask **what interval does it vary on**, and
-sample across that interval. If the answer is unknown, the honest status is
-"not observed today", not "not reproducible".
+Something had. A node added that afternoon, `cmd_vel_idle`, publishes zeros on
+`/cmd_vel` at 20 Hz forever — and 20 Hz of `/cmd_vel` costs the hardware node a
+third of its publish rate. The two measurements straddled that commit. Elapsed
+time was a coincidence lying on top of a regression, and it was persuasive
+precisely because it came with a tidy monotonic story.
+
+Two habits, both cheap:
+
+- When you catch yourself writing *"nothing changed but X"*, run `git log
+  --since` over the interval before believing it. Your own commits are the
+  changes you are least likely to suspect.
+- Before closing an intermittent fault, ask **what interval does it vary on**
+  and sample across that interval. If the answer is unknown, the honest status
+  is "not observed today", not "not reproducible".
+
+### Measure the layer below before designing an experiment on top of it
+
+The plan that followed from *"decays with board uptime"* was: power-cycle the
+board, then measure every 15 minutes for three hours. It required the operator
+to keep the robot powered all evening, and it would have measured nothing.
+
+What actually settled it was **fifteen seconds** spent one layer lower — reading
+the ROSMaster's serial stream directly with no ROS stack running. It reported
+49.98 Hz at 2 h 41 min of board uptime, while ROS had reported 39.0 Hz nine
+minutes *earlier* at a shorter uptime. The firmware was innocent, so the
+variable named in the hypothesis could not exist, and the three-hour experiment
+died before it was run.
+
+A layered system gives this for free: firmware, serial, driver, topic. When a
+number is wrong at the top, measure the bottom first — it is almost always the
+cheapest measurement available and it eliminates whole strata at once.
+
+`.claude/scripts/rate_decay_log.py` (serial layer) and `topic_rate_log.py` (ROS
+layer) exist so this comparison stays a two-command job.
+
+### Bisect by launching one thing at a time
+
+Once the firmware was cleared, the cause took four 40-second runs: the hardware
+node alone (50.0 Hz), plus localization (50.0), plus lidar (50.0), plus
+twist_mux (37.4). Then one more run replaced twist_mux with a bare
+`ros2 topic pub -r 20 /cmd_vel` and still reproduced it — which is what proved
+twist_mux was a bystander rather than the culprit.
+
+Launch files make this nearly free on this robot, and the last step matters
+most: after a bisect fingers a component, **reproduce it without that
+component**. Otherwise the fix goes into the wrong package.
 
 ### Prove a guard fails before trusting it
 

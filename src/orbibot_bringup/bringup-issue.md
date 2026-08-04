@@ -5,6 +5,33 @@
 
 ---
 
+## ⚠️ Open
+
+### BRINGUP-4: `cmd_vel_idle` exposed a 33 % sensor-rate loss in `orbibot_hardware`
+**Opened:** 2026-08-04 · **Severity:** MEDIUM here, HIGH in `orbibot_hardware`
+**File:** `orbibot_bringup/cmd_vel_idle.py` — but the **defect is not here**
+
+`cmd_vel_idle` publishes a zero `Twist` at 20 Hz so that "silence means stop" is
+actually true (twist_mux is event-driven and publishes nothing when its inputs
+go quiet). That node is correct and stays.
+
+What it revealed is that `orbibot_hardware`'s node cannot absorb 20 Hz on
+`/cmd_vel`: `/imu/data_raw` falls from **50.0 Hz to 32.4 Hz** and the node's CPU
+goes from 11.4 % to 60.4 %, all of it on the executor thread, with motors
+disabled. Reproduced with a bare `ros2 topic pub` and **no twist_mux running**,
+so nothing in this package is the cause. Full measurements and the fix plan:
+`src/orbibot_hardware/hardware-issue.md`, HW-BUG-8.
+
+Recorded here because this package's launch file is what makes `/cmd_vel` busy
+on an idle robot, and because for two hours the symptom was mistaken for a
+firmware fault. Do **not** "fix" it by lowering `cmd_vel_idle`'s rate — that
+hides a defect that teleop, the agent and Nav2 will all hit at ~20 Hz anyway.
+
+**Closes when** HW-BUG-8 is fixed and `robot.launch.py` holds 50 Hz with
+`cmd_vel_idle` running.
+
+---
+
 ## ✅ Fixed
 
 ### BRINGUP-2: the LiDAR was opening `/dev/motordriver`
