@@ -5,10 +5,10 @@
 
 ---
 
-## ✅ Fixed / not reproducible
+## 🔴 Open
 
-*Nothing in this file is currently open. HW-BUG-9 is fixed; HW-BUG-8 and HW-BUG-1
-do not reproduce on this machine. Technical debt below is still real.*
+*HW-BUG-8 is **reopened** — see below; closing it this morning was wrong.
+HW-BUG-9 is fixed and HW-BUG-1 does not reproduce.*
 
 ### HW-BUG-9: `robot.launch.py` silently arms the motors 6 s after startup
 **Opened:** 2026-08-03 · **FIXED 2026-08-03** · **Severity:** HIGH — safety
@@ -63,9 +63,9 @@ turned out to be wrong; see the corrected measurements there.
 
 ---
 
-### HW-BUG-8: `/imu/data_raw` runs at 40–45 Hz, not the documented 50 Hz
-**Opened:** 2026-08-03 · **NOT REPRODUCIBLE, 2026-08-04**
-**Severity:** ~~MEDIUM~~ — see the re-measurement below
+### HW-BUG-8: serial-derived topics decay from 50 Hz with board uptime
+**Opened:** 2026-08-03 · **Closed wrongly, then REOPENED 2026-08-04**
+**Severity:** MEDIUM — Madgwick and the EKF are fed by this
 **Files:** `hardware_node.py`; firmware `task_communication.c`
 
 Measured on the Beelink, `robot.launch.py` up, robot elevated, motors disabled:
@@ -92,7 +92,7 @@ message headers. Phase 4 tunes `gain` and `zeta` against that. A filter told it
 runs at 50 Hz while fed 43 Hz with jitter will be tuned wrong, and the error
 will be blamed on the gains.
 
-> ### NOT REPRODUCIBLE — re-measured 2026-08-04
+> ### First re-measurement, 2026-08-04 ~14:45 — looked fine, and this conclusion was wrong
 >
 > Same conditions as the original: full `robot.launch.py`, robot elevated,
 > motors disabled, machine 98.8 % idle. Four consecutive 50-sample windows:
@@ -121,10 +121,52 @@ will be blamed on the gains.
 > **If it returns, measure the board's behaviour before touching the ROS side**
 > — check for `ch341` disconnects in `journalctl -k` first.
 
-**How to resolve** (only if it reappears):
-1. Check `journalctl -k` for `ch341` re-enumeration before anything else
-2. Measure the actual serial throughput and packet loss at 115200
-3. Compare against `test-report.md` §9.5's 52.5 Hz — what changed since?
+### REOPENED — 2026-08-04 17:09. It came back, and now it has a shape.
+
+Same day, same stack, nothing changed but elapsed time:
+
+| when | since board power-on | `/imu/data_raw` |
+|---|---|---|
+| 2026-08-03 | hours | 40.4, 45.1 Hz |
+| 2026-08-04 **14:45** | **~10 min** | 49.998, 49.992, 50.004, 49.998 |
+| 2026-08-04 **17:09** | **~2 h 32 min** | 44.6, 39.95, 41.0, 39.0 |
+
+**The closure above was wrong.** Four windows inside ten minutes of a board
+power cycle is not evidence a fault is gone — it is evidence of what a freshly
+powered board does. An intermittent fault needs a measurement spread over the
+interval it varies on.
+
+**What the fault actually is, as far as measured:**
+
+- **Both serial-derived topics decay together.** `/joint_states` measured
+  40.6 Hz alongside `/imu/data_raw` 39.0 Hz. They share one 115200 link.
+- **`/scan` is unaffected** — 8.087 Hz, normal. Different USB device, different
+  driver. So this is the ROSMaster serial path, not the host or USB generally.
+- **Not CPU.** Machine 95.7 % idle; `twist_mux`, `cmd_vel_idle` and
+  `cmd_vel_source` each at 0.0 %.
+- **No errors.** Zero `ch341` events in `journalctl -k`, no hardware_node
+  timeouts or serial errors. The link is not failing, it is *slowing*.
+- **A power cycle restores it**, which is how the 14:45 numbers were obtained.
+
+**Leading hypothesis, untested:** something in the firmware's report scheduling
+drifts with uptime — the five report types are interleaved 1 ms apart on a link
+close to its limit (`task_communication.c`). A counter, timer or buffer that
+degrades over hours would produce exactly this. **This is a hypothesis. Do not
+write it down as the cause until it is measured.**
+
+**How to resolve:**
+1. **Characterise the curve.** Power-cycle the board, then measure
+   `/imu/data_raw` every 15 min for 3 h. Is the decay linear, or a step?
+2. Measure at the serial layer, below ROS — `tests/test_data_rate.py` — to
+   separate firmware scheduling from the driver's read loop
+3. Check whether traffic *volume* matters: does it decay faster with the ROS 2
+   stack running than with the board idle?
+4. Only then look at `task_communication.c`
+
+**Consequence meanwhile:** Madgwick is configured `frequency: 50.0` and the EKF
+now runs at 50 Hz. Both are being fed ~40 Hz after a few hours. Phase 4 must not
+tune `gain`/`zeta` against an input rate that depends on how long ago someone
+power-cycled the board.
 
 ---
 

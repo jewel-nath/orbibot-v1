@@ -73,7 +73,7 @@ matter first if this ever became tight again.
 |---|---|---|---|
 | `/odometry/filtered` | **24.0–24.5 Hz** | 25 configured | Within 4 %. HW-BUG-1's ~2.5 Hz does not occur here |
 | `/scan` | **8.0 Hz** | 8 Hz | ✅ device rate — SENS-1 resolved 2026-08-04 |
-| `/imu/data_raw` | **40–45 Hz** | 50 Hz | ✅ re-measured 49.99 Hz on 2026-08-04 — HW-BUG-8 not reproducible |
+| `/imu/data_raw` | **40–45 Hz** | 50 Hz | ⚠️ **HW-BUG-8 open** — 50.0 Hz within 10 min of a board power cycle, 39–44 Hz after 2.5 h. Decays with board uptime |
 | `/odom` | 1.95 Hz | on-change + 0.5 s heartbeat | ✅ correct — robot stationary, so heartbeat only |
 
 The `/odom` figure is the one that looks wrong and is not: 1.95 Hz is the 0.5 s

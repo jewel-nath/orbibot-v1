@@ -198,6 +198,21 @@ asserts agreement over a refactor that merges them — merging C built by
 PlatformIO with Python installed by colcon trades a naming problem for a
 build-system one. `test_protocol_table_agreement.py`.
 
+### "Not reproducible" needs a measurement spread over the fault's own timescale
+
+HW-BUG-8 was closed on four `/imu/data_raw` windows reading 49.99 Hz with a
+0.012 Hz spread. Convincing — and wrong. All four were taken within ten minutes
+of a board power cycle, and the fault decays with **uptime**: the same stack
+measured 39–44 Hz two and a half hours later, on the same day, with nothing
+changed but elapsed time.
+
+Four samples in ten minutes measured what a freshly powered board does, not
+whether the fault was gone.
+
+Before closing an intermittent fault, ask **what interval does it vary on**, and
+sample across that interval. If the answer is unknown, the honest status is
+"not observed today", not "not reproducible".
+
 ### Prove a guard fails before trusting it
 
 A test that has never failed is not evidence of anything. After writing the
