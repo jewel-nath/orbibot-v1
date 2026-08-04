@@ -148,6 +148,21 @@ If P-2 or P-3 fails, the fixes in order of preference: bulk capacitance across
 the converter input, thicker/shorter battery leads, or raising the software
 low-voltage warning well above 10.5 V.
 
+> ⚠️ **Disconnect the charger before measuring any of these.** Attempted
+> 2026-08-03 with the charger still on the pack: motor bursts produced only a
+> 0.20 V dip (12.80 → 12.60 V), which looks like a comfortable pass and is
+> **meaningless**. A connected charger holds the rail up, so what was measured
+> was the charger's regulation, not the battery's internal resistance — which
+> is the entire quantity P-2 and P-3 exist to bound. The run was void and the
+> numbers were not recorded as a result.
+>
+> Two further conditions the measurement is only valid under:
+>
+> - **Wheels on the ground, under load.** Wheels-free draws roughly the motors'
+>   no-load current and understates the worst case badly.
+> - **Battery not freshly charged.** The margin that matters is at the bottom
+>   of the discharge curve, near the 10.5 V cutoff, not at 12.8 V.
+
 Record results in `test-report.md`, dated. See `.claude/rules/robot-safety.md`.
 
 ### Runtime

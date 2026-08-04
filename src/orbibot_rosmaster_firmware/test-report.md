@@ -471,3 +471,56 @@ while time.time() - t0 < 3.5:
 p.stop(); p.disconnect()
 "
 ```
+
+---
+
+## 9.6 Power Rail Under Motor Load (P-3 / P-5) — 2026-08-03
+
+**Host:** Beelink SER5 Pro, `/dev/motordriver` → `ttyUSB0`, CH340N @ 115200.
+**Robot state:** elevated on a stool, **wheels free**.
+**Power:** 4S LiFePO4, charger **disconnected**. Beelink on its own mains
+adapter; the shared 12.8 V rail feeds the ROSMaster board.
+**Method:** `robot.launch.py` up, motors enabled explicitly, four 3 s bursts at
+20 Hz `cmd_vel`, battery sampled from `/orbibot/system_status` throughout.
+
+| Profile | min V | max V | mean V |
+|---|---|---|---|
+| forward 0.15 m/s | 12.60 | 12.70 | 12.68 |
+| forward 0.30 m/s | 12.60 | 12.70 | 12.67 |
+| rotate 1.0 rad/s | 12.60 | 12.70 | 12.66 |
+| rotate 2.0 rad/s | 12.60 | 12.70 | 12.63 |
+
+Idle before the run: **12.80 V**.
+
+**P-5: pass.** Uptime advanced 766 s → 792 s across the whole run — no reboot.
+`dmesg` shows zero resets, disconnects or under-voltage events.
+
+**P-3: not yet answered.** Do not read the table as a pass. Three limits, in
+descending order of importance:
+
+1. **Wheels free.** The motors drew roughly their no-load current. Real traction
+   load is several times higher, and stall is ~3 A per motor. This is a lower
+   bound on the draw, so an upper bound on the rail's health.
+2. **Resolution.** The firmware reports battery in **0.1 V steps**. The whole
+   observed excursion — 12.80 idle to 12.60 loaded — is two steps. The honest
+   statement is *"sag was not resolvable at this current"*, not *"sag was
+   0.20 V"*.
+3. **Battery near full.** The margin that matters is at the bottom of the
+   discharge curve, close to the 10.5 V BMS cutoff and the converter's 10 V
+   minimum input. Nothing here probes that.
+
+**An earlier run of this same test, an hour before, was void** — the charger was
+still connected to the pack, so the rail was being held up by the charger rather
+than the battery. It produced identical numbers, which is worth knowing: at
+no-load motor current this measurement cannot tell a charged battery from a
+charger, because neither moves the reading.
+
+**Still required before the robot drives autonomously:**
+
+- P-1 and P-2 — converter *output* under load. Needs a multimeter on the 19 V
+  side; not observable in software.
+- P-3 proper — wheels on the ground, under real traction load, battery part
+  discharged.
+- P-4 — converter case temperature after 30 min under load.
+
+See `docs/operations/computer-setup.md` for the pass criteria.

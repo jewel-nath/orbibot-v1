@@ -27,10 +27,18 @@ def generate_launch_description():
         description='Serial port for motor driver'
     )
     
+    # Default false, deliberately. Launching the stack must not arm four motors
+    # on a robot that may be on the floor. Enabling is an explicit act:
+    #   ros2 launch orbibot_bringup robot.launch.py motors_enabled:=true
+    # or the dashboard's motor-enable control, or the SetMotorEnable service.
+    #
+    # This defaulted to 'true' until 2026-08-03. hardware_node.py never enables
+    # motors itself, so reading the node gave the opposite answer to what the
+    # launch actually did — see hardware-issue.md HW-BUG-9.
     declare_start_enabled = DeclareLaunchArgument(
         'motors_enabled',
-        default_value='true',
-        description='Start with motors enabled'
+        default_value='false',
+        description='Arm the motors at startup. Default false — enabling is explicit.'
     )
     
     # Launch configuration variables
@@ -53,17 +61,20 @@ def generate_launch_description():
         ]
     )
     
-    # Motor enable: single call after delay so hardware node and service are ready
+    # Motor enable: single call after delay so hardware node and service are ready.
+    # Only runs when motors_enabled:=true is passed explicitly — see above.
     motor_enable_cmd = TimerAction(
         period=6.0,
         actions=[
+            LogInfo(msg='[Hardware] ⚠ ARMING MOTORS — motors_enabled:=true was passed'),
             ExecuteProcess(
                 cmd=['ros2', 'service', 'call', '/orbibot/set_motor_enable',
                      'orbibot_msgs/srv/SetMotorEnable', '{enable: true}'],
                 name='motor_enable_startup',
                 condition=IfCondition(motors_enabled)
             )
-        ]
+        ],
+        condition=IfCondition(motors_enabled)
     )
     
     log_info = LogInfo(
