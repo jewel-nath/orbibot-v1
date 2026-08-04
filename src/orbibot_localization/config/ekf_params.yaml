@@ -4,11 +4,23 @@
 
 robot_localization_ekf:
   ros__parameters:
-    # Update frequency — 25 Hz for RPi5 with full nav stack
-    # 25 Hz = 40ms cycle time; sufficient for mecanum at 0.5 m/s (2cm/cycle)
-    # lgdxrobot2 runs 50Hz; 25Hz balances accuracy vs RPi5 CPU headroom with nav2
-    # (Was 15 Hz — too coarse at 66ms/3.3cm per cycle for navigation)
-    frequency: 25.0
+    # Update frequency — matched to the inputs, not to a CPU budget.
+    #
+    # Both sensors this filter fuses arrive at 50 Hz: /imu/data_raw measured
+    # 49.99 Hz and /joint_states 49.97 Hz on 2026-08-04. /odom is deduplicated
+    # when the robot is still (see hardware_node heartbeat) but also reaches
+    # ~50 Hz under motion. Running the filter slower than its inputs throws away
+    # every other measurement.
+    #
+    # Was 25.0, chosen as "balances accuracy vs RPi5 CPU headroom with nav2"
+    # (and 15.0 before that). That machine was replaced 2026-08-03 by a Beelink
+    # SER5 Pro, 8C/16T. The constraint it was fitted to no longer exists, so the
+    # number is re-derived from the sensor rates rather than rescaled.
+    # Measured after the change, 2026-08-04, robot elevated, motors disabled:
+    # /odometry/filtered 49.999 Hz (was 25.000), ekf_node 1.6 % of one core
+    # over 8 s, RSS 38.7 MB, machine 98.7 % idle. The 25 Hz was buying nothing
+    # this machine needed. See docs/operations/baseline-results.md.
+    frequency: 50.0
     sensor_timeout: 0.2
     two_d_mode: true
     transform_time_offset: 0.0

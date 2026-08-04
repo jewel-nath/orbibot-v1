@@ -28,6 +28,7 @@ was measured, and how to learn it. Start at [docs/README.md](docs/README.md).
 |---|---|
 | **Setting up the new computer** | [docs/operations/computer-setup.md](docs/operations/computer-setup.md) — power, ROS 2, build, mounting |
 | **What to build next** | [docs/plan/roadmap.md](docs/plan/roadmap.md) — phases and gates |
+| **Values still fitted to the old Pi** | [docs/plan/inherited-values.md](docs/plan/inherited-values.md) — every one, and what to re-derive it from |
 | **What is broken** | `src/<pkg>/<pkg>-issue.md`; [docs/moc/backlog-moc.md](docs/moc/backlog-moc.md) maps them |
 | A package's API | `src/<pkg>/README.md` |
 | A package's orientation and open items | `docs/packages/<pkg>.md` |
@@ -133,6 +134,14 @@ Handy scripts: `.claude/scripts/preflight.sh` before operating,
   Exactly one node may publish `map → odom`
 - **Odometry**: `/odom` is raw wheel odometry; Nav2 and consumers use
   `/odometry/filtered` from the EKF
+- **Tune for the Beelink, not the Pi.** Any value carrying a "reduced for
+  RPi" / "to fit a Raspberry Pi" justification is void — that machine is gone.
+  Re-derive it from a measurement on this hardware and write the number, the
+  date and the robot's state beside the value. Do **not** rescale it, and do not
+  raise it unmeasured either: both are the same error. The full list is in
+  [docs/plan/inherited-values.md](docs/plan/inherited-values.md). Note that
+  `/scan` at 7.9 Hz and the camera's 480 Mbps link are sensor limits, not CPU
+  limits, and do not move with the faster machine
 - **No magnetometer.** Removed 2026-04-28 — indoor iron and motor currents made
   heading worse. Madgwick runs `use_mag: false`, EKF yaw is relative, and drift
   is corrected by SLAM/AMCL. Do not propose bringing it back
