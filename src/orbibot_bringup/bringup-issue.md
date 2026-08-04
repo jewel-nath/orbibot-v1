@@ -105,25 +105,44 @@ launch processes before nodes.
 
 ---
 
-## 🔴 Open
+## ⛔ Not a bug — closed the day it was opened
 
 ### BRINGUP-3: `/odom` publishes at 1.94 Hz
-**Opened:** 2026-08-04 · **Severity:** MEDIUM — Nav2 and the EKF read this
-**Owner:** likely `orbibot_hardware`, not this package
+**Opened and closed:** 2026-08-04 · **Verdict:** working as designed
 
-Measured on the full stack, robot elevated, motors disabled, 2026-08-04:
+Measured on the full stack, robot elevated, motors disabled:
 
 | Topic | Rate |
 |---|---|
 | `/joint_states` | 49.97 Hz |
 | `/imu/data_raw` | 49.99 Hz |
 | `/odometry/filtered` | 25.00 Hz |
-| **`/odom`** | **1.94 Hz** |
+| `/odom` | 1.94 Hz |
 
-`/odom` and `/joint_states` are derived from the *same* serial frames, so a 25×
-gap between them is not a device limit. Not CPU — the machine is near idle.
-Investigate in `orbibot_hardware`; recorded here because it was found during
-bringup verification.
+Opened on the reasoning that `/odom` and `/joint_states` come from the same
+serial frames, so a 25× gap had to be a bug. That skipped reading the code.
+`hardware_node._publish_firmware_odom()` **deduplicates unchanged odometry** and
+re-sends it only as a heartbeat, `odometry.heartbeat_interval`, default 0.5 s.
+A stationary robot produces identical odometry every frame, so 1/0.5 = 2 Hz is
+the correct output.
+
+Proved without needing motors, by changing the live parameter:
+
+| `heartbeat_interval` | measured `/odom` |
+|---|---|
+| 0.5 s (default) | 1.948 Hz |
+| 0.2 s | 4.659 Hz |
+| 0.1 s | 8.474 Hz |
+
+It tracks the interval. (Each is slightly under 1/interval because the check
+runs on the 50 Hz sensor callback, so the wait rounds up to the next 20 ms
+tick.) **`/odom` under motion is still unmeasured** — expect ~50 Hz once the
+wheels turn, and confirm it during Phase 1.
+
+**Lesson worth keeping:** a rate that looks wrong is not a bug until the code
+that produces it has been read. This is the second time today the same mistake
+appeared — see BRINGUP-1, where a claim was made from a test harness artifact
+rather than the robot's real behaviour.
 
 ---
 
