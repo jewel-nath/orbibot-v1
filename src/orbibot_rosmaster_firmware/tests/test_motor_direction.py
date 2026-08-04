@@ -1,9 +1,27 @@
 #!/usr/bin/env python3
 """
-Motor Direction Test Script for OrbiBot Firmware
+Motor Direction Test Script for OrbiBot Firmware — DOES NOT WORK, DO NOT USE.
 
-Tests each motor individually to verify direction is correct.
-Each motor should spin FORWARD (wheel moves forward when touching ground).
+**This test has never been able to do what it claims.** It drives each wheel via
+`ROSMasterProtocol.set_motor()`, which sent function code 0x09 with a two-byte
+payload. This firmware has **no per-motor command**: 0x09 is FUNC_RESET_ODOM and
+takes no payload, so every packet was rejected on its length check and no motor
+was ever commanded.
+
+The test then asked the operator *"Did FL spin FORWARD? [y/n]"* — so whatever it
+recorded was a human opinion about a wheel that was never asked to move.
+
+Found 2026-08-04 by diffing the three hand-maintained protocol tables; the
+mismatch is now guarded by test_protocol_table_agreement.py. It is not in
+run_all_tests.py and never was.
+
+**Use test_kinematics.py instead.** Motors are driven only through FUNC_MOTION
+(0x12) as whole-robot velocity, so wheel direction is checked by commanding a
+pure vx / vy / wz and observing which wheels turn — which is what that test
+already does, without needing a human to adjudicate.
+
+Kept rather than deleted because the motor mapping below is still correct and
+worth reading:
 
 Motor mapping:
 - M1: Front-Left (FL) - should spin to move robot forward
@@ -127,5 +145,13 @@ def main():
     return 0 if wrong == 0 else 1
 
 
+def _refuse():
+    print(__doc__)
+    print("Refusing to run. Use: python3 test_kinematics.py --port /dev/motordriver")
+    sys.exit(2)
+
+
 if __name__ == "__main__":
+    _refuse()
+    # Unreachable — kept so the original flow is still readable.
     sys.exit(main())

@@ -8,6 +8,49 @@ This file lists **open** issues only. Fixed items live in
 
 ---
 
+## ✅ Fixed
+
+### FW-ISSUE-12: the test harness called 0x09 `SET_MOTOR`; the firmware calls it `FUNC_RESET_ODOM`
+**Found and fixed:** 2026-08-04 · **Severity:** MEDIUM — a test that could only lie
+**Files:** `tests/rosmaster_protocol.py`, `tests/test_motor_direction.py`
+
+The serial protocol table is maintained by hand in three places. Two agreed; the
+third did not:
+
+| code | `protocol.h` | `rosmaster_driver.py` | `tests/rosmaster_protocol.py` |
+|---|---|---|---|
+| `0x09` | `FUNC_RESET_ODOM` | `FUNC_RESET_ODOM` | **`SET_MOTOR`** |
+
+**This firmware has no per-motor command.** Motors are driven only through
+`FUNC_MOTION` (0x12) as whole-robot velocity. `FUNC_RESET_ODOM` takes **no
+payload** — see the length table in `protocol.c` — while the harness sent two
+bytes, so every packet was rejected on length and no motor was ever commanded.
+
+The only caller was `test_motor_direction.py`, which spun each wheel in turn and
+then asked the operator *"Did FL spin FORWARD? [y/n]"*. Whatever it recorded was
+a human opinion about a wheel that had never been asked to move. It is not in
+`run_all_tests.py`, so it never ran as part of the suite — which is the only
+reason this did not corrupt the test report.
+
+**Fixed:**
+- `rosmaster_protocol.py` — `SET_MOTOR` renamed to the truth, `RESET_ODOM = 0x09`,
+  with a working `reset_odom()`. `set_motor()` now raises `NotImplementedError`
+  explaining why, instead of silently sending a rejected packet
+- `test_motor_direction.py` refuses to run and points at `test_kinematics.py`,
+  which checks direction the way the protocol actually allows: command a pure
+  vx / vy / wz and observe which wheels turn, no human adjudication
+- **`test_protocol_table_agreement.py` added** — parses all three tables and
+  fails if any byte means two different things, any name has two different
+  values, or a consumer invents a code the firmware does not implement.
+  Verified by reintroducing the bug: it fails three ways with the byte named
+
+Roadmap 1.9 asked for "one source of truth for the protocol table". Merging the
+three would trade a naming problem for a build-system one — the firmware is C
+built by PlatformIO, the driver is Python installed by colcon. Asserting
+agreement costs nothing and catches drift, which was the actual failure.
+
+---
+
 ## 🟠 Open issues (need hardware or further thought before fixing)
 
 ### FW-ISSUE-4: `MAX_WHEEL_SPEED_MMS` is theoretical, not measured

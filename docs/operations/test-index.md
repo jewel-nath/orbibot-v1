@@ -24,6 +24,7 @@ Runs anywhere, any time. If these are red, fix them before touching hardware.
 | What | Command | Last run | Result |
 |---|---|---|---|
 | **Hardware unit tests** — driver protocol, node logic, launch file | `python3 -m pytest src/orbibot_hardware/tests/ -q` | 2026-08-04 | **82 passed** in directory, reverse and per-file order |
+| **Protocol table agreement** — firmware vs driver vs test harness | `python3 -m pytest src/orbibot_rosmaster_firmware/tests/test_protocol_table_agreement.py -q` | 2026-08-04 | **9 passed**; caught `SET_MOTOR = 0x09` when reintroduced |
 | **Workspace build** | `colcon build --symlink-install` | 2026-08-04 | 12 packages clean, 17.9 s |
 | **Firmware build** | `cd src/orbibot_rosmaster_firmware && ~/.platformio-venv/bin/pio run` | 2026-08-03 | 24.7 KB flash (9.7 %), 21.6 KB RAM (45.1 %), 89 s |
 | **Frontend build** | `cd src/orbibot_webgui/frontend && npm run build` | 2026-08-03 | 816 K `dist/` |

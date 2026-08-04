@@ -182,6 +182,31 @@ Fixed by evicting stubs before importing the real module, and a
 
 ---
 
+### A table maintained in three places will disagree, and each copy looks fine
+
+The serial protocol table lives in `protocol.h`, `rosmaster_driver.py` and the
+test harness. Two said `0x09 = FUNC_RESET_ODOM`; the harness said `SET_MOTOR`.
+Each file was internally consistent, so nothing was obviously broken — and the
+firmware has no per-motor command at all, so `SET_MOTOR` was pure fiction.
+
+The test that used it asked a human *"Did the wheel spin FORWARD?"* about a
+wheel that was never commanded. **An interactive test can report a pass for
+something that physically did not happen.**
+
+Diff duplicated tables mechanically rather than by eye, and prefer a test that
+asserts agreement over a refactor that merges them — merging C built by
+PlatformIO with Python installed by colcon trades a naming problem for a
+build-system one. `test_protocol_table_agreement.py`.
+
+### Prove a guard fails before trusting it
+
+A test that has never failed is not evidence of anything. After writing the
+agreement test, the original bug was reintroduced to confirm it was caught — it
+failed three ways and named the byte. Do that every time; the alternative is a
+regex that silently matches nothing and passes everything.
+
+---
+
 ## Environment facts worth knowing
 
 ### Included launch files share one context

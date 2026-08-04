@@ -30,7 +30,7 @@ class FuncCode(IntEnum):
     SET_RGB = 0x03
     SET_PWM_SERVO = 0x04
     RESET_ENCODERS = 0x08
-    SET_MOTOR = 0x09
+    RESET_ODOM = 0x09         # NOT "SET_MOTOR" — see the note below
     REPORT_SPEED = 0x0A
     REPORT_IMU_ATTITUDE = 0x0C
     REPORT_ENCODER = 0x0D
@@ -177,10 +177,33 @@ class ROSMasterProtocol:
         """Beep the buzzer."""
         self.send(FuncCode.BEEP, [duration_ms & 0xFF, (duration_ms >> 8) & 0xFF])
 
+    def reset_odom(self):
+        """Reset firmware odometry to zero. 0x09, no payload."""
+        self.send(FuncCode.RESET_ODOM, [])
+
     def set_motor(self, motor_id: int, speed: int):
-        """Set individual motor speed (-100 to 100)."""
-        speed = max(-100, min(100, speed))
-        self.send(FuncCode.SET_MOTOR, [motor_id, speed & 0xFF])
+        """Not supported by this firmware — there is no per-motor command.
+
+        This used to send FuncCode.SET_MOTOR = 0x09 with a 2-byte payload. The
+        firmware calls 0x09 FUNC_RESET_ODOM and expects it with **no payload**
+        (protocol.h, and the length table in protocol.c), so the packet was
+        rejected on length and no motor ever moved. Worse, the only caller —
+        test_motor_direction.py — then asked a human "Did it spin FORWARD?",
+        so the result recorded was whatever the operator answered about a wheel
+        that was never commanded.
+
+        Found 2026-08-04 by diffing the three hand-maintained protocol tables
+        against each other; see test_protocol_table_agreement.py, which now
+        fails if they drift again.
+
+        Motors are driven only through FUNC_MOTION (0x12), as whole-robot
+        velocity. To check wheel direction, command a pure vx / vy / wz and
+        observe which wheels turn — that is what test_kinematics.py does.
+        """
+        raise NotImplementedError(
+            "This firmware has no per-motor command. 0x09 is FUNC_RESET_ODOM. "
+            "Drive the robot with FUNC_MOTION (0x12) — see test_kinematics.py."
+        )
 
     def set_oled(self, line: int, text: str):
         """Set OLED display line (0-3)."""
