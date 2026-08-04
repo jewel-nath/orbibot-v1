@@ -10,6 +10,18 @@ from unittest.mock import MagicMock, patch, call
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
+# test_hardware_node_unit.py installs a MagicMock at
+# sys.modules['orbibot_hardware.rosmaster_driver'], deliberately, to push
+# hardware_node.py down its `except ImportError` branch — and never restores it.
+# pytest imports every test module during collection, alphabetically, so that
+# stub is already in place by the time this file is imported and every assertion
+# here would run against a MagicMock instead of the real driver.
+#
+# The symptom is misleading: each file passes on its own, and 34 tests fail only
+# when the directory is run as a whole. Evict the stub so this module always gets
+# the real thing, whatever ran before it.
+sys.modules.pop('orbibot_hardware.rosmaster_driver', None)
+
 from orbibot_hardware.rosmaster_driver import (
     Rosmaster,
     SERIAL_HEAD, SERIAL_DEVICE_ID, SERIAL_COMPLEMENT,
@@ -294,8 +306,22 @@ class TestSetPidParam:
         assert pkt[-1] == expected
 
     def test_rejects_out_of_range(self):
+        """Out-of-range gains raise, and nothing reaches the wire.
+
+        This test used to assert the value was "silently ignored". The driver
+        raises ValueError instead, which is the better behaviour — a PID gain
+        that vanishes without complaint is how a robot ends up mistuned with no
+        evidence. The assertion was stale, not the driver.
+        """
         driver = _make_rosmaster()
-        driver.set_pid_param(11.0, 0.0, 0.0)  # kp > 10 — should be silently ignored
+        with pytest.raises(ValueError):
+            driver.set_pid_param(11.0, 0.0, 0.0)   # kp > 10
+        driver.ser.write.assert_not_called()
+
+    def test_rejects_negative(self):
+        driver = _make_rosmaster()
+        with pytest.raises(ValueError):
+            driver.set_pid_param(-0.1, 0.0, 0.0)
         driver.ser.write.assert_not_called()
 
 

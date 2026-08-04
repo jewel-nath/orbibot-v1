@@ -156,6 +156,29 @@ value after you have it.
 
 ---
 
+### A test suite that passes per-file can still be broken
+
+`sys.modules` is process-global and pytest imports every test module during
+collection, before running anything. One file stubbing `rclpy` or a driver
+module poisons every later file that wants the real thing — and the stub is
+already in place before any fixture can run.
+
+Measured in `orbibot_hardware/tests` on 2026-08-04:
+
+| how it was run | result |
+|---|---|
+| each file on its own | 81 passed, 1 failed |
+| the directory | **46 passed, 35 failed** |
+
+Nothing was wrong with the code under test. **Always run the whole directory,
+and run it in more than one order**, or the suite is only testing that files
+work in isolation.
+
+Fixed by evicting stubs before importing the real module, and a
+`real_ros_modules` fixture in `conftest.py` for tests that need genuine ROS.
+
+---
+
 ## Environment facts worth knowing
 
 ### Included launch files share one context
