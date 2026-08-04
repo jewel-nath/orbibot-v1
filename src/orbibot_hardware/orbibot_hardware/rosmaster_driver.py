@@ -412,21 +412,48 @@ class Rosmaster:
         with self._data_lock:
             return self._firmware_version
 
-    def request_firmware_version(self, timeout=0.5):
+    def request_firmware_version(self, timeout=0.5, poll_interval=0.005):
         """Send a version request to the firmware and return the version string.
 
         Sends the 0x51 VERSION command; the receive thread parses the response
-        and updates the cached version. Returns the version after waiting.
+        and updates the cached version. Returns as soon as that lands, rather
+        than sleeping out the whole timeout.
+
+        This used to be a flat ``time.sleep(timeout)``, which cost 0.5 s on
+        every call whether the board answered in 3 ms or not at all. The node
+        runs single-threaded (see ``hardware_node.main``), so that sleep stalled
+        50 Hz sensor publishing for half a second — about 25 dropped messages
+        for a query the board answers almost immediately.
 
         Args:
-            timeout: Seconds to wait for the firmware response.
+            timeout: Longest to wait for the firmware response, in seconds.
+            poll_interval: How often to re-check the cached value.
 
         Returns:
             Version string (e.g., '2.0') or 'unknown' if no response.
         """
+        with self._data_lock:
+            previous = self._firmware_version
+            self._firmware_version = "unknown"
+
         try:
             self._send_command(FUNC_VERSION, [])
-            time.sleep(timeout)
         except (serial.SerialException, OSError) as e:
             print(f'---request_firmware_version error: {e}---')
-        return self.get_firmware_version()
+            with self._data_lock:
+                self._firmware_version = previous
+            return previous
+
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            version = self.get_firmware_version()
+            if version != "unknown":
+                return version
+            time.sleep(poll_interval)
+
+        # No answer inside the timeout. Restore whatever was known before, so a
+        # single dropped reply does not erase a version read successfully
+        # earlier — the caller sees 'unknown' only if it was never known.
+        with self._data_lock:
+            self._firmware_version = previous
+        return previous

@@ -256,14 +256,22 @@ incoming message, whether or not there is any real work to do. This is why the
   the node's default mutually-exclusive group
 - `_sensor_cb_group` and the `ReentrantCallbackGroup` import are gone
 
-**What single-threading costs, stated rather than discovered later:**
-`_get_firmware_version_callback` blocks up to 0.5 s waiting on the board, and
-now stalls sensor publishing for that long — about 25 lost messages. It is a
-manual diagnostic call, not a control path. Making that request non-blocking is
-the correct follow-up; it was not worth losing a third of the sensor rate every
-time someone drove the robot. Nothing else in the node blocks: `_send_command`
-sleeps 2 ms, so even with motors armed a 20 Hz `/cmd_vel` stream is 4 % duty on
-the one thread.
+**What single-threading cost — and how it was paid off the same day.**
+`_get_firmware_version_callback` blocked waiting on the board, which under a
+single-threaded executor stalls sensor publishing for the duration. It was worse
+than "up to 0.5 s": `request_firmware_version` did a flat `time.sleep(timeout)`,
+so it cost the full 0.5 s whether the board answered in 3 ms or never — about 25
+dropped messages, every call.
+
+It now polls the cached value every 5 ms and returns the moment the reply lands,
+with the timeout as a bound rather than a schedule. If no reply arrives it
+restores the previously known version instead of overwriting it with `unknown`,
+so one dropped reply cannot erase a good earlier read. **Verified:** the service
+still returns `2.0`, and `/imu/data_raw` holds **50.04 Hz** while the service is
+called eight times back to back.
+
+Nothing else in the node blocks: `_send_command` sleeps 2 ms, so even with motors
+armed a 20 Hz `/cmd_vel` stream is 4 % duty on the one thread.
 
 ### Verification — 2026-08-04 18:05
 

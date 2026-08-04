@@ -30,12 +30,23 @@ per message never made sense as callback time.
 went **37.7 → 50.00 Hz** and node CPU ~45 % → **9.75 %**. Command-pipeline
 acceptance re-run afterwards: 8/8, stop in 286 ms.
 
-**Accepted cost:** `_get_firmware_version_callback` blocks up to 0.5 s on the
-board and now stalls publishing for that long — a manual diagnostic call, worth
-far less than a third of the sensor rate whenever the robot is driven. Making
-it non-blocking is the follow-up.
-
 Phase 4 filter tuning is unblocked.
+
+### Fixed — `request_firmware_version` no longer sleeps out its whole timeout
+
+It did `time.sleep(timeout)` after sending the 0x51 command, so it cost a flat
+0.5 s whether the board answered in 3 ms or not at all. Under the new
+single-threaded executor that stalled 50 Hz publishing for the duration — about
+25 dropped messages per call.
+
+It now polls the cached version every 5 ms and returns as soon as the receive
+thread lands the reply; `timeout` is a bound, not a schedule. On no reply it
+restores the previously known version rather than overwriting it with
+`unknown`, so one dropped response cannot erase a good earlier read.
+
+**Verified:** service still returns `2.0`, and `/imu/data_raw` measures
+**50.04 Hz** while the service is called eight times back to back — the case
+that would previously have cost four seconds of stalled publishing.
 
 ### Changed — unit-test stubs no longer name a single executor
 
