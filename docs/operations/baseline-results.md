@@ -71,9 +71,24 @@ matter first if this ever became tight again.
 
 | Topic | Measured | Documented | Verdict |
 |---|---|---|---|
-| `/odometry/filtered` | **24.0–24.5 Hz** | 25 configured | Within 4 %. HW-BUG-1's ~2.5 Hz does not occur here |
+| `/odometry/filtered` | **24.0–24.5 Hz** | 25 configured | Superseded — EKF re-derived to 50 Hz, and now measures **50.00 Hz** (see below) |
 | `/scan` | **8.0 Hz** | 8 Hz | ✅ device rate — SENS-1 resolved 2026-08-04 |
-| `/imu/data_raw` | **40–45 Hz** | 50 Hz | ⚠️ **HW-BUG-8 open** — cause found 2026-08-04: 20 Hz of `/cmd_vel` costs the node a third of its rate. 50.0 Hz with `/cmd_vel` quiet, **32.4 Hz** under it. Nothing to do with board uptime |
+| `/imu/data_raw` | **40–45 Hz** | 50 Hz | ✅ **HW-BUG-8 fixed 2026-08-04** — `MultiThreadedExecutor` was costing a third of the rate under `/cmd_vel` load. Now **50.00 Hz** driven or parked |
+
+### Re-measured after the HW-BUG-8 fix — 2026-08-04 18:05
+
+Full `robot.launch.py`, robot elevated, motors disabled, 40 s window:
+
+| Topic | Measured | Configured | Verdict |
+|---|---|---|---|
+| `/imu/data_raw` | **50.00 Hz** | 50 | ✅ |
+| `/joint_states` | **50.00 Hz** | 50 | ✅ |
+| `/odometry/filtered` | **50.00 Hz** | 50 | ✅ — was 37.7 Hz on this stack the same afternoon |
+| `/scan` | **8.10 Hz** | 8 (device) | ✅ untouched by any of this — different USB device |
+
+`hardware_node` holds this at **9.75 % of one core**, RSS 77.7 MB, against
+~45 % before the fix. The margin the Beelink was bought for is now actually
+available rather than being spent on executor overhead.
 | `/odom` | 1.95 Hz | on-change + 0.5 s heartbeat | ✅ correct — robot stationary, so heartbeat only |
 
 The `/odom` figure is the one that looks wrong and is not: 1.95 Hz is the 0.5 s

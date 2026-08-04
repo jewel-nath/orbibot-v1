@@ -2,6 +2,48 @@
 
 ## [Unreleased] — 2026-08-04
 
+### Fixed — HW-BUG-8: the node spins single-threaded now
+
+`main()` spins a `SingleThreadedExecutor`; it was `MultiThreadedExecutor(num_threads=4)`.
+The three timers dropped their `ReentrantCallbackGroup` and use the node's
+default mutually-exclusive group. `_sensor_cb_group` and the
+`rclpy.callback_groups` import are gone.
+
+**Why, measured.** Same node, same 20 Hz `/cmd_vel` load, only the executor
+differing:
+
+| executor | idle | under load | CPU under load |
+|---|---|---|---|
+| `MultiThreadedExecutor(4)` | 50.01 Hz | 33.65 Hz | 56.8 % |
+| `MultiThreadedExecutor(2)` | 50.03 Hz | 33.70 Hz | 60.9 % |
+| `SingleThreadedExecutor` | 50.07 Hz | **50.07 Hz** | **10.75 %** |
+
+Two threads and four threads land within 0.05 Hz of each other, which rules out
+callback contention and points at rclpy's multi-threaded dispatch itself — a
+wait-set rebuild per ready callback, contended across threads, paid per incoming
+message regardless of whether the callback does any work. That is why ~24.5 ms
+per message never made sense as callback time.
+
+**Verified across every configuration that used to fail** — hardware alone
+50.03, plus twist_mux 50.04, full `robot.launch.py` **50.02** (was 42.2), bare
+20 Hz publisher **50.04** (was 32.4). On the full stack `/odometry/filtered`
+went **37.7 → 50.00 Hz** and node CPU ~45 % → **9.75 %**. Command-pipeline
+acceptance re-run afterwards: 8/8, stop in 286 ms.
+
+**Accepted cost:** `_get_firmware_version_callback` blocks up to 0.5 s on the
+board and now stalls publishing for that long — a manual diagnostic call, worth
+far less than a third of the sensor rate whenever the robot is driven. Making
+it non-blocking is the follow-up.
+
+Phase 4 filter tuning is unblocked.
+
+### Changed — unit-test stubs no longer name a single executor
+
+`test_hardware_node_unit.py` stubbed exactly `MultiThreadedExecutor` and
+`ReentrantCallbackGroup`, so switching executor broke 33 tests with a bare
+`ImportError`. It now stubs every executor and callback-group name. The stub's
+job is keeping rclpy out of a unit test, not asserting which executor is in use.
+
 ### Investigated — HW-BUG-8 has a cause, and it is not the firmware
 
 No code changed in this package yet; the fix is scoped and pending. What changed

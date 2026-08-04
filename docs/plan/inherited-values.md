@@ -38,6 +38,7 @@ constraint that no longer exists.
 | Package | Parameter | Was | Now | Derived from |
 |---|---|---|---|---|
 | `orbibot_localization` | `ekf frequency` | 25.0 Hz | **50.0 Hz** | Both fused inputs run at 50 Hz (`/imu/data_raw` 49.99, `/joint_states` 49.97). Measured after: `/odometry/filtered` 49.999 Hz, ekf_node **1.6 % of one core**, RSS 38.7 MB, machine 98.7 % idle — 2026-08-04 |
+| `orbibot_hardware` | `main()` executor | `MultiThreadedExecutor(num_threads=4)` | **`SingleThreadedExecutor`** | Not a Pi value — a wrong one on any machine, and the faster CPU hid it. Under 20 Hz `/cmd_vel`: 33.65 Hz at 56.8 % CPU multi-threaded, **50.07 Hz at 10.75 %** single. 2 vs 4 threads identical, so the cost is rclpy dispatch, not contention — 2026-08-04, HW-BUG-8 |
 
 ---
 

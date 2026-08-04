@@ -5,11 +5,18 @@
 
 ---
 
-## ⚠️ Open
+## ✅ Fixed
 
 ### BRINGUP-4: `cmd_vel_idle` exposed a 33 % sensor-rate loss in `orbibot_hardware`
-**Opened:** 2026-08-04 · **Severity:** MEDIUM here, HIGH in `orbibot_hardware`
-**File:** `orbibot_bringup/cmd_vel_idle.py` — but the **defect is not here**
+**Opened and closed:** 2026-08-04 · **Severity:** MEDIUM here, HIGH in `orbibot_hardware`
+**File:** `orbibot_bringup/cmd_vel_idle.py` — but the **defect was not here**
+
+> **Closed.** Fixed in `orbibot_hardware` by spinning the node on a
+> `SingleThreadedExecutor` instead of a `MultiThreadedExecutor`. `cmd_vel_idle`
+> is unchanged and still publishes at 20 Hz. Verified with the full
+> `robot.launch.py`: `/imu/data_raw`, `/joint_states` and `/odometry/filtered`
+> all at **50.00 Hz**, `/scan` 8.10 Hz, `hardware_node` at 9.75 % of one core.
+> Command-pipeline acceptance re-run: 8/8, stop in 286 ms.
 
 `cmd_vel_idle` publishes a zero `Twist` at 20 Hz so that "silence means stop" is
 actually true (twist_mux is event-driven and publishes nothing when its inputs

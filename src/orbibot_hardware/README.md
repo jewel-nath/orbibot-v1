@@ -234,7 +234,8 @@ screen /dev/motordriver 115200              # Direct serial monitor (Ctrl+A K to
 ## Implementation Notes
 
 - **Serial write lock** — all `ser.write()` calls share a `threading.Lock` to prevent byte interleaving from concurrent threads
-- **Thread-safe state flags** — `motors_enabled` and `emergency_stop` guarded by `_state_lock` (MultiThreadedExecutor safe)
+- **Single-threaded executor** — `main()` spins `SingleThreadedExecutor`, deliberately. On a `MultiThreadedExecutor` this node lost a third of its 50 Hz publish rate whenever anything published `/cmd_vel` (33.7 Hz at 57 % CPU, versus 50.1 Hz at 11 %), and thread count made no difference. Measure before changing it — `main()`'s docstring and HW-BUG-8 carry the numbers
+- **Thread-safe state flags** — `motors_enabled` and `emergency_stop` guarded by `_state_lock`. Still required: the serial receive thread is a real thread regardless of the executor
 - **Cmd_vel timeout** — stop command sent once per timeout event; set outside `_cmd_time_lock` to avoid holding it during the 2ms serial delay
 - **Adaptive covariance** — accumulated position/rotation variance uses exponential decay (factor 0.99 by default) to prevent unbounded growth
 - **Odometry deduplication** — `/odom` publishes only when firmware data changes; skips duplicate frames at 50Hz sensor timer rate. When unchanged, re-publishes at `odometry.heartbeat_interval` (default 0.5 s) so late-joining subscribers (e.g. web dashboard) receive data within one interval

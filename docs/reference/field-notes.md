@@ -252,6 +252,44 @@ cheapest measurement available and it eliminates whole strata at once.
 `.claude/scripts/rate_decay_log.py` (serial layer) and `topic_rate_log.py` (ROS
 layer) exist so this comparison stays a two-command job.
 
+### rclpy's `MultiThreadedExecutor` can be five times *slower* than single-threaded
+
+`orbibot_hardware` ran on `MultiThreadedExecutor(num_threads=4)` with its timers
+in a `ReentrantCallbackGroup` — the arrangement every tutorial recommends when a
+periodic timer shares a node with subscriptions. Measured, on the same node with
+a 20 Hz `/cmd_vel` stream and motors disabled:
+
+| executor | `/imu/data_raw` | node CPU |
+|---|---|---|
+| `MultiThreadedExecutor(4)` | 33.65 Hz | 56.8 % |
+| `MultiThreadedExecutor(2)` | 33.70 Hz | 60.9 % |
+| `SingleThreadedExecutor` | **50.07 Hz** | **10.75 %** |
+
+**Two threads and four threads are within 0.05 Hz of each other.** That is the
+diagnostic: if adding threads changes nothing, the cost is not the work being
+done, it is the dispatch machinery. Each ready callback drives a wait-set
+rebuild and the threads contend over it — paid per incoming message even when
+the callback does nothing. Here the callback genuinely did nothing (motors were
+disabled, so it took two locks and returned) and each message still cost about
+24.5 ms of executor CPU.
+
+Three things this is worth remembering for:
+
+- **Idle proves nothing.** All three executors sit at 50 Hz with no traffic. The
+  fault only appears once something publishes — which on a robot means *once you
+  start driving it*, the worst possible time to lose sensor rate.
+- **It hides as a hardware fault.** For two hours this was believed to be
+  firmware report scheduling on a 115200 link, and the fix plan involved the
+  operator keeping the robot powered for three hours.
+- **Multi-threading is not free and not the default answer.** It is right for
+  callbacks that genuinely block — `orbibot_agent`'s chat server waits on LLM
+  calls and keeps its `MultiThreadedExecutor`. It is wrong for a node whose
+  callbacks are short and frequent.
+
+Cost of single-threading here, accepted knowingly: one 0.5 s blocking service
+call now stalls publishing while it runs. Measure the executor choice; do not
+inherit it.
+
 ### Bisect by launching one thing at a time
 
 Once the firmware was cleared, the cause took four 40-second runs: the hardware

@@ -65,14 +65,24 @@ def _stub_ros_modules():
             def add_on_set_parameters_callback(self, *a, **kw): pass
         node_mod.Node = _Node
 
-    # Stub callback groups / executors / QoS
-    for name, cls_name in [
-        ('rclpy.callback_groups', 'ReentrantCallbackGroup'),
-        ('rclpy.executors', 'MultiThreadedExecutor'),
+    # Stub callback groups / executors / QoS.
+    #
+    # Every executor and callback-group name is stubbed, not just the ones the
+    # node imports today. Listing only the current name means the suite breaks
+    # with a bare ImportError the moment the node switches executor — which is
+    # exactly what happened when it moved off MultiThreadedExecutor for
+    # HW-BUG-8. The stub exists to keep rclpy out of a unit test, not to assert
+    # which executor is in use; `main()` is where that decision is documented.
+    for name, cls_names in [
+        ('rclpy.callback_groups',
+         ['ReentrantCallbackGroup', 'MutuallyExclusiveCallbackGroup']),
+        ('rclpy.executors',
+         ['SingleThreadedExecutor', 'MultiThreadedExecutor', 'Executor']),
     ]:
         m = sys.modules[name]
-        if not hasattr(m, cls_name):
-            setattr(m, cls_name, MagicMock)
+        for cls_name in cls_names:
+            if not hasattr(m, cls_name):
+                setattr(m, cls_name, MagicMock)
 
     qos_mod = sys.modules['rclpy.qos']
     for attr in ['QoSProfile', 'ReliabilityPolicy', 'DurabilityPolicy']:

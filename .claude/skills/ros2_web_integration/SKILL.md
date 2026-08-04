@@ -1326,6 +1326,17 @@ async def navigate(goal: NavGoal):
 
 **Fix:** Use `MultiThreadedExecutor` with a small thread count (2-4). For high-throughput systems, run the ROS2 node in a separate process and communicate via shared memory, Redis, or a Unix socket.
 
+> ⚠️ **Measure this one on OrbiBot before believing it.** The advice holds for a
+> node whose callbacks *block* — waiting on uvicorn, a socket, an LLM. It is
+> actively wrong for a node whose callbacks are short and frequent.
+> `orbibot_hardware` lost a third of its 50 Hz sensor rate to
+> `MultiThreadedExecutor(4)` and got it back by going single-threaded, at a
+> fifth of the CPU; thread count made no difference at all, which is the sign
+> that the cost is rclpy's dispatch rather than the callbacks. See
+> `src/orbibot_hardware/hardware-issue.md` (HW-BUG-8) and
+> `docs/reference/field-notes.md`. Use `.claude/scripts/topic_rate_log.py` to
+> check, under load — idle, every executor looks identical.
+
 ```python
 # BAD: SingleThreadedExecutor competing with uvicorn for the GIL
 executor = SingleThreadedExecutor()

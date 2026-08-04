@@ -66,9 +66,15 @@ turned out to be wrong; see the corrected measurements there.
 ---
 
 ### HW-BUG-8: `/cmd_vel` traffic collapses the 50 Hz sensor rate — the executor, not the board
-**Opened:** 2026-08-03 · closed wrongly, reopened, **CAUSE FOUND 2026-08-04 17:30**
-**Severity:** MEDIUM → **HIGH** — it bites hardest exactly while the robot is being driven
+**Opened:** 2026-08-03 · closed wrongly, reopened, cause found, **FIXED 2026-08-04 18:05**
+**Severity:** was MEDIUM → HIGH — it bit hardest exactly while the robot was being driven
 **File:** `hardware_node.py` (**not** the firmware, and **not** `task_communication.c`)
+
+> **FIXED.** `main()` now spins a `SingleThreadedExecutor` instead of
+> `MultiThreadedExecutor(num_threads=4)`, and the timers no longer carry a
+> `ReentrantCallbackGroup`. Verified across every configuration that previously
+> failed — see *Verification* at the bottom. `/odometry/filtered` went from
+> 37.7 Hz to 50.00 Hz and the node's CPU from ~45 % of a core to 9.75 %.
 
 > **Read the resolution at the bottom before the history.** The title above is
 > the third characterisation of this bug. The first two — "not reproducible",
@@ -220,29 +226,90 @@ the agent and Nav2 all publish `cmd_vel` at ~20 Hz, so odometry and IMU drop by
 a third at exactly the moment localisation is being asked to work hardest. The
 old framing hid that, because it blamed a clock nobody was driving.
 
-**How to resolve — the fix is in `hardware_node.py`:**
-1. Give the 50 Hz sensor timer its own `MutuallyExclusiveCallbackGroup` and run
-   the node on a `MultiThreadedExecutor`, so `/cmd_vel` arrivals cannot delay
-   publishing. Measure the same table again — it is 40 s per row.
-2. If that is not enough, find out *what* costs 24.5 ms per message. That number
-   is far too large for a wait-set rebuild and is not yet explained. **Do not
-   write an explanation into this file until it is measured.**
-3. Re-check with the full `robot.launch.py`, which is the configuration the
-   operator actually runs.
+**The first fix proposed here was to add a `MultiThreadedExecutor`.** The node
+was already running one — `num_threads=4`, with the timers in a
+`ReentrantCallbackGroup`. That is what the whole plan had to be re-thought
+around, and the answer turned out to be the opposite one.
 
-**Consequence meanwhile:** Madgwick is configured `frequency: 50.0` and the EKF
-now runs at 50 Hz. Both are fed ~50 Hz parked and ~35 Hz under teleop. Phase 4
-must not tune `gain`/`zeta` until this is fixed — the input rate currently
-depends on whether anyone is driving.
+---
 
-**Reproduce in 90 seconds:**
+### THE FIX — 2026-08-04 18:05. Spin single-threaded.
+
+Three executors, same node, same `/cmd_vel` load, nothing else changed:
+
+| executor | `/imu/data_raw` idle | under 20 Hz `/cmd_vel` | CPU under load |
+|---|---|---|---|
+| `MultiThreadedExecutor(4)` — as shipped | 50.01 Hz | **33.65 Hz** | 56.8 % |
+| `MultiThreadedExecutor(2)` | 50.03 Hz | **33.70 Hz** | 60.9 % |
+| **`SingleThreadedExecutor`** | 50.07 Hz | **50.07 Hz** | **10.75 %** |
+
+**Thread count changes nothing** — 2 threads and 4 threads are within 0.05 Hz of
+each other. That is the tell: the cost is not contention between the callbacks,
+it is rclpy's multi-threaded dispatch itself. Each ready callback drives a
+wait-set rebuild that the threads then contend over, and the price is paid per
+incoming message, whether or not there is any real work to do. This is why the
+~24.5 ms per message never made sense as callback time: almost none of it was.
+
+**Changed in `hardware_node.py`:**
+- `main()` spins `SingleThreadedExecutor()` — was `MultiThreadedExecutor(num_threads=4)`
+- the three timers dropped `callback_group=self._sensor_cb_group`; they now use
+  the node's default mutually-exclusive group
+- `_sensor_cb_group` and the `ReentrantCallbackGroup` import are gone
+
+**What single-threading costs, stated rather than discovered later:**
+`_get_firmware_version_callback` blocks up to 0.5 s waiting on the board, and
+now stalls sensor publishing for that long — about 25 lost messages. It is a
+manual diagnostic call, not a control path. Making that request non-blocking is
+the correct follow-up; it was not worth losing a third of the sensor rate every
+time someone drove the robot. Nothing else in the node blocks: `_send_command`
+sleeps 2 ms, so even with motors armed a 20 Hz `/cmd_vel` stream is 4 % duty on
+the one thread.
+
+### Verification — 2026-08-04 18:05
+
+Every configuration that previously failed, re-measured:
+
+| configuration | before | after | node CPU before → after |
+|---|---|---|---|
+| `hardware.launch.py` alone | 50.00 Hz | **50.03 Hz** | 11.7 % → **8.5 %** |
+| \+ `twist_mux.launch.py` | 37.4 Hz | **50.04 Hz** | 51.7 % → **10.9 %** |
+| **full `robot.launch.py`** | **42.2 Hz** | **50.02 Hz** | ~45 % → **10.7 %** |
+| bare `topic pub -r 20 /cmd_vel` | 32.4 Hz | **50.04 Hz** | 60.0 % → **10.1 %** |
+
+Full stack, 40 s, all four consumers at once:
+
+```
+/imu/data_raw       50.00 Hz
+/joint_states       50.00 Hz
+/odometry/filtered  50.00 Hz      <- was 37.7 Hz
+/scan                8.10 Hz      <- unchanged, device rate
+hardware_node        9.75 % of one core, RSS 77.7 MB
+```
+
+Command-pipeline acceptance re-run after the change, since this node is what
+consumes `/cmd_vel`: **8/8**, all sources silent → stop in **286 ms**.
+
+**Phase 4 is unblocked.** Madgwick's `frequency: 50.0` and the EKF's 50 Hz are
+now fed 50.00 Hz whether or not the robot is being driven, so `gain` and `zeta`
+can be tuned against a rate that means something.
+
+**Reproduce the original fault in 90 seconds** (revert `main()` to
+`MultiThreadedExecutor` first — this is also the regression guard):
 
 ```bash
 ros2 launch orbibot_hardware hardware.launch.py &
 python3 .claude/scripts/topic_rate_log.py -w 15 -d 15 -t /imu/data_raw   # 50 Hz
 ros2 topic pub -r 20 /cmd_vel geometry_msgs/msg/Twist "{}" &             # zeros only
-python3 .claude/scripts/topic_rate_log.py -w 15 -d 15 -t /imu/data_raw   # ~32 Hz
+python3 .claude/scripts/topic_rate_log.py -w 15 -d 15 -t /imu/data_raw   # 50 Hz now
 ```
+
+**Where else this pattern lives.** One other node uses a `MultiThreadedExecutor`:
+`orbibot_agent/interfaces/chat_server.py:244`. It is **not** changed, and not on
+evidence that it is fine — it simply has not been measured. Its workload is the
+opposite shape (occasional requests that block on LLM calls, no high-rate timer),
+which is the case multi-threading is actually for. Measure before touching it;
+the lesson here is that the executor choice must be measured, not that
+single-threaded is always right.
 
 ---
 

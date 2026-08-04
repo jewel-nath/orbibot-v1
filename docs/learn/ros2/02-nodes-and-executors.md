@@ -145,8 +145,37 @@ def main(args=None):
 ```
 
 - Processes callbacks in parallel
-- Better for CPU-intensive work
-- Used in `orbibot_hardware`!
+- Better for callbacks that **block** — waiting on a network call, a slow
+  service, an LLM. `orbibot_agent`'s chat server uses one for exactly that
+
+### ⚠️ Multi-threaded is not "the faster one"
+
+`orbibot_hardware` used `MultiThreadedExecutor(num_threads=4)` until
+2026-08-04, and it was costing the robot a third of its sensor rate. Same node,
+same 20 Hz `/cmd_vel` load, only the executor changed:
+
+| executor | `/imu/data_raw` | node CPU |
+|---|---|---|
+| `MultiThreadedExecutor(4)` | 33.65 Hz | 56.8 % |
+| `MultiThreadedExecutor(2)` | 33.70 Hz | 60.9 % |
+| `SingleThreadedExecutor` | **50.07 Hz** | **10.75 %** |
+
+Two threads and four threads land within 0.05 Hz of each other — so the cost is
+not the callbacks, it is rclpy's multi-threaded dispatch. Every ready callback
+drives a wait-set rebuild that the threads then contend over, and you pay it per
+incoming message whether or not the callback does any work.
+
+The rule of thumb worth carrying:
+
+- callbacks that **block** → multi-threaded
+- callbacks that are **short and frequent** → single-threaded
+- either way → **measure it**, with `.claude/scripts/topic_rate_log.py`
+
+Note also that idle proves nothing: all three executors above sit at 50 Hz when
+nothing is publishing. The fault only appears under traffic — on a robot, that
+means it appears the moment you start driving.
+
+Full write-up: `src/orbibot_hardware/hardware-issue.md`, HW-BUG-8.
 
 ---
 

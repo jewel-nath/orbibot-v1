@@ -43,10 +43,10 @@ Robot can be anywhere. Motors stay disarmed.
 | What | Command | Last run | Result |
 |---|---|---|---|
 | **Preflight** — devices, nodes, battery | `.claude/scripts/preflight.sh` | — | not recorded |
-| **Stack health** — all topic rates | `/robot-status` | 2026-08-04 17:09 | `/scan` 8.09 ✅. `/imu/data_raw` **42.2 Hz** under `robot.launch.py` — HW-BUG-8, cause found |
+| **Stack health** — all topic rates | `/robot-status` | 2026-08-04 18:05 | ✅ full `robot.launch.py`: `/imu/data_raw`, `/joint_states`, `/odometry/filtered` all **50.00 Hz**, `/scan` 8.10 Hz, `hardware_node` 9.75 % |
 | **Firmware report rate** — below ROS, no stack running | `python3 .claude/scripts/rate_decay_log.py -w 20 -d 40` | 2026-08-04 17:18 | **49.98 Hz** on all five report types at 2 h 41 min board uptime; battery 12.5 V. Firmware exonerated |
-| **Sensor rate under `/cmd_vel` load** — HW-BUG-8 regression guard | `topic_rate_log.py`, then `ros2 topic pub -r 20 /cmd_vel …` (see hardware-issue.md) | 2026-08-04 17:30 | **50.0 Hz idle → 32.4 Hz** under 20 Hz `/cmd_vel`; node CPU 11.4 % → 60.4 %, all of it in the executor thread |
-| **cmd_vel arbitration** — priorities, timeouts, e-stop | `python3 .claude/scripts/test_cmd_vel_arbitration.py` | 2026-08-04 | **8/8**; all sources silent → stop in **291 ms** |
+| **Sensor rate under `/cmd_vel` load** — HW-BUG-8 regression guard | `topic_rate_log.py`, then `ros2 topic pub -r 20 /cmd_vel …` (see hardware-issue.md) | 2026-08-04 18:05 | **50.04 Hz under load** ✅ — was 32.4 Hz before the executor fix; node CPU 60.4 % → 10.1 % |
+| **cmd_vel arbitration** — priorities, timeouts, e-stop | `python3 .claude/scripts/test_cmd_vel_arbitration.py` | 2026-08-04 18:05 | **8/8**; all sources silent → stop in **286 ms**. Re-run after the executor change |
 | **Single writer on `/cmd_vel`** | `ros2 topic info /cmd_vel` | 2026-08-04 | Publisher count **1** (twist_mux), type `Twist` |
 | **Active source reporting** | `ros2 topic echo /orbibot/cmd_vel_source` while publishing to an input | 2026-08-04 | tracks `idle` → `web` → `estop` → `idle` |
 | **Teardown leaves nothing** | `.claude/scripts/stop.sh` | 2026-08-04 | clean; serial devices released |

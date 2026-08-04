@@ -248,8 +248,15 @@ Only meaningful once Phase 1's numbers exist to compare against.
 | 4.1 | Re-measure IMU noise; set EKF covariances from data, not defaults |
 | 4.2 | Tune Madgwick `gain` and `zeta` — with `use_mag: false`, `zeta` is what fights gyro bias |
 | 4.3 | Compare `/odom` against `/odometry/filtered` over a closed loop |
-| 4.4 | Confirm the EKF publishes at its configured rate |
-| 4.5 | Reconsider the EKF rate — 25 Hz was a Pi compromise, not a design choice |
+| 4.4 | ✅ Confirm the EKF publishes at its configured rate — **50.00 Hz** on the full stack, 2026-08-04 |
+| 4.5 | ✅ Reconsider the EKF rate — raised 25 → 50 Hz, measured at 1.6 % of one core |
+
+> **Unblocked 2026-08-04.** 4.1 and 4.2 were held because the filters' input rate
+> depended on whether anyone was driving: 20 Hz of `/cmd_vel` dropped
+> `/imu/data_raw` from 50 Hz to 32 Hz. That was HW-BUG-8, and it was
+> `MultiThreadedExecutor` in `hardware_node`, now fixed. `/imu/data_raw`,
+> `/joint_states` and `/odometry/filtered` all hold **50.00 Hz** driven or
+> parked, so `gain` and `zeta` can be tuned against a rate that means something.
 
 **Gate**
 

@@ -24,8 +24,7 @@ import time
 import threading
 import rclpy
 from rclpy.node import Node
-from rclpy.executors import MultiThreadedExecutor
-from rclpy.callback_groups import ReentrantCallbackGroup
+from rclpy.executors import SingleThreadedExecutor
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 from rcl_interfaces.msg import SetParametersResult
 
@@ -103,8 +102,9 @@ class OrbiBotHardwareNode(Node):
         self._last_pid_save_update = 0.0
         self._last_yaw_pid_save_update = 0.0
 
-        # Callback group for concurrent timer execution with MultiThreadedExecutor
-        self._sensor_cb_group = ReentrantCallbackGroup()
+        # No explicit callback group: everything runs in the node's default
+        # mutually-exclusive group on a SingleThreadedExecutor. See main() for
+        # why, and for the measurement that decided it (HW-BUG-8).
 
         # Create ROS interfaces
         self._create_publishers()
@@ -347,16 +347,19 @@ class OrbiBotHardwareNode(Node):
             self._get_firmware_version_callback)
 
     def _create_timers(self):
-        """Create periodic timers"""
+        """Create periodic timers.
+
+        All three share the node's default mutually-exclusive callback group, so
+        they cannot interleave with each other or with a subscription callback.
+        `_sensor_callback` is the expensive one and it holds the serial driver's
+        locks; letting it run concurrently with `_cmd_vel_callback` bought
+        nothing measurable and cost a great deal — see main().
+        """
         self.sensor_timer = self.create_timer(
-            1.0 / self.sensor_rate, self._sensor_callback,
-            callback_group=self._sensor_cb_group)
+            1.0 / self.sensor_rate, self._sensor_callback)
         self.status_timer = self.create_timer(
-            1.0 / self.status_rate, self._status_callback,
-            callback_group=self._sensor_cb_group)
-        self.safety_timer = self.create_timer(
-            0.1, self._safety_callback,
-            callback_group=self._sensor_cb_group)
+            1.0 / self.status_rate, self._status_callback)
+        self.safety_timer = self.create_timer(0.1, self._safety_callback)
 
     def _initialize_hardware(self):
         """Initialize ROSMaster board connection"""
@@ -994,11 +997,38 @@ class OrbiBotHardwareNode(Node):
 
 
 def main(args=None):
+    """Spin the node on a SingleThreadedExecutor. This is deliberate.
+
+    This node ran on `MultiThreadedExecutor(num_threads=4)` until 2026-08-04,
+    with the timers in a `ReentrantCallbackGroup`, on the reasonable-sounding
+    theory that the 50 Hz sensor timer should not have to wait behind an
+    incoming `/cmd_vel`. Measured, it was backwards. `/imu/data_raw` under a
+    20 Hz `/cmd_vel` stream, motors disabled, identical in every other respect:
+
+        MultiThreadedExecutor(4)    33.65 Hz    56.8 % of a core
+        MultiThreadedExecutor(2)    33.70 Hz    60.9 %
+        SingleThreadedExecutor      50.07 Hz    10.75 %
+
+    Thread count changes nothing, which is the tell: the cost is not contention
+    over the callbacks but rclpy's multi-threaded dispatch itself — every
+    ready callback drives a wait-set rebuild that several threads then fight
+    over. Idle, all three sit at 50 Hz; the fault only appears once something
+    publishes `/cmd_vel`, which is to say once the robot is being driven.
+
+    What single-threading costs: `_get_firmware_version_callback` blocks for up
+    to 0.5 s waiting on the board, and now stalls sensor publishing for that
+    long. It is a manual diagnostic call, not a control-loop path. Making that
+    request non-blocking is the right follow-up; losing a third of the sensor
+    rate whenever anyone drives the robot was not an acceptable price for it.
+
+    Re-measure with `.claude/scripts/topic_rate_log.py` before changing this.
+    HW-BUG-8.
+    """
     rclpy.init(args=args)
 
     try:
         node = OrbiBotHardwareNode()
-        executor = MultiThreadedExecutor(num_threads=4)
+        executor = SingleThreadedExecutor()
         executor.add_node(node)
 
         try:

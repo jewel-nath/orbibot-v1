@@ -103,11 +103,22 @@ depends on both.
 | ID | What | Where |
 |---|---|---|
 | SENS-2 | RealSense enumerates at 480 Mbps, blocking the depth decision | `sensors-issue.md` |
-| SENS-1 | `/scan` runs at 7.9 Hz, documented as 10 | `sensors-issue.md` |
-| BRINGUP-1 | Killing the bringup leaves an orphaned, respawning LiDAR | `bringup-issue.md` |
-| HW-BUG-8 | `/imu` at 40–45 Hz; the firmware sends 52.5 | `hardware-issue.md` |
-| CC-1 | Four unarbitrated `/cmd_vel` publishers — Phase 2 | [[command-pipeline]] |
 | CC-2 | Accel X/Y scale unconfirmed under real acceleration | [[backlog-moc]] |
+| FW-ISSUE-4 | M4 runs 12–15 % slow at full speed | `firmware-issue.md` |
+
+Closed 2026-08-04:
+
+| ID | Outcome |
+|---|---|
+| **HW-BUG-8** | **Fixed.** Not the firmware and not board uptime — `MultiThreadedExecutor` cost the node a third of its rate under `/cmd_vel` load. Now 50.00 Hz driven or parked, at 9.75 % CPU |
+| **BRINGUP-2** | Fixed — the LiDAR was opening `/dev/motordriver` via a shared launch-argument name |
+| **BRINGUP-3** | Not a bug — `/odom` at 1.94 Hz is the designed on-change + heartbeat behaviour |
+| **SENS-1** | Resolved — `/scan` at 8.0 Hz is the A1's device rate; the documented 10 Hz was the datasheet maximum |
+| **CC-1** | Done — `twist_mux` is the single writer of `/cmd_vel`, 8/8 acceptance, stop in 286 ms |
+| **FW-ISSUE-12** | `SET_MOTOR = 0x09` was fiction; the test that used it is withdrawn and a table-agreement guard added |
+
+BRINGUP-1 was re-characterised rather than closed: real Ctrl+C stops everything
+in 1.1 s, and the variable is the controlling terminal, not the launch file.
 
 Fixed 2026-08-03: **HW-BUG-9** — the launch armed all four motors six seconds
 after start. `motors_enabled` now defaults to `false`.
