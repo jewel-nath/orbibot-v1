@@ -493,7 +493,17 @@ adapter; the shared 12.8 V rail feeds the ROSMaster board.
 Idle before the run: **12.80 V**.
 
 **P-5: pass.** Uptime advanced 766 s → 792 s across the whole run — no reboot.
-`dmesg` shows zero resets, disconnects or under-voltage events.
+Kernel log shows **no under-voltage, brownout, hard-reset or over-current
+events** at any point since boot. The only USB disconnects in the log are the
+four from the operator swapping the camera's port and cable, all outside the
+test window.
+
+> **Read the kernel log with `journalctl -k`, not `dmesg`.** This machine has
+> `kernel.dmesg_restrict` set, so an unprivileged `dmesg` fails with
+> *"read kernel buffer failed: Operation not permitted"* — and a `dmesg | grep
+> -c` therefore returns a confident **0** having read nothing at all. The first
+> version of this section claimed "dmesg shows zero resets" on exactly that
+> basis. `journalctl -k` works for any user in the `adm` group.
 
 **P-3: not yet answered.** Do not read the table as a pass. Three limits, in
 descending order of importance:
