@@ -40,7 +40,8 @@ Once the hardware is connected, commands here move real wheels —
 | How another robot solved this | [[yahboom-rosmaster-x3]], [[lgdxrobot2]], [[aubot]] |
 | **A trap that already cost time** | [[field-notes]] — tools that lie, failures that were not what they looked like |
 | **Values still fitted to the old Pi** | [[inherited-values]] |
-| **To just operate the robot** | `.claude/commands/` — `/robot-status`, `/robot-start`, `/robot-drive`, `/robot-stop` |
+| **To just operate the robot** | `.claude/commands/` — `/robot-status`, `/robot-start`, `/robot-drive`, `/robot-stop`, `/robot-test`, `/robot-fix` |
+| **How to test X, and what it said last time** | [[test-index]] |
 
 ---
 

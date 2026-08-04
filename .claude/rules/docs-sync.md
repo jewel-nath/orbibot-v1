@@ -34,6 +34,7 @@ note and the code disagree, the code decides and the note gets fixed.
 | A finding — fixed it, made it worse, found a new one | `src/<pkg>/<pkg>-issue.md` |
 | A number measured on real hardware | `src/orbibot_rosmaster_firmware/test-report.md` |
 | A procedure or a pass criterion | `testing-guide.md` |
+| **You ran a test** | the "last run" column in `docs/operations/test-index.md` |
 | How the robot is operated or stopped | `.claude/commands/`, `.claude/scripts/` |
 | A tuning value inherited from the Pi | `docs/plan/inherited-values.md` |
 | **Something you learned the hard way** | `docs/reference/field-notes.md` |

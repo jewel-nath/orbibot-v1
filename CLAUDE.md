@@ -35,7 +35,8 @@ was measured, and how to learn it. Start at [docs/README.md](docs/README.md).
 | **What to build next** | [docs/plan/roadmap.md](docs/plan/roadmap.md) — phases and gates |
 | **Values still fitted to the old Pi** | [docs/plan/inherited-values.md](docs/plan/inherited-values.md) — every one, and what to re-derive it from |
 | **Traps that already cost time** | [docs/reference/field-notes.md](docs/reference/field-notes.md) — tools that lie, failures that were not what they looked like |
-| **Operating the robot from zero** | `.claude/commands/` — `/robot-status`, `/robot-start`, `/robot-drive`, `/robot-stop` |
+| **Operating the robot from zero** | `.claude/commands/` — `/robot-status`, `/robot-start`, `/robot-drive`, `/robot-stop`, `/robot-test`, `/robot-fix` |
+| **How to test X, and what it said last time** | [docs/operations/test-index.md](docs/operations/test-index.md) |
 | **What is broken** | `src/<pkg>/<pkg>-issue.md`; [docs/moc/backlog-moc.md](docs/moc/backlog-moc.md) maps them |
 | A package's API | `src/<pkg>/README.md` |
 | A package's orientation and open items | `docs/packages/<pkg>.md` |

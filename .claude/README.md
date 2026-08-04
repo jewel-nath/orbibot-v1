@@ -96,6 +96,8 @@ each carries its own safety gates so the operator does not have to know them.
 | `/robot-start` | Brings the stack up, motors disarmed | **yes** |
 | `/robot-drive` | Guided driving, from asking the robot's state to disarming | asks first |
 | `/robot-stop` | Stops everything and proves it stopped | **yes** |
+| `/robot-test` | What to run, and where the result gets written | depends on the test |
+| `/robot-fix` | Symptom → first check. Cheap checks before expensive ones | **yes** |
 | `/ros2` | Command cheat-sheet | **yes** |
 
 `/robot-drive` is the one that matters. It enforces the rule the operator cannot

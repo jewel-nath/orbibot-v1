@@ -16,8 +16,9 @@ This file is append-only in spirit. Every entry earned its place by being
 believed wrongly at least once.
 
 **When you learn something here, write it here.** Not in a commit message, not
-in a conversation — those are gone by next month. See
-`.claude/rules/capture-learnings.md`.
+in a conversation — those are gone by next month, and nobody greps history
+before debugging. The discipline is in `.claude/rules/docs-sync.md`; the bar is
+*would you have saved an hour if you had read it this morning?*
 
 ---
 
@@ -156,6 +157,8 @@ value after you have it.
 
 ---
 
+## Testing traps
+
 ### A test suite that passes per-file can still be broken
 
 `sys.modules` is process-global and pytest imports every test module during
@@ -232,5 +235,5 @@ and write `0x03`. Doing this overturned BRINGUP-1's entire diagnosis.
 
 ## Related
 
-`.claude/rules/capture-learnings.md` · [[roadmap]] · [[backlog-moc]] ·
-`src/orbibot_rosmaster_firmware/test-report.md`
+`.claude/rules/docs-sync.md` · [[roadmap]] · [[backlog-moc]] ·
+[[test-index]] · `src/orbibot_rosmaster_firmware/test-report.md`
