@@ -61,10 +61,21 @@ def generate_launch_description():
         respawn_delay=2.0,
     )
 
+    # Roadmap 2.5 — the operator should never have to guess who has control.
+    cmd_vel_source_node = Node(
+        package='orbibot_bringup',
+        executable='cmd_vel_source',
+        name='cmd_vel_source',
+        output='screen',
+        respawn=True,
+        respawn_delay=2.0,
+    )
+
     return LaunchDescription([
         declare_config_arg,
         LogInfo(msg='[Bringup] Command arbitration — twist_mux owns /cmd_vel; '
                     'sources: estop > joy > web > agent > nav > idle'),
         twist_mux_node,
         cmd_vel_idle_node,
+        cmd_vel_source_node,
     ])

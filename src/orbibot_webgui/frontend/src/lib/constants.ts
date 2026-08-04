@@ -13,6 +13,11 @@ export const ROS_TOPICS = {
   cmdVel: '/cmd_vel_web',
   // Highest priority: publishing zeros here overrides every other source.
   cmdVelEstop: '/cmd_vel_estop',
+  // std_msgs/String, latched: which source twist_mux is currently obeying —
+  // estop | joystick | web | agent | navigation | idle. Show it always; the
+  // operator should never have to guess who has control. 'idle' means nothing
+  // is commanding motion, which is not the same as the robot being unable to.
+  cmdVelSource: '/orbibot/cmd_vel_source',
   odom: '/odom',
   odomFiltered: '/odometry/filtered',
   imu: '/imu/data',

@@ -46,6 +46,7 @@ Robot can be anywhere. Motors stay disarmed.
 | **Stack health** — all topic rates | `/robot-status` | 2026-08-04 | `/scan` 8.114, `/imu/data_raw` 49.987, `/joint_states` 50.014, `/odometry/filtered` 49.998 Hz |
 | **cmd_vel arbitration** — priorities, timeouts, e-stop | `python3 .claude/scripts/test_cmd_vel_arbitration.py` | 2026-08-04 | **8/8**; all sources silent → stop in **291 ms** |
 | **Single writer on `/cmd_vel`** | `ros2 topic info /cmd_vel` | 2026-08-04 | Publisher count **1** (twist_mux), type `Twist` |
+| **Active source reporting** | `ros2 topic echo /orbibot/cmd_vel_source` while publishing to an input | 2026-08-04 | tracks `idle` → `web` → `estop` → `idle` |
 | **Teardown leaves nothing** | `.claude/scripts/stop.sh` | 2026-08-04 | clean; serial devices released |
 | **Firmware protocol suite** — 17 scripts | `cd src/orbibot_rosmaster_firmware/tests && python3 run_all_tests.py --port /dev/motordriver` | 2026-04-19 | see `test-report.md` §8.A |
 | **Encoder comms** | `.claude/scripts/encoder.sh` | — | not recorded |

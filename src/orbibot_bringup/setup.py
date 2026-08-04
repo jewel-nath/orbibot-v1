@@ -25,6 +25,7 @@ setup(
     entry_points={
         'console_scripts': [
             'cmd_vel_idle = orbibot_bringup.cmd_vel_idle:main',
+            'cmd_vel_source = orbibot_bringup.cmd_vel_source:main',
         ],
     },
 )
