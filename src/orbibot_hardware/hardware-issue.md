@@ -1,15 +1,29 @@
 # Hardware Node Issue Tracker
 
 **Package:** `orbibot_hardware` (ROS 2 serial bridge, Python)
-**Last Updated:** 2026-03-25
+**Last Updated:** 2026-08-04
 
 ---
 
-## 🔴 Open Bugs
+## ✅ Fixed / not reproducible
+
+*Nothing in this file is currently open. HW-BUG-9 is fixed; HW-BUG-8 and HW-BUG-1
+do not reproduce on this machine. Technical debt below is still real.*
 
 ### HW-BUG-9: `robot.launch.py` silently arms the motors 6 s after startup
-**Opened:** 2026-08-03 · **Severity:** HIGH — safety
-**File:** `launch/hardware.launch.py` lines ~30–67
+**Opened:** 2026-08-03 · **FIXED 2026-08-03** · **Severity:** HIGH — safety
+**File:** `launch/hardware.launch.py`
+
+> **Fixed.** `motors_enabled` now defaults to `'false'`, the `TimerAction`
+> itself carries the `IfCondition`, and arming logs a WARN-level line naming the
+> argument that caused it. Verified by launching the stack and confirming
+> `motors_enabled: false` in `/orbibot/system_status` with no `Motors enabled`
+> line in the log — re-confirmed 2026-08-04.
+>
+> The original report is kept below because *how* it was missed is the useful
+> part: the node was read, the launch was not.
+
+**The code as it was:**
 
 ```python
 declare_start_enabled = DeclareLaunchArgument(
@@ -39,23 +53,19 @@ mention in any doc. Nothing then commands motion, and the firmware's 2 s command
 timeout is a genuine backstop, so the robot does not move. But "armed and
 waiting for a command" is not the state the operator is told they are in.
 
-**How to resolve:**
+**How it was resolved:** `default_value` flipped to `'false'` (1), and the
+arming path now logs at WARN naming the argument responsible (3). Point 2 did
+not apply once the default changed.
 
-1. Flip `default_value` to `'false'`. Enabling motors should be an explicit act
-   — `motors_enabled:=true`, or the dashboard's own control
-2. If the default stays `true`, it must be stated in `CLAUDE.md`, the bringup
-   README and `.claude/rules/robot-safety.md`, because all three currently imply
-   the opposite
-3. Log it at WARN, not INFO — it is the single most consequential thing the
-   launch does
-
-**Related:** `src/orbibot_bringup/bringup-issue.md` BRINGUP-1 — stopping the
-stack does not reliably stop everything either.
+**Related:** `src/orbibot_bringup/bringup-issue.md` — BRINGUP-2 (the LiDAR was
+opening `/dev/motordriver`) and BRINGUP-1, whose original claim about teardown
+turned out to be wrong; see the corrected measurements there.
 
 ---
 
 ### HW-BUG-8: `/imu/data_raw` runs at 40–45 Hz, not the documented 50 Hz
-**Opened:** 2026-08-03 · **Severity:** MEDIUM
+**Opened:** 2026-08-03 · **NOT REPRODUCIBLE, 2026-08-04**
+**Severity:** ~~MEDIUM~~ — see the re-measurement below
 **Files:** `hardware_node.py`; firmware `task_communication.c`
 
 Measured on the Beelink, `robot.launch.py` up, robot elevated, motors disabled:
@@ -82,10 +92,39 @@ message headers. Phase 4 tunes `gain` and `zeta` against that. A filter told it
 runs at 50 Hz while fed 43 Hz with jitter will be tuned wrong, and the error
 will be blamed on the gains.
 
-**How to resolve:**
-1. Measure the actual serial throughput and packet loss at 115200
-2. Compare against `test-report.md` §9.5's 52.5 Hz — what changed since?
-3. Either raise the rate, or **correct every doc that claims 50 Hz**
+> ### NOT REPRODUCIBLE — re-measured 2026-08-04
+>
+> Same conditions as the original: full `robot.launch.py`, robot elevated,
+> motors disabled, machine 98.8 % idle. Four consecutive 50-sample windows:
+>
+> | window | `/imu/data_raw` |
+> |---|---|
+> | 1 | 49.998 Hz |
+> | 2 | 49.992 Hz |
+> | 3 | 50.004 Hz |
+> | 4 | 49.998 Hz |
+>
+> Spread **0.012 Hz**, against the 4.7 Hz swing that defined the original
+> report. `/joint_states` measured 49.967 and 50.003 Hz alongside. The rate is
+> at spec and the jitter is gone.
+>
+> **The cause was never found, and is not being invented now.** The serial
+> saturation hypothesis above was never tested — it remains plausible and
+> unproven, and it does not explain why the symptom vanished.
+>
+> One intervening event is worth recording, as a lead rather than a conclusion:
+> on 2026-08-04 the ROSMaster board entered a state where it **stopped
+> responding entirely** — no serial data, dim power LED, `ch341` re-enumerating
+> twice in 13 s — and the operator power-cycled it. The 40–45 Hz reading of
+> 2026-08-03 may have been that same degradation partway along. Unproven.
+>
+> **If it returns, measure the board's behaviour before touching the ROS side**
+> — check for `ch341` disconnects in `journalctl -k` first.
+
+**How to resolve** (only if it reappears):
+1. Check `journalctl -k` for `ch341` re-enumeration before anything else
+2. Measure the actual serial throughput and packet loss at 115200
+3. Compare against `test-report.md` §9.5's 52.5 Hz — what changed since?
 
 ---
 
@@ -96,6 +135,12 @@ will be blamed on the gains.
 > **Measured 2026-08-03 on the Beelink SER5 Pro:** `/odometry/filtered` runs at
 > **24.0–24.5 Hz** against a configured 25.0 — within 4 %. Robot elevated,
 > motors disabled, full `robot.launch.py` stack up, whole machine at 1.3 % CPU.
+>
+> **Re-confirmed 2026-08-04 at a higher setpoint.** The EKF was re-derived from
+> its input rates and now runs at **50 Hz** (see [[inherited-values]]);
+> `/odometry/filtered` measured **49.999 Hz** — within 0.002 %, at double the
+> rate that originally failed. `ekf_node` costs 1.6 % of one core. Whatever the
+> Pi could not sustain, this machine sustains twice as much without noticing.
 >
 > None of the three hypotheses below was tested and confirmed; the symptom
 > simply does not occur on this hardware. The most likely explanation is that
