@@ -12,6 +12,11 @@ One table per question: **how do I test this**, **when was it last run**, **what
 did it say**. Procedures live in [[testing-guide]]; live hardware results live in
 `test-report.md`. This is the index over both.
 
+> **This file lists what to _run_. [[physical-checks]] lists what to _look at_** —
+> the claims software cannot verify about itself: which wheel M4 is, whether the
+> LiDAR faces forward, what the wheel radius is under load. A test can pass
+> against a wrong assumption, which is exactly what that list exists to catch.
+
 **Update the "last run" column when you run something.** A test whose last
 result nobody recorded is a test nobody can trust.
 

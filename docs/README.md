@@ -42,6 +42,7 @@ Once the hardware is connected, commands here move real wheels —
 | **Values still fitted to the old Pi** | [[inherited-values]] |
 | **To just operate the robot** | `.claude/commands/` — `/robot-status`, `/robot-start`, `/robot-drive`, `/robot-stop`, `/robot-test`, `/robot-fix` |
 | **How to test X, and what it said last time** | [[test-index]] |
+| **What only the real robot can confirm** | [[physical-checks]] |
 
 ---
 

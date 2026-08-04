@@ -95,5 +95,5 @@ Check it is not already known, and not a misreading:
 
 ## Related
 
-`/robot-status` · `/robot-drive` · `/robot-fix` · [[test-index]] ·
+`/robot-status` · `/robot-drive` · `/robot-check` · `/robot-fix` · [[test-index]] ·
 [[testing-guide]] · `.claude/rules/robot-safety.md`
