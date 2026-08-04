@@ -133,6 +133,27 @@ ros2 launch orbibot_localization localization.launch.py log_level:=debug
 | vroll, vpitch, vyaw | **Yes** | Gyroscope rates |
 | ax, ay, az | **No** | Disabled — mecanum vibration causes noise |
 
+> #### Which covariances actually reach the EKF
+>
+> A filter only uses the covariance of a field it fuses, so most of the IMU
+> covariance block in `hardware_params.yaml` never reaches this EKF. Worth
+> knowing before spending an afternoon tuning a number nothing reads:
+>
+> | Parameter | Reaches the EKF? |
+> |---|---|
+> | `imu.gyro_covariance_z` | **Yes** — this is the `vyaw` measurement noise |
+> | `imu.gyro_covariance_x` / `_y` | No — `vroll`/`vpitch` are off under `two_d_mode` |
+> | `imu.accel_covariance_x` / `_y` / `_z` | No — `ax, ay, az` are not fused |
+> | Madgwick `orientation_stddev` | **Yes** — this is the `yaw` measurement noise |
+>
+> The accelerometer still matters enormously; it is what corrects roll and
+> pitch **inside Madgwick**, and Madgwick ignores the input covariance entirely.
+> So a bad accel *reading* corrupts orientation, while a bad accel *covariance*
+> changes nothing. Two different failures that look alike in a config file.
+>
+> If `imu0_config` is ever changed to fuse acceleration, this table changes with
+> it — re-read it, do not trust this copy.
+
 ### Key Parameters
 
 | Parameter | Value | Description |
