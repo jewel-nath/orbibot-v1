@@ -12,7 +12,6 @@ Usage:
 from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
-    ExecuteProcess,
     IncludeLaunchDescription,
     LogInfo,
     TimerAction,
@@ -31,7 +30,25 @@ def generate_launch_description():
         description='Launch RealSense camera'
     )
 
+    # Both serial devices are named here, under distinct argument names, and
+    # passed explicitly into the includes below. The included launch files each
+    # call their argument 'serial_port'; sharing one context means the first one
+    # included wins for everybody. Naming them apart here makes that impossible.
+    declare_motor_port_arg = DeclareLaunchArgument(
+        'motor_port',
+        default_value='/dev/motordriver',
+        description='Serial port for the ROSMaster motor board'
+    )
+
+    declare_lidar_port_arg = DeclareLaunchArgument(
+        'lidar_port',
+        default_value='/dev/lidar',
+        description='Serial port for the RPLidar A1'
+    )
+
     use_camera = LaunchConfiguration('use_camera')
+    motor_port = LaunchConfiguration('motor_port')
+    lidar_port = LaunchConfiguration('lidar_port')
 
     log_startup = LogInfo(
         msg=['[Bringup] Robot base started — camera: ', use_camera]
@@ -56,20 +73,47 @@ def generate_launch_description():
                 'launch',
                 'hardware.launch.py'
             ])
-        ])
+        ]),
+        launch_arguments={'serial_port': motor_port}.items()
     )
 
-    # Lidar (delayed, launched as separate subprocess for isolation)
-    # Using ExecuteProcess instead of IncludeLaunchDescription to avoid
-    # USB serial conflict between /dev/motordriver and /dev/lidar
+    # Lidar, delayed so the hardware node has opened /dev/motordriver first.
+    #
+    # This used to be ExecuteProcess(['ros2', 'launch', ...]) "for isolation, to
+    # avoid USB serial conflict between /dev/motordriver and /dev/lidar". The
+    # symptom was real; the explanation was not. There is no device conflict —
+    # the two have separate udev symlinks and separate processes. What actually
+    # happened is a **launch argument name collision**:
+    #
+    #   hardware.launch.py declares 'serial_port', default /dev/motordriver
+    #   lidar.launch.py    declares 'serial_port', default /dev/lidar
+    #
+    # Included launch files share one context, and a DeclareLaunchArgument does
+    # not overwrite a value already in it. Whichever is included first wins, so
+    # rplidar_composition opened /dev/motordriver, sent A1 commands to the motor
+    # board and died with RESULT_OPERATION_TIMEOUT. Verified 2026-08-04:
+    # `ros2 param get /rplidar_node serial_port` returned /dev/motordriver.
+    #
+    # Running it as a subprocess hid this, because a separate `ros2 launch` gets
+    # a separate context — at the cost of a second launch service that had to be
+    # torn down separately, and that orphaned itself. See bringup-issue.md.
+    #
+    # Passing launch_arguments explicitly is the fix: it pins the value instead
+    # of inheriting whatever the context happens to hold. Every include below
+    # does this, so adding a package later cannot silently repoint a device.
     lidar_launch = TimerAction(
         period=5.0,
         actions=[
-            LogInfo(msg='[Bringup] Starting LiDAR as subprocess...'),
-            ExecuteProcess(
-                cmd=['ros2', 'launch', 'orbibot_sensors', 'lidar.launch.py'],
-                name='lidar_launch',
-                output='screen',
+            LogInfo(msg='[Bringup] Starting LiDAR...'),
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource([
+                    PathJoinSubstitution([
+                        FindPackageShare('orbibot_sensors'),
+                        'launch',
+                        'lidar.launch.py'
+                    ])
+                ]),
+                launch_arguments={'serial_port': lidar_port}.items()
             )
         ]
     )
@@ -104,6 +148,8 @@ def generate_launch_description():
 
     return LaunchDescription([
         declare_use_camera_arg,
+        declare_motor_port_arg,
+        declare_lidar_port_arg,
         log_startup,
         description_launch,
         hardware_launch,
