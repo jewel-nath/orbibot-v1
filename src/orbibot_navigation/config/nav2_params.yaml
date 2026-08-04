@@ -346,7 +346,9 @@ collision_monitor:
     base_frame_id: "base_footprint"
     odom_frame_id: "odom"
     cmd_vel_in_topic: "cmd_vel_smoothed"
-    cmd_vel_out_topic: "cmd_vel"
+    # Was "cmd_vel". Nav2 now feeds twist_mux at priority 50 instead of
+    # writing the driver's topic directly — command-pipeline.md.
+    cmd_vel_out_topic: "cmd_vel_nav_out"
     state_topic: "collision_monitor_state"
     transform_tolerance: 0.2
     source_timeout: 4.0

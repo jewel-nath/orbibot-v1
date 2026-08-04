@@ -9,7 +9,10 @@
 // -- ROS topic names --
 
 export const ROS_TOPICS = {
-  cmdVel: '/cmd_vel',
+  // Arbitrated by twist_mux (priority 200). Never publish /cmd_vel directly.
+  cmdVel: '/cmd_vel_web',
+  // Highest priority: publishing zeros here overrides every other source.
+  cmdVelEstop: '/cmd_vel_estop',
   odom: '/odom',
   odomFiltered: '/odometry/filtered',
   imu: '/imu/data',

@@ -14,7 +14,11 @@ class MotionMixin:
 
     def _init_motion(self):
         """Create motion publishers. Called by RosBridge.__init__."""
-        self._cmd_vel_pub = self._node.create_publisher(Twist, '/cmd_vel', 10)
+        # Arbitrated by twist_mux at priority 100 — below the dashboard, so an
+        # operator's stick always preempts the agent. Never publish /cmd_vel
+        # directly: see docs/architecture/command-pipeline.md.
+        self._cmd_vel_pub = self._node.create_publisher(
+            Twist, '/cmd_vel_agent', 10)
 
     def publish_cmd_vel(self, vx: float, vy: float, wz: float) -> None:
         """Publish a velocity command, clamped by safety limits."""

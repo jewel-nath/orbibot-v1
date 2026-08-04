@@ -65,6 +65,18 @@ def generate_launch_description():
         ])
     )
 
+    # Command arbitration. Started before the hardware node so that /cmd_vel has
+    # exactly one publisher from the first moment anything could command motion.
+    twist_mux_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource([
+            PathJoinSubstitution([
+                FindPackageShare('orbibot_bringup'),
+                'launch',
+                'twist_mux.launch.py'
+            ])
+        ])
+    )
+
     # Hardware Interface (serial bridge to firmware + system monitor)
     hardware_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([
@@ -152,6 +164,7 @@ def generate_launch_description():
         declare_lidar_port_arg,
         log_startup,
         description_launch,
+        twist_mux_launch,
         hardware_launch,
         lidar_launch,
         localization_launch,

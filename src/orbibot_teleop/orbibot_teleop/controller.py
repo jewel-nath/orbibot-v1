@@ -84,7 +84,10 @@ class Controller(Node):
         self.last_button_time = {}
 
         # Publishers
-        self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)
+        # Reserved slot, arbitrated by twist_mux at priority 220. This package
+        # is dormant — teleop is web-only — but the topic is correct so that
+        # wiring it up later needs no renumbering.
+        self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel_joy', 10)
 
         # Subscribers
         self.joy_sub = self.create_subscription(Joy, '/joy', self.joy_callback, 10)

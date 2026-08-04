@@ -1,0 +1,114 @@
+# OrbiBot command arbitration — the single writer of /cmd_vel
+#
+# Every source that wants to move the robot publishes to its own topic and is
+# arbitrated here by priority and timeout. Design and acceptance tests:
+# docs/architecture/command-pipeline.md
+#
+# Two properties this buys, and both are safety properties:
+#
+#   Human always wins.  Driving from the dashboard overrides autonomous
+#   navigation without stopping Nav2 or unwinding any of its state.
+#
+#   Silence means stop.  A source that stops publishing is dropped after its
+#   timeout and the next-highest takes over. Teleop is web-only, so a dropped
+#   wifi link, a closed laptop lid and a switched browser tab must all look
+#   identical to the robot — commands stop arriving, so the robot stops.
+#
+#   That second property is NOT free. twist_mux is event driven and publishes
+#   nothing when every input is silent, so it needs the `idle` input at the
+#   bottom of this file to fall through to. See the comment there.
+#
+# Timeouts are the safety mechanism, not housekeeping. Keep every one of them
+# shorter than the driver's control.cmd_timeout (2.0 s in hardware_params.yaml)
+# and the firmware's COMMAND_TIMEOUT_MS (2000), which are last-resort backstops
+# rather than the intended path.
+
+twist_mux:
+  ros__parameters:
+
+    # MUST be false. twist_mux on Jazzy defaults this to true and then both
+    # publishes and subscribes geometry_msgs/TwistStamped — while every other
+    # node in this project speaks plain Twist: orbibot_hardware_node's /cmd_vel
+    # subscription, the agent, the teleop fallback, the dashboard, and Nav2's
+    # collision_monitor output.
+    #
+    # The mismatch is silent. DDS simply does not connect a TwistStamped
+    # publisher to a Twist subscriber, so `ros2 topic info /cmd_vel` reports one
+    # publisher and one subscriber, looking correct, while no command ever
+    # reaches the driver. Found 2026-08-04 by the Phase 2 acceptance tests,
+    # which measured nothing at all arriving on /cmd_vel.
+    #
+    # If TwistStamped is ever wanted, it is a coordinated change across all five
+    # packages plus Nav2's enable_stamped_cmd_vel — not a flip of this line.
+    use_stamped: false
+
+    topics:
+
+      # Emergency stop. Highest priority, and deliberately a normal Twist
+      # input rather than a lock: publishing zeros here overrides everything
+      # below and keeps overriding while it is being published.
+      estop:
+        topic   : cmd_vel_estop
+        timeout : 0.5
+        priority: 255
+
+      # Reserved for orbibot_teleop — a gamepad on the robot's own USB, which
+      # would survive a network failure. Not wired up today (teleop is web
+      # only), but numbered above the dashboard so that adding it later needs
+      # no renumbering. See .claude/rules/robot-safety.md.
+      joystick:
+        topic   : cmd_vel_joy
+        timeout : 0.5
+        priority: 220
+
+      # The operator's dashboard: a controller on their laptop, read by the
+      # browser Gamepad API, sent over rosbridge. The shortest timeout in the
+      # system because the network is the control path — 0.3 s is shorter than
+      # a human notices but longer than normal wifi jitter. Tune it against a
+      # measured round-trip; never let it exceed the driver's cmd_timeout.
+      web:
+        topic   : cmd_vel_web
+        timeout : 0.3
+        priority: 200
+
+      # orbibot_agent. Below the dashboard on purpose: an LLM is a publisher
+      # that can be confidently wrong, so the operator's stick must always
+      # preempt it. Roadmap Phase 8.2 treats this as that phase's safety
+      # property. Longer timeout because agent commands are deliberate and
+      # low-rate, not a continuous stream.
+      agent:
+        topic   : cmd_vel_agent
+        timeout : 1.0
+        priority: 100
+
+      # Nav2, after its own chain:
+      #   controller_server -> cmd_vel_nav -> velocity_smoother
+      #                     -> cmd_vel_smoothed -> collision_monitor
+      #                     -> cmd_vel_nav_out -> here
+      # That internal chain is correct and stays. The only thing that changed
+      # is collision_monitor's output topic, which used to be /cmd_vel itself.
+      navigation:
+        topic   : cmd_vel_nav_out
+        timeout : 0.5
+        priority: 50
+
+      # Fallback, and the reason "silence means stop" is true at all.
+      #
+      # twist_mux is event driven: it only publishes when one of its inputs
+      # receives a message. With every input silent it publishes NOTHING, so the
+      # last commanded velocity stays the newest message on /cmd_vel and nothing
+      # commands a stop. Measured 2026-08-04: zero messages on /cmd_vel in the
+      # 3 s after the last input.
+      #
+      # cmd_vel_idle publishes a zero Twist at 20 Hz. Every real source above
+      # outranks it, so it does nothing while the robot is driven; when they all
+      # go stale the next idle message makes the mux fall through to zero. Stop
+      # latency becomes the quiet source's timeout plus one idle period, instead
+      # of the driver's 2 s backstop.
+      #
+      # Timeout is deliberately generous: if this node dies the mux should not
+      # thrash, and the driver's cmd_timeout is still underneath.
+      idle:
+        topic   : cmd_vel_idle
+        timeout : 0.5
+        priority: 1
