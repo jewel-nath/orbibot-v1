@@ -31,16 +31,35 @@ orbibot_hardware_node:
       battery_critical_voltage: 10.5 # Volts - critical battery level (auto-disable)
 
     # IMU covariance (R4) — per-axis diagonal entries for accel and gyro.
-    # Run `ros2 run orbibot_localization measure_imu_noise` to get measured values.
-    # Firmware also computes these at boot via Welford's algorithm (see boot log).
+    # Re-measure with:
+    #   ros2 run orbibot_localization measure_imu_noise --ros-args -p duration:=600.0
+    #
+    # Measured 2026-08-04, 29977 samples over 10 min, robot elevated on a stool,
+    # motors disabled, Beelink not yet mounted. Replaces figures from 2026-03-24
+    # that came from 212 samples on the Raspberry Pi, through the accelerometer
+    # path that was later found faulty (CC-3).
+    #
+    # ⚠️ THIS IS THE STATIONARY NOISE FLOOR — a lower bound, not the operating
+    # value. Mecanum vibration under motion will raise all six, and the EKF's
+    # Mahalanobis rejection scales as 1/sqrt(covariance): shrinking gyro Z by
+    # 19x tightens `imu0_twist_rejection_threshold` by ~4.4x in absolute terms,
+    # which can start rejecting good data once the robot moves. **Re-measure
+    # while driving before Phase 1 tuning** — roadmap 1.3 / 4.1.
+    #
+    # Only `gyro_covariance_z` actually reaches the EKF: imu0_config fuses yaw
+    # and vyaw only, so the accel entries and gyro X/Y are read by nothing here.
+    # They are kept measured because they document the sensor, and because
+    # enabling accel fusion later would make them live. See
+    # src/orbibot_localization/README.md.
     imu:
-      accel_covariance_x: 0.000081  # (m/s²)² — measured 2026-03-24, 212 samples, robot stationary
-      accel_covariance_y: 0.000053
-      accel_covariance_z: 0.000041
-      gyro_covariance_x: 0.000001  # (rad/s)² — measured 2026-03-24
-      gyro_covariance_y: 0.000026
-      gyro_covariance_z: 0.000001
-      orientation_covariance: 0.0025
+      accel_covariance_x: 5.277280e-05  # (m/s²)² — stationary floor, 2026-08-04
+      accel_covariance_y: 5.395034e-05
+      accel_covariance_z: 1.664637e-04
+      gyro_covariance_x: 5.910444e-07   # (rad/s)² — stationary floor, 2026-08-04
+      gyro_covariance_y: 5.854038e-07
+      gyro_covariance_z: 5.160473e-08   # was 1e-6 — 19x too large, and the one the EKF reads
+      orientation_covariance: 0.0025    # NOT measured — Madgwick's orientation_stddev
+                                        # (0.05 rad) is what the EKF actually uses for yaw
 
       # Magnetometer calibration block removed 2026-04-28 — magnetometer
       # support was dropped from firmware and driver. Heading correction is

@@ -154,7 +154,7 @@ nothing to do it first and it makes the whole calibration session safer.
 |---|---|---|
 | 1.1 | Wheel radius and encoder CPR — drive a measured 2 m, compare `/odom` | ground, ~3 m clear |
 | 1.2 | Rotation — 10 × 360° in place, compare accumulated yaw | ground, ~1.5 m clear |
-| 1.3 | **Yaw drift rate**, stationary, 10 min — the number that replaces the magnetometer | ground, still |
+| 1.3 | ⚠️ **Yaw drift rate**, stationary, 10 min — **taken 2026-08-04: +0.547 °/min**, but the sensor was tilted 0.94° and 83 % of that is the tilt. Re-take level | ground, still |
 | 1.4 | Forward/backward velocity asymmetry seen wheels-free | ground |
 | 1.5 | Accel X/Y scale under a known acceleration (CC-2) | ground |
 | 1.6 | Re-tune motor PID **under the new mass**; write it to flash | ground |
@@ -172,7 +172,10 @@ Then 1.6 and 1.7.
 - Straight 2 m: odometry error **< 3 %**, forward and backward
 - 10 × 360°: accumulated yaw error **< 5°** total
 - Yaw drift, stationary, 10 min: **recorded** — a baseline, not a pass/fail, but
-  Phase 4 cannot be judged without it
+  Phase 4 cannot be judged without it. *Partially met:* +0.547 °/min recorded
+  2026-08-04 (`test-report.md` §9.7), and it also found **why** — a 0.94°
+  mounting tilt contributing 83 % of it (LOC-1). The gate is not met until the
+  figure is re-taken with the sensor level
 - Forward and backward at equal commanded speed agree within **5 %**
 - `\|a\|` within **1 %** of g through a slow tilt, on all three axes
 - Unit tests green with no hardware attached

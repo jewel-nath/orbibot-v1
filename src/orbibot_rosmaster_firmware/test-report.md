@@ -534,3 +534,89 @@ charger, because neither moves the reading.
 - P-4 — converter case temperature after 30 min under load.
 
 See `docs/operations/computer-setup.md` for the pass criteria.
+
+---
+
+## 9.7 Stationary IMU — noise, bias and yaw drift — 2026-08-04
+
+*Robot **elevated on a stool**, wheels free, motors disabled, Beelink powered
+but **not yet mounted**. Full `robot.launch.py`. 29 977 raw samples over
+**10 minutes**, no one touching the robot. Tool:
+`ros2 run orbibot_localization measure_imu_noise -p duration:=600.0`.*
+
+This replaces the covariances of 2026-03-24, which came from 212 samples on the
+Raspberry Pi through the accelerometer path later found faulty (CC-3), and it is
+the first time yaw drift has been measured on this robot at all — the number
+that replaced the magnetometer when it was removed on 2026-04-28.
+
+### Accelerometer
+
+| axis | mean (m/s²) | stddev | variance (m/s²)² |
+|---|---|---|---|
+| X | +0.00308 | 0.00726 | 5.277e-05 |
+| Y | **−0.16003** | 0.00735 | 5.395e-05 |
+| Z | +9.80707 | 0.01290 | 1.665e-04 |
+
+**|a| = 9.8084 m/s², ratio to g = 1.0002.** The accel scale is correct to
+0.02 % — FW-BUG-2's inflated-Z era is over, and CC-2's scale question is
+answered for the static case. Dynamic scale still needs the robot on the ground.
+
+### Gyroscope
+
+| axis | bias (°/s) | stddev (rad/s) | variance (rad/s)² |
+|---|---|---|---|
+| X | +0.14675 | 0.000769 | 5.910e-07 |
+| Y | **−0.45684** | 0.000765 | 5.854e-07 |
+| Z | **+0.00162** | 0.000227 | 5.160e-08 |
+
+Gyro Z is an excellent axis: bias 0.0016 °/s, and a noise floor **19× below**
+the 1e-6 that had been configured. X and Y are 90× and 280× noisier in bias.
+
+### Yaw drift, and what actually causes it
+
+| | °/min |
+|---|---|
+| **Measured**, `/imu/data_filtered`, over 10 min | **+0.547** |
+| Predicted from gyro **Z** bias alone | +0.097 |
+
+A 5.6× gap — and it is fully explained. The gravity vector shows the sensor is
+**not level**:
+
+```
+roll  (about X) = −0.935°        pitch (about Y) = −0.018°
+```
+
+Euler yaw kinematics leak the other two gyro axes into yaw through that tilt:
+
+```
+ψ̇ = (ω_y·sin φ + ω_z·cos φ) / cos θ
+  = (−0.45684)(−0.01632) + (+0.00162)(0.99987)
+  = +0.00907 °/s = +0.544 °/min      vs +0.547 measured — 0.47 % error
+```
+
+**The drift is not a gyro problem. It is a mounting problem.** A 0.94° tilt
+turns a −0.457 °/s bias on an axis nobody watches into 83 % of the heading
+error. Level the sensor and drift should fall to about **+0.10 °/min
+(5.8 °/hour)** from **+0.55 °/min (33 °/hour)**.
+
+### `/odom` while stationary
+
+`vx`, `vy`, `vyaw` all read **exactly 0.000000, stddev 0.000000** over 1 158
+messages. Wheels free and still, encoders report exact zero — no quantisation
+dither to integrate.
+
+### What this changes
+
+- `hardware_params.yaml` IMU covariances replaced with the measured values.
+  **Stationary floor only** — vibration under motion will raise them, and the
+  EKF's Mahalanobis rejection scales as 1/√covariance, so this must be
+  re-measured while driving before Phase 1 tuning.
+- Of the six, only `gyro_covariance_z` reaches the EKF (`imu0_config` fuses yaw
+  and vyaw only).
+- Madgwick `zeta: 0.0` should be reconsidered on this evidence — see
+  `localization-issue.md` LOC-1.
+
+### Not covered
+
+Yaw drift **with the sensor level**, and everything under vibration. Both wait
+on the Beelink being mounted (Phase 0.8).

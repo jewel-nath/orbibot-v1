@@ -290,6 +290,37 @@ Cost of single-threading here, accepted knowingly: one 0.5 s blocking service
 call now stalls publishing while it runs. Measure the executor choice; do not
 inherit it.
 
+### A one-degree mounting tilt can dominate yaw drift
+
+OrbiBot's yaw drifts at **0.547 °/min**. Its gyro Z bias is 0.0016 °/s, which
+predicts 0.097 °/min. The 5.6× gap is not the gyro and not noise — it is a
+**0.94° mounting tilt** leaking the *other* gyro axes into yaw:
+
+```
+ψ̇ = (ω_y·sin φ + ω_z·cos φ) / cos θ
+
+ω_y bias = −0.457 °/s, φ = −0.935°  →  +0.544 °/min   (measured: +0.547)
+```
+
+83 % of the heading error comes from an axis nobody was looking at, through a
+tilt small enough to be invisible by eye. The model matches to 0.47 %, so this
+is not a plausible story — it is the answer.
+
+Two things worth carrying:
+
+- **Always record all three gyro biases, not just Z.** Z is the one that
+  "matters" for heading, right up until the platform is not level. On this
+  robot Z was the *best* axis by 280×, and it contributed 17 % of the drift.
+- **Check gravity before blaming the sensor.** The accelerometer means give the
+  mounting tilt for free — `roll = atan2(a_y, a_z)`, `pitch = atan2(−a_x, √(a_y²+a_z²))`.
+  Any stationary IMU capture already contains it.
+
+The general form: with `use_mag: false` nothing observes heading, so *every*
+gyro bias term integrates forever. Levelling the sensor is a fix with no
+runtime cost, and it is cheaper than any amount of filter tuning.
+`measure_imu_noise` now prints the bias prediction beside the measured drift so
+the gap is visible without anyone doing the algebra.
+
 ### Bisect by launching one thing at a time
 
 Once the firmware was cleared, the cause took four 40-second runs: the hardware

@@ -50,10 +50,12 @@ Design and the fix: [[command-pipeline]]. Gate for Phase 2 in [[roadmap]].
 ### CC-2 · Accel X/Y scale unconfirmed under real acceleration · **MEDIUM**
 
 The Z-axis self-test fix (`test-report.md` §9.4) is verified static:
-`|a| = 9.802 m/s²`, ratio to g **0.9995**. But X and Y read ~0 on a static
-robot either way, so the corrected scale on those two axes — the ones a ground
-robot actually accelerates along — has not been shown. Needs a known
-acceleration with the robot **on the ground**.
+`|a| = 9.802 m/s²`, ratio to g **0.9995** — **re-confirmed 2026-08-04 at
+1.0002 over 29 977 samples** (§9.7). But X and Y read ~0 on a static robot
+either way, so the corrected scale on those two axes — the ones a ground robot
+actually accelerates along — has not been shown. Needs a known acceleration
+with the robot **on the ground**. The static half is now well measured; the
+dynamic half is untouched.
 
 ### CC-3 · Every pre-2026-08 localisation conclusion is suspect · **MEDIUM**
 
