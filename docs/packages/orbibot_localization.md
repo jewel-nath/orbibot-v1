@@ -43,10 +43,16 @@ magnetometer it is what fights gyro bias.
 
 ## Open
 
-- **`README.md` still says Madgwick "fuses raw IMU + magnetometer"** — wrong
-  since April, [[backlog-moc]] CC-4
 - Every covariance and tuning figure predates the 2026-08-03 accel fix and
-  should be re-measured — roadmap Phase 4
+  should be re-measured — roadmap Phase 4. **In progress 2026-08-04:**
+  `measure_imu_noise` now reports gyro bias and measured yaw drift alongside
+  the variances, and a 10-minute stationary run is what Phase 4.1 and roadmap
+  1.3 are waiting on
+- `zeta: 0.0` has never been tested against a measured drift figure. Raising it
+  is only justifiable once that figure exists
+
+Closed 2026-08-04: **CC-4** — the README's magnetometer claim was fixed back in
+`bf8d74f`; the backlog entry had simply never been closed.
 
 ## Related
 

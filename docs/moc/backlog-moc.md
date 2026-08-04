@@ -63,12 +63,23 @@ length check whenever firmware and driver were out of step. Any tuning result,
 drift figure or EKF covariance recorded before 2026-08-03 was measured through
 that. Re-measure rather than trust — see [[roadmap]] Phase 1.
 
-### CC-4 · `orbibot_localization/README.md` still describes the magnetometer · **LOW**
+### ~~CC-4 · `orbibot_localization/README.md` still describes the magnetometer~~ · **CLOSED 2026-08-04**
 
-It says the Madgwick stage "fuses raw IMU + magnetometer → drift-free
+> **Already fixed, and this entry was wrong to still be open.** Commit
+> `bf8d74f` — *"delete the magnetometer from every doc that still claimed it
+> exists"* — rewrote that README. It now opens with the opposite statement:
+> *"Yaw is not absolute and not drift-free."* The phrase this entry quotes has
+> not been in the file since.
+>
+> Verified 2026-08-04 by grepping the README for the quoted text. Nothing
+> matched. An issue tracker that reports a fixed problem as open costs the same
+> as a doc that describes deleted code: someone goes looking for something that
+> is not there.
+
+It said the Madgwick stage "fuses raw IMU + magnetometer → drift-free
 orientation". `madgwick_params.yaml` has `use_mag: false`, and magnetometer
 support was deleted across firmware, driver and msgs on 2026-04-28. The README
-was not updated with it.
+was not updated with it at the time.
 
 ## Related
 
