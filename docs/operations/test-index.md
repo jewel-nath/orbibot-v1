@@ -29,6 +29,7 @@ Runs anywhere, any time. If these are red, fix them before touching hardware.
 | **Firmware build** | `cd src/orbibot_rosmaster_firmware && ~/.platformio-venv/bin/pio run` | 2026-08-03 | 24.7 KB flash (9.7 %), 21.6 KB RAM (45.1 %), 89 s |
 | **Frontend build** | `cd src/orbibot_webgui/frontend && npm run build` | 2026-08-03 | 816 K `dist/` |
 | **Firmware/ROS limit cross-check** | `.claude/scripts/safety.sh` | — | not recorded |
+| ~~`test_motor_direction.py`~~ | — | — | **withdrawn 2026-08-04** — used a function code the firmware does not implement, then asked a human to confirm. FW-ISSUE-12 |
 
 > Run the unit tests as a **directory**, and occasionally in a different order.
 > Per-file green is not green — see [[field-notes]], *Testing traps*.
@@ -59,8 +60,7 @@ traction.
 
 | What | Command / section | Last run | Result |
 |---|---|---|---|
-| **Motor direction, each wheel** | `.claude/scripts/motor.sh` | 2026-04-19 | `test-report.md` §6 |
-| **Mecanum kinematics, 4 directions** | `test_kinematics.py` | 2026-04-19 | all four correct |
+| **Wheel direction + mecanum kinematics** | `.claude/scripts/motor.sh`, or `test_kinematics.py` directly | 2026-04-19 | all four sign patterns correct — `test-report.md` §6 |
 | **Command timeout (2 s)** | `test_safety.py` | 2026-04-19 | motors stop 2.12 s after last command |
 | **Velocity clamp** | `test_motor_max_speed.py` | 2026-04-28 | 1023 mm/s peak on a 3000 mm/s command |
 | **Per-motor max speed** | `test_motor_max_speed.py` | 2026-04-28 | **M4 runs 12–15 % slow** — FW-ISSUE-4, open |
