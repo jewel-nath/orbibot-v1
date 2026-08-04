@@ -59,6 +59,38 @@ faster than 8 Hz reprocesses the same scan.
 
 ---
 
+## 🩺 Diagnostic trap — read this before blaming the LiDAR
+
+`RESULT_OPERATION_TIMEOUT` and `cannot retrieve rplidar health code` look like a
+dead or wedged device. **Twice on 2026-08-04 they meant something else, and the
+LiDAR was fine both times:**
+
+| what it actually was | how it looked |
+|---|---|
+| The node had been handed **`/dev/motordriver`** (BRINGUP-2) | timeout on open |
+| **Twelve** `rplidar_composition` processes contending for `/dev/lidar` | timeout on open, survived a USB replug |
+
+The second was self-inflicted: every failed launch respawned its node
+(`respawn=True`), and killing the launch without a controlling terminal orphaned
+them, so they accumulated silently across test runs. A USB replug did not fix it
+and looked like proof of a hardware fault.
+
+**Check these two things before touching the hardware:**
+
+```bash
+ros2 param get /rplidar_node serial_port        # must be /dev/lidar
+pgrep -c -f '^/opt/ros/jazzy/lib/rplidar_ros/rplidar_composition'   # must be 0 or 1
+```
+
+`.claude/scripts/stop.sh` clears both conditions and verifies the serial devices
+were released. Use it between runs rather than `kill`.
+
+A genuinely wedged A1 looks different: it still answers identity queries — S/N,
+`Firmware Ver`, `Hardware Rev` all read correctly — and fails only at the health
+check and scan start. If identity queries also fail, suspect power or cabling.
+
+---
+
 ## 🔴 Open
 
 ### SENS-2: RealSense D435 enumerates at 480 Mbps (USB 2.0)
