@@ -1,5 +1,35 @@
 # orbibot_localization — Changelog
 
+## [Unreleased] — 2026-08-04
+
+### Changed — `measure_imu_noise` now reports bias and yaw drift, not just variance
+
+The tool computed the per-axis **mean** with Welford's algorithm and never
+printed it for the gyro. That mean is the gyro bias, and with `use_mag: false`
+— the magnetometer was removed 2026-04-28 because indoor iron and motor
+currents made heading worse — nothing observes heading at all, so gyro Z bias
+integrates directly into yaw drift. It was the most important number the tool
+had and the one number it threw away.
+
+Added:
+
+- **Gyro bias** per axis, in rad/s and °/s, with the yaw drift it predicts
+- **Measured yaw drift** from `/imu/data_filtered`, unwrapped across the ±180°
+  seam, reported in °/min — roadmap 1.3, the measurement that replaced the
+  magnetometer. Printed beside the bias prediction, because the two agreeing
+  means Madgwick is not correcting yaw at all (expected at `zeta: 0.0`) and the
+  two disagreeing means it is doing more than assumed
+- **`/odom` twist while stationary** — should be zero; anything there is
+  encoder noise the EKF integrates
+- **`|a|` and its ratio to g**, so a scale error is not mistaken for noise (CC-2)
+- an `output` parameter, so the result lands in a file rather than a terminal
+- default duration 30 s → **600 s**. Bias and drift are slow effects; a 30 s
+  window cannot see them
+
+Variances now print in scientific notation. At six decimal places a gyro
+variance of 1e-7 and one of 1.4e-6 both read `0.000001`, and the values in
+`hardware_params.yaml` were written at exactly that precision.
+
 ## [Unreleased] — 2026-03-24
 
 Reference: `lgdxrobot2` open-source project (same ICM-20948, mecanum wheels)

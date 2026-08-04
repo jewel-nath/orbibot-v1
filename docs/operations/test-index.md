@@ -43,6 +43,7 @@ Robot can be anywhere. Motors stay disarmed.
 | What | Command | Last run | Result |
 |---|---|---|---|
 | **Preflight** — devices, nodes, battery | `.claude/scripts/preflight.sh` | — | not recorded |
+| **Stationary IMU** — noise, gyro bias, yaw drift (Phase 4.1 + roadmap 1.3) | `ros2 run orbibot_localization measure_imu_noise --ros-args -p duration:=600.0` | 2026-08-04 | see below — robot must be untouched for the full 10 min |
 | **Stack health** — all topic rates | `/robot-status` | 2026-08-04 18:05 | ✅ full `robot.launch.py`: `/imu/data_raw`, `/joint_states`, `/odometry/filtered` all **50.00 Hz**, `/scan` 8.10 Hz, `hardware_node` 9.75 % |
 | **Firmware report rate** — below ROS, no stack running | `python3 .claude/scripts/rate_decay_log.py -w 20 -d 40` | 2026-08-04 17:18 | **49.98 Hz** on all five report types at 2 h 41 min board uptime; battery 12.5 V. Firmware exonerated |
 | **Sensor rate under `/cmd_vel` load** — HW-BUG-8 regression guard | `topic_rate_log.py`, then `ros2 topic pub -r 20 /cmd_vel …` (see hardware-issue.md) | 2026-08-04 18:05 | **50.04 Hz under load** ✅ — was 32.4 Hz before the executor fix; node CPU 60.4 % → 10.1 % |

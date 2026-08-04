@@ -181,17 +181,33 @@ map (world frame, from SLAM)
 
 ## Tuning Guide
 
-### IMU Noise Measurement
+### Stationary IMU characterisation — noise, bias and yaw drift
 
 ```bash
-# Robot stationary and level, 30 s
-ros2 run orbibot_localization measure_imu_noise
+# Robot still and level. No motion is commanded; motors are never armed.
+ros2 run orbibot_localization measure_imu_noise --ros-args \
+  -p duration:=600.0 -p output:=/tmp/imu_char.txt
 ```
 
-Writes measured accel/gyro variances for the EKF covariance diagonals. The
-values currently in `hardware_params.yaml` were taken through a faulty
-accelerometer path and are **suspect** — re-measure before trusting them. See
+Reports three things, not one:
+
+| Output | What it decides |
+|---|---|
+| **Per-axis variance** — accel and gyro | the IMU covariances in `hardware_params.yaml`, which is how heavily the EKF trusts the sensor |
+| **Gyro bias** — mean rate of a robot that is not turning | with `use_mag: false` nothing observes heading, so gyro Z bias integrates straight into yaw drift. This is what `zeta` exists to chase |
+| **Yaw drift** — measured on `/imu/data_filtered`, °/min | roadmap 1.3. The number that replaced the magnetometer, removed 2026-04-28 |
+
+It also watches `/odom`: a stationary robot should report zero twist, and any
+residual is encoder noise the EKF will integrate.
+
+**Run it for ten minutes, not thirty seconds.** Bias and drift are slow; a 30 s
+window cannot see them. The covariances that were in `hardware_params.yaml`
+came from 212 samples in March 2026 — through a faulty accelerometer path, on
+the Raspberry Pi, before the magnetometer was removed. See
 `docs/moc/backlog-moc.md` CC-3.
+
+Values print in scientific notation on purpose: at six decimal places a gyro
+variance of 1e-7 and one of 1.4e-6 both read as `0.000001`.
 
 > There is no magnetometer calibration. `calibrate_magnetometer` was deleted
 > along with magnetometer support on 2026-04-28.
