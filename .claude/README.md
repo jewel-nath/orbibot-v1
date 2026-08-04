@@ -9,7 +9,7 @@ question: **does the agent need this every session, or only some sessions?**
 ├── hooks/       Fire regardless of what the agent remembers.
 ├── skills/      Loaded on demand. Reference material, procedures, templates.
 ├── scripts/     Run by hand or by the agent, on the real robot.
-├── commands/    Slash commands. Load only when invoked.
+├── commands/    Slash commands — the front door for operating the robot.
 └── settings.json
 ```
 
@@ -81,6 +81,30 @@ matching skills cover the same ground and are discoverable.
 | `diag.sh` | Collects system status for troubleshooting |
 | `encoder.sh` | Diagnoses encoder communication failures |
 | `motor.sh` | Spins each wheel briefly — **wheels must be free** |
+| `stop.sh` | Stops the stack and **verifies the serial devices were released** |
+| `test_cmd_vel_arbitration.py` | Phase 2 acceptance — priorities, timeouts, e-stop. No motion needed |
+
+## commands/ — the front door
+
+Someone SSHes into the robot, opens Claude, and wants it to move. These are what
+they reach for. Each one is written for a reader who has never used ROS 2, and
+each carries its own safety gates so the operator does not have to know them.
+
+| Command | Does | Safe with the robot on the floor? |
+|---|---|---|
+| `/robot-status` | Health check — rates, battery, what is running | **yes**, read-only |
+| `/robot-start` | Brings the stack up, motors disarmed | **yes** |
+| `/robot-drive` | Guided driving, from asking the robot's state to disarming | asks first |
+| `/robot-stop` | Stops everything and proves it stopped | **yes** |
+| `/ros2` | Command cheat-sheet | **yes** |
+
+`/robot-drive` is the one that matters. It enforces the rule the operator cannot
+be expected to remember: **state which robot state the test needs, ask for one
+physical action, then wait.** It also points every command at `/cmd_vel_web`
+rather than `/cmd_vel`, so a beginner cannot accidentally bypass the e-stop.
+
+Each command file lists the expected numbers, so "is this healthy?" has an
+answer rather than a judgement.
 
 ## No simulation — but the reason expired
 

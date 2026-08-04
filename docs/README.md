@@ -11,11 +11,12 @@ tags:
 Mecanum-wheeled indoor robot. ROS 2 Jazzy on a **Beelink SER5 Pro**, motor
 control on a Yahboom ROSMaster V3.0 (STM32F103RCT6) over serial at 115200 baud.
 
-> ⚠️ **Migration in progress — 2026-08-03.** The Raspberry Pi 5 hit 100 % CPU
-> under any real workload and has been replaced. **The Beelink is on a bench,
-> not on the robot** — nothing is wired to it and ROS 2 is not installed.
-> Start at [[computer-setup]]. The Pi's state lives on the `raspberry_pi`
-> branch.
+> ⚠️ **Migration in progress — updated 2026-08-04.** The Raspberry Pi 5 hit
+> 100 % CPU under any real workload and has been replaced by a Beelink SER5 Pro.
+> ROS 2 and all 12 packages are up, and the board, LiDAR and camera are
+> connected — **commands can move wheels.** The Beelink is not yet bolted to the
+> robot; that is Phase 0.8 and it gates Phase 1. Start at [[computer-setup]].
+> The Pi's state lives on the `raspberry_pi` branch.
 
 Once the hardware is connected, commands here move real wheels —
 `.claude/rules/robot-safety.md` first.
@@ -37,6 +38,9 @@ Once the hardware is connected, commands here move real wheels —
 | The board itself — pinout, timers, rails | [[rosmaster-board]] |
 | What hardware is actually fitted | [[inventory]] |
 | How another robot solved this | [[yahboom-rosmaster-x3]], [[lgdxrobot2]], [[aubot]] |
+| **A trap that already cost time** | [[field-notes]] — tools that lie, failures that were not what they looked like |
+| **Values still fitted to the old Pi** | [[inherited-values]] |
+| **To just operate the robot** | `.claude/commands/` — `/robot-status`, `/robot-start`, `/robot-drive`, `/robot-stop` |
 
 ---
 

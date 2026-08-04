@@ -34,7 +34,36 @@ note and the code disagree, the code decides and the note gets fixed.
 | A finding — fixed it, made it worse, found a new one | `src/<pkg>/<pkg>-issue.md` |
 | A number measured on real hardware | `src/orbibot_rosmaster_firmware/test-report.md` |
 | A procedure or a pass criterion | `testing-guide.md` |
+| How the robot is operated or stopped | `.claude/commands/`, `.claude/scripts/` |
+| A tuning value inherited from the Pi | `docs/plan/inherited-values.md` |
+| **Something you learned the hard way** | `docs/reference/field-notes.md` |
 | A project-wide convention | `CLAUDE.md` — and only then |
+
+**Three places, every task: `docs/`, `.claude/`, `CLAUDE.md`.** They drift
+independently, and each one is trusted by a different reader — `docs/` by a
+human learning the system, `.claude/` by the agent operating it, `CLAUDE.md` by
+whoever arrives next with no context at all. A change that updates one and not
+the others has not been finished.
+
+## Write down what you learned, not just what you changed
+
+A commit message explains a change to someone reading history. It does **not**
+help the next person who hits the same trap, because nobody greps history before
+debugging.
+
+If, while doing the work, you discovered something that was **not obvious** —
+a tool that lies, a failure that was not what it looked like, a spec that was the
+datasheet maximum, an assumption that turned out backwards — it goes in
+[docs/reference/field-notes.md](../../docs/reference/field-notes.md), in the
+present tense, with what it cost.
+
+The bar is simple: **would you have saved an hour if you had read it this
+morning?** If yes, write it. Entries earn their place by having been believed
+wrongly at least once.
+
+This is not optional politeness. Four of the entries in that file are mistakes
+made *twice* in the same project, months apart, because the first one was only
+recorded in a commit message.
 
 **Measurements are documentation.** A number that stays in the terminal is a
 number somebody re-measures next month. Write it down with the date **and the
