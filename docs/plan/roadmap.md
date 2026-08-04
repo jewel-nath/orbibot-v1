@@ -103,7 +103,7 @@ The software half is done. What remains is physical, and it gates Phase 1.
 | 0.6 | RealSense enumerates at **5000 Mbps**, depth + colour together | — | ⬜ 480 — SENS-2 |
 | 0.7 | PlatformIO toolchain; firmware builds; fix the `pio` path in the docs | — | ✅ 89 s |
 | 0.8 | **Mount the Beelink, converter and fuse on the robot** | robot | ⬜ |
-| 0.9 | **Re-weigh the robot and re-measure the footprint** | robot | ⬜ |
+| 0.9 | **Re-weigh the robot, re-measure the footprint, and re-measure the IMU/LiDAR/camera origins for the URDF** (DESC-1 — the ROSMaster board moved rearward 2026-08-04) | robot | ⬜ |
 | 0.10 | Power measurements P-1…P-5 — sag, thermals, brown-out | robot | ◐ P-5 only |
 | 0.11 | **Record a CPU and thermal baseline** — stack idle, and stack driving | robot | ◐ idle only |
 
@@ -127,6 +127,10 @@ early work.
   A1's motor speed, and the docs claiming 10 Hz were quoting its maximum
 - RealSense at **5000 Mbps** with depth and colour streaming together
 - New mass and footprint written into [[inventory]]
+- IMU, LiDAR and camera origins measured and written into the URDF — DESC-1
+- **ROSMaster board mounted level.** A 0.94° tilt was measured 2026-08-04 and
+  accounts for 83 % of the yaw drift (LOC-1); levelling is worth ~5.6× and
+  costs nothing at runtime
 - CPU baseline recorded — Phases 3 and 6 have nothing to budget against without it
 
 > 0.10 is the one people skip. A brown-out during an NVMe write corrupts the

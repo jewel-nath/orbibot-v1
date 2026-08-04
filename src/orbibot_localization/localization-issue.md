@@ -53,14 +53,37 @@ forever until SLAM or AMCL corrects `map → odom`.
    `zeta: 0.0`, then at a candidate value, and compare drift. The tool prints
    the bias prediction beside the measured drift for exactly this comparison.
 
-**Open question for the operator, unresolved.** The tilt is reported as
-**roll**, i.e. one side down, with pitch essentially zero (−0.018°). The
-operator described the *rear of the board being raised*, which is pitch. The
-URDF fixes `imu_joint` at `rpy="0 0 0"` and `hardware_node` passes the axes
-through unmodified, so if the board is physically mounted rotated with respect
-to `base_link`, **roll and pitch are swapped through the entire pipeline** and
-the URDF is wrong. That is a real bug if true and harmless if not, and it
-cannot be settled from the data alone.
+**Tilt direction — confirmed, and the axes are fine.** For a moment this looked
+like it might be an axis bug: the measurement says *roll*, and the board had
+been described as having its rear raised, which would be *pitch*. It is not a
+bug. The operator confirmed the board was **moved backward** to make room for
+the mini PC with **its direction unchanged**, and that the **right side sits
+slightly high**.
+
+The sensor had already said so, before anyone looked:
+
+```
+a_y = −0.160 m/s²  →  roll = −0.935°
+negative roll about +X rotates +Y (left) toward −Z  →  left side down, RIGHT SIDE UP
+```
+
+Two independent observations agreeing on which side is up is also a check on
+the whole convention chain — firmware axes, driver, URDF, ROS sign convention.
+`imu_joint` at `rpy="0 0 0"` stands, and physical motion still matches RViz.
+
+**Levelling is worth about 5.6× on drift, and it should happen during Phase
+0.8, not before.** The board will be unbolted anyway when the Beelink,
+converter and fuse go on. Adjusting it now means adjusting it twice.
+
+**Left open by the same change: the IMU is no longer where the URDF says.**
+`imu_joint` is fixed at `xyz="0.0 0.0 0.02"` — the robot's centre — and the
+board has since moved rearward. See `orbibot_description/description-issue.md`
+DESC-1. It has **no effect on anything measured here**: angular velocity is
+identical everywhere on a rigid body, and `imu0_config` fuses yaw and vyaw
+only, both translation-invariant. It starts to matter during turns, where a
+lever arm `d` adds centripetal acceleration `ω²d` that Madgwick reads as tilt —
+0.29° of apparent pitch at 1 rad/s with d = 5 cm — feeding the exact
+roll/pitch → yaw leak described above.
 
 **Blocks:** Phase 4.2 (`gain`/`zeta` tuning) should not be finalised against a
 drift figure taken with the sensor tilted.

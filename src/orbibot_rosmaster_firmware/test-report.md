@@ -599,6 +599,18 @@ turns a −0.457 °/s bias on an axis nobody watches into 83 % of the heading
 error. Level the sensor and drift should fall to about **+0.10 °/min
 (5.8 °/hour)** from **+0.55 °/min (33 °/hour)**.
 
+**Tilt direction confirmed independently.** `a_y = −0.160` gives a negative
+roll, which rotates +Y (left) toward −Z — so the sensor says the **right side
+is up**. The operator, asked afterwards, reported the right side sitting
+slightly high, with the board moved rearward but not rotated. Two independent
+observations agreeing on which side is up also checks the whole convention
+chain: firmware axes → driver → URDF `rpy="0 0 0"` → ROS sign convention.
+
+The rearward move is not reflected in the URDF (`imu_joint` is still at the
+robot centre) — `description-issue.md` DESC-1. It does not affect anything
+above: the gyro is translation-invariant, `imu0_config` fuses yaw and vyaw
+only, and this run was stationary.
+
 ### `/odom` while stationary
 
 `vx`, `vy`, `vyaw` all read **exactly 0.000000, stddev 0.000000** over 1 158

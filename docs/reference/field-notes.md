@@ -314,6 +314,12 @@ Two things worth carrying:
 - **Check gravity before blaming the sensor.** The accelerometer means give the
   mounting tilt for free — `roll = atan2(a_y, a_z)`, `pitch = atan2(−a_x, √(a_y²+a_z²))`.
   Any stationary IMU capture already contains it.
+- **Then ask a human which way it leans, and check the answer matches.** Here
+  the sensor said *right side up* before anyone looked, and the operator
+  confirmed it. That agreement is worth more than the tilt figure: it verifies
+  the entire convention chain at once — firmware axis order, driver pass-through,
+  URDF `rpy`, and ROS's right-hand rule. If they had disagreed, the tilt would
+  have been the small problem.
 
 The general form: with `use_mag: false` nothing observes heading, so *every*
 gyro bias term integrates forever. Levelling the sensor is a fix with no
