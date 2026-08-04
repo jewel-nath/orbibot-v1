@@ -6,7 +6,7 @@ EKF sensor fusion for OrbiBot using `robot_localization`. Fuses wheel odometry w
 
 This package implements a two-stage sensor fusion pipeline:
 1. **Madgwick Filter** (50 Hz): gyro + accel → orientation. **6-DoF, `use_mag: false`**
-2. **EKF** (25 Hz): wheel velocities + Madgwick orientation → smooth odometry
+2. **EKF** (50 Hz): wheel velocities + Madgwick orientation → smooth odometry
 
 **Yaw is not absolute and not drift-free.** The magnetometer was removed on
 2026-04-28 — indoors, steel and motor currents made heading worse than dead
@@ -34,7 +34,7 @@ SENSOR FUSION PIPELINE
         │
         │   /odom          20 Hz   wheel velocities, from orbibot_hardware
         │        │
-        └────────┴──► EKF (robot_localization)      25 Hz
+        └────────┴──► EKF (robot_localization)      50 Hz
                         │   fuses vx, vy from /odom
                         │   fuses yaw, vyaw from the IMU
                         │   imu0_relative: true  — first reading becomes zero
@@ -55,9 +55,12 @@ The EKF is configured with `odom0_config` positions=false. This prevents wheel e
 
 ### Madgwick + EKF (Two-Stage)
 - **Madgwick** runs at 50 Hz on gyro + accel → orientation (6-DoF, no magnetometer)
-- **EKF** fuses this with wheel odometry at 25 Hz → smooth, computationally efficient
+- **EKF** fuses this with wheel odometry at 50 Hz → smooth, and cheap: measured
+  at **1.6 % of one core** on the Beelink (2026-08-04)
 
-This provides better yaw accuracy than EKF alone while keeping CPU usage low.
+This gives better yaw accuracy than the EKF alone. The 25 Hz it used to run at
+was a Raspberry Pi compromise, not a design choice — see
+`docs/plan/inherited-values.md`.
 
 ---
 
@@ -91,14 +94,14 @@ ros2 launch orbibot_localization localization.launch.py log_level:=debug
 | Topic | Type | Source | Rate | Description |
 |-------|------|--------|------|-------------|
 | `/imu/data_raw` | `sensor_msgs/Imu` | `orbibot_hardware` | 50 Hz | Raw accelerometer + gyroscope |
-| `/odom` | `nav_msgs/Odometry` | `orbibot_hardware` | 20 Hz | Wheel odometry (velocities) |
+| `/odom` | `nav_msgs/Odometry` | `orbibot_hardware` | on change + 0.5 s heartbeat (**~1.95 Hz stationary**) | Wheel odometry (velocities). The low stationary rate is by design, not a fault — BRINGUP-3 |
 
 ### Published
 
 | Topic | Type | Rate | Description |
 |-------|------|------|-------------|
 | `/imu/data_filtered` | `sensor_msgs/Imu` | 50 Hz | Madgwick-filtered IMU with orientation quaternion |
-| `/odometry/filtered` | `nav_msgs/Odometry` | **24.0–24.5 Hz measured** (25 configured) | EKF-fused odometry for Nav2/SLAM. The ~2.5 Hz of HW-BUG-1 was a Pi-era symptom and does not occur on the Beelink |
+| `/odometry/filtered` | `nav_msgs/Odometry` | **50.00 Hz measured** (50 configured, 2026-08-04) | EKF-fused odometry for Nav2/SLAM. The ~2.5 Hz of HW-BUG-1 was a Pi-era symptom and does not occur on the Beelink |
 
 ### TF Published
 
@@ -133,6 +136,20 @@ ros2 launch orbibot_localization localization.launch.py log_level:=debug
 | vroll, vpitch, vyaw | **Yes** | Gyroscope rates |
 | ax, ay, az | **No** | Disabled — mecanum vibration causes noise |
 
+> #### ⚠️ `/imu/data_filtered` roll and pitch are in the **sensor** frame
+>
+> The IMU is mounted **90° rotated** about Z — sensor +X points along the
+> robot's left. `imu_joint` carries `rpy="0 0 1.5707963"` to describe it
+> (2026-08-04, `test-report.md` §9.9).
+>
+> The EKF resolves TF, so it sees the corrected values. **Anything reading the
+> topic directly does not** — a dashboard, a tilt check, `ros2 topic echo`. On
+> that topic, robot pitch appears as roll and robot roll appears as negative
+> pitch.
+>
+> To see what a TF-aware consumer sees:
+> `python3 .claude/scripts/imu_base_frame.py -d 10`
+>
 > #### Which covariances actually reach the EKF
 >
 > A filter only uses the covariance of a field it fuses, so most of the IMU
@@ -158,8 +175,8 @@ ros2 launch orbibot_localization localization.launch.py log_level:=debug
 
 | Parameter | Value | Description |
 |-----------|-------|-------------|
-| `frequency` | 25.0 Hz | EKF output rate. Set for a Raspberry Pi 5 that has since been replaced — re-derive, see roadmap 4.5 |
-| `sensor_timeout` | 0.15 s | Max wait before prediction-only |
+| `frequency` | **50.0 Hz** | EKF output rate. Was 25.0 for a Raspberry Pi that has since been replaced; re-derived 2026-08-04 — both fused inputs run at 50 Hz, and the node costs 1.6 % of one core |
+| `sensor_timeout` | 0.2 s | Max wait before prediction-only |
 | `two_d_mode` | true | Planar robot — ignore z/roll/pitch |
 | `imu0_differential` | false | Use absolute yaw (not differentiated) |
 | `imu0_relative` | true | Yaw starts at 0 regardless of initial heading |

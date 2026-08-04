@@ -53,37 +53,50 @@ forever until SLAM or AMCL corrects `map → odom`.
    `zeta: 0.0`, then at a candidate value, and compare drift. The tool prints
    the bias prediction beside the measured drift for exactly this comparison.
 
-**Tilt direction — confirmed, and the axes are fine.** For a moment this looked
-like it might be an axis bug: the measurement says *roll*, and the board had
-been described as having its rear raised, which would be *pitch*. It is not a
-bug. The operator confirmed the board was **moved backward** to make room for
-the mini PC with **its direction unchanged**, and that the **right side sits
-slightly high**.
+> ### ⚠️ The paragraph this replaced was wrong, and was committed as fact
+>
+> It read *"Tilt direction — confirmed, and the axes are fine"*, and closed the
+> axis question on two things agreeing: the sensor said `roll −0.935°`, and the
+> operator said the right side looked high.
+>
+> They agreed by coincidence. The operator's **first** description had been
+> *"the rear is raised"* — a pitch — and the second was hedged (*"it seems"*).
+> Taking a hedged observation as independent confirmation of a measurement, and
+> then closing an open question with it, is the mistake. **The axes were not
+> fine.** See `test-report.md` §9.9 and DESC-2.
 
-The sensor had already said so, before anyone looked:
+**Tilt direction, and what it actually was.** The IMU is mounted **rotated 90°
+about Z**: sensor +X points along the robot's left. Proven three ways, in
+`test-report.md` §9.9 — three separate camera-up/down holds, three yaw rotations
+in both directions to establish handedness, and an end-to-end check after the
+fix. `imu_joint` now carries `rpy="0 0 1.5707963"`.
 
-```
-a_y = −0.160 m/s²  →  roll = −0.935°
-negative roll about +X rotates +Y (left) toward −Z  →  left side down, RIGHT SIDE UP
-```
+Translating this issue's own numbers through that rotation:
 
-Two independent observations agreeing on which side is up is also a check on
-the whole convention chain — firmware axes, driver, URDF, ROS sign convention.
-`imu_joint` at `rpy="0 0 0"` stands, and physical motion still matches RViz.
+| sensor reads | physically |
+|---|---|
+| roll −0.935° | **rear raised 0.94°** |
+| pitch −0.018° | no side tilt |
 
-**Levelling is worth about 5.6× on drift, and it should happen during Phase
-0.8, not before.** The board will be unbolted anyway when the Beelink,
-converter and fuse go on. Adjusting it now means adjusting it twice.
+Which is what the operator said before anything was measured.
 
-**Left open by the same change: the IMU is no longer where the URDF says.**
-`imu_joint` is fixed at `xyz="0.0 0.0 0.02"` — the robot's centre — and the
-board has since moved rearward. See `orbibot_description/description-issue.md`
-DESC-1. It has **no effect on anything measured here**: angular velocity is
-identical everywhere on a rigid body, and `imu0_config` fuses yaw and vyaw
-only, both translation-invariant. It starts to matter during turns, where a
-lever arm `d` adds centripetal acceleration `ω²d` that Madgwick reads as tilt —
-0.29° of apparent pitch at 1 rad/s with d = 5 cm — feeding the exact
-roll/pitch → yaw leak described above.
+**The drift analysis below is unaffected.** It was computed entirely in the
+sensor frame and is self-consistent there; only the labels move. The leaking
+term is the **sensor Y** gyro bias (−0.457 °/s) — the robot's *roll* axis —
+leaking through a rear-up *pitch*. The 0.47 % agreement, the 5.6×, and the
+remedy all stand.
+
+**Levelling still belongs in Phase 0.8**, not now: the board comes off anyway
+when the Beelink, converter and fuse are mounted, so adjusting it twice is
+wasted work.
+
+**Also left open by the board being moved rearward:** `imu_joint`'s *translation*
+is still `xyz="0 0 0.02"`, the robot's centre, and the IMU is no longer there —
+`description-issue.md` DESC-1. No effect on anything measured here (angular
+velocity is position-independent, `imu0_config` fuses yaw and vyaw only, and
+every run was stationary), but it matters during turns, where a lever arm `d`
+adds `ω²d` that Madgwick reads as tilt: 0.29° of apparent tilt at 1 rad/s with
+d = 5 cm.
 
 **Blocks:** Phase 4.2 (`gain`/`zeta` tuning) should not be finalised against a
 drift figure taken with the sensor tilted.

@@ -210,11 +210,19 @@
   </joint>
   <link name="camera_depth_optical_frame"/>
 
-  <!-- IMU sensor -->
+  <!-- IMU sensor.
+       The ICM-20948's axes are NOT aligned with the chassis: the sensor's +X
+       points along the robot's LEFT (base_link +Y), i.e. the frame is rotated
+       +90 deg about Z. Measured 2026-08-04, three independent ways —
+       test-report.md 9.9. Until then this joint claimed rpy="0 0 0" and roll
+       and pitch were silently swapped everywhere downstream.
+
+       Do not "simplify" this back to zero because the board looks square-on in
+       the chassis. The board is not rotated; the chip on it is. -->
   <joint name="imu_joint" type="fixed">
     <parent link="base_link"/>
     <child link="imu_link"/>
-    <origin xyz="0.0 0.0 0.02" rpy="0 0 0"/>
+    <origin xyz="0.0 0.0 0.02" rpy="0 0 1.5707963"/>
   </joint>
 
   <link name="imu_link">

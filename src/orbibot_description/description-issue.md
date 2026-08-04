@@ -5,6 +5,53 @@
 
 ---
 
+## ✅ Fixed
+
+### DESC-2: `imu_joint` claimed the IMU was aligned with the chassis. It is 90° out.
+**Opened and fixed:** 2026-08-04 · **Severity:** MEDIUM
+**File:** `urdf/orbibot.urdf.xacro:214`
+
+```diff
+-    <origin xyz="0.0 0.0 0.02" rpy="0 0 0"/>
++    <origin xyz="0.0 0.0 0.02" rpy="0 0 1.5707963"/>
+```
+
+The ICM-20948's axes are not aligned with the chassis: the sensor's **+X points
+along the robot's left** (`base_link` +Y). The board is not rotated — the chip
+on it is — which is why nothing looked wrong to the eye. Roll and pitch were
+swapped everywhere downstream of the IMU for as long as this URDF has existed.
+
+**Proven three independent ways** before the change was made, and verified
+after. Full numbers in `test-report.md` §9.9:
+
+| evidence | runs |
+|---|---|
+| Camera end tilted up/down moves **sensor roll**, not pitch | 3 separate holds, both directions |
+| Frame is right-handed, so it is a **rotation** and not a mirrored axis order | 3 yaw rotations, clockwise and counter-clockwise |
+| TF reports the new value | `base_link ← imu_link : yaw +90.00°` |
+| A TF-aware consumer sees the right axis | camera up → `base_link` **pitch +8.32° = NOSE UP** |
+
+The handedness test is the one that decided *where* the fix belonged. A
+roll↔pitch swap could equally have been a reflection — X and Y exchanged without
+a sign change — which no mounting can produce and which would have meant an
+index bug in firmware or driver. Rotating clockwise gave gyro Z **−25.38** and
+**−41.25 °/s**; counter-clockwise gave **+44.86**. Sign follows direction, so
+the frame is right-handed, so it is a rotation, so the URDF is the right place.
+
+**Impact before the fix: small, and about to stop being small.** `imu0_config`
+fuses yaw and vyaw only, `imu0_relative: true` cancels a constant yaw offset,
+and angular velocity about Z is unchanged by a Z-rotation — so the EKF's
+arithmetic was unaffected. It would have started mattering the moment
+`two_d_mode` was turned off, accelerometer fusion enabled, roll/pitch used for a
+tilt or roll-over check, or anyone read `/imu/data_filtered` orientation
+directly. RViz was wrong the whole time.
+
+**Do not simplify this back to zero** because the board sits square in the
+chassis. Verify with `.claude/scripts/imu_base_frame.py` instead — it resolves
+the topic into `base_link` and prints both, so the difference is visible.
+
+---
+
 ## ⚠️ Open
 
 ### DESC-1: the IMU has moved and the URDF has not
@@ -12,10 +59,11 @@
 **File:** `urdf/orbibot.urdf.xacro:214` — `imu_joint`
 
 ```xml
-<origin xyz="0.0 0.0 0.02" rpy="0 0 0"/>
+<origin xyz="0.0 0.0 0.02" rpy="0 0 1.5707963"/>
 ```
 
-That places the IMU exactly at the robot's centre, 2 cm up. On 2026-08-04 the
+The **rotation** is now right (DESC-2). The **translation** is not: this places
+the IMU exactly at the robot's centre, 2 cm up. On 2026-08-04 the
 ROSMaster board — which carries the IMU — was **moved rearward** to make room
 for the Beelink. Its orientation was not changed, so `rpy="0 0 0"` is still
 right; the translation is not.

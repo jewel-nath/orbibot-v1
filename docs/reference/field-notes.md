@@ -327,6 +327,57 @@ runtime cost, and it is cheaper than any amount of filter tuning.
 `measure_imu_noise` now prints the bias prediction beside the measured drift so
 the gap is visible without anyone doing the algebra.
 
+### "Left" and "right" are unusable instructions for someone holding a robot
+
+Verifying the IMU's axes took five attempts, and four of them failed on the
+same thing: *"lift the left side"* means the robot's left, but the person
+holding it answers with **their own** left, and the two agree only if the robot
+happens to be facing away from them. Rotate the robot in their hands and the
+instruction silently rotates with it.
+
+Every wrong answer looked like a sensor bug. Two of them nearly got written up
+as one.
+
+What worked, and what to reach for first:
+
+- **A visible feature instead of a direction.** "Tilt the camera end up" cannot
+  be mirrored. It gave a clean, repeatable answer on the first try.
+- **A rotation sense instead of a side.** "Clockwise seen from above" is
+  unambiguous in a way that "turn it left" is not, and it settles handedness —
+  which is what separates *the frame is rotated* (fix the URDF) from *the axes
+  are swapped in code* (fix the driver).
+- **Predict before asking.** State the expected sign first. If it comes back
+  the other way, that is a result rather than a puzzle, and there is no room to
+  rationalise afterwards.
+
+Corollary for cueing a human at all: from a cue being emitted to the operator
+acting was about **7 seconds**. Long enough that timing-based pairing of poses
+to instructions goes wrong if one step is skipped. Record continuously and find
+the held poses afterwards — `.claude/scripts/imu_sequence.py` looks for
+stretches where the gyro goes quiet, which needs no synchronisation at all.
+
+### Two things agreeing can still both be wrong
+
+The IMU axis question was closed once already, on the strength of the sensor
+reading `roll −0.935°` and the operator saying the right side looked high. Two
+independent observations, agreeing. Case closed, written into the issue file,
+committed.
+
+Both were misread. The operator's **first** description had been *"the rear is
+raised"* — a pitch, not a roll — and the second one was hedged: *"it seems"*.
+The sensor's roll was a pitch too, because the sensor is mounted 90° out. Two
+wrongs lined up and looked like a confirmation.
+
+- **A hedged observation is not independent confirmation.** "It seems" is data
+  about someone's confidence, not about the robot.
+- **When two accounts of the same thing differ, the disagreement is the
+  finding.** The operator said *rear* first and *side* second. Rather than
+  picking the one that matched the sensor, the right move was to ask which.
+- The operator's standing instruction after this: **do not write anything down
+  until it is certain; test three times rather than once.** It cost one wrong
+  commit to learn and it is cheap to follow — the re-test that settled this took
+  four minutes.
+
 ### Bisect by launching one thing at a time
 
 Once the firmware was cleared, the cause took four 40-second runs: the hardware

@@ -696,3 +696,106 @@ them afterwards by stillness. That worked, but the ~7 s between a cue being
 emitted and the operator acting is enough to mis-pair poses with instructions if
 anything is skipped — so `imu_sequence.py` reports **the measured angles first**
 and its own PASS/FAIL second, and says so when the counts do not line up.
+
+---
+
+## 9.9 The IMU is mounted 90° rotated — found, proven three ways, fixed — 2026-08-04
+
+*Robot hand-held and on a table, motors disabled, full `robot.launch.py`. Eight
+separate captures. Tools: `.claude/scripts/imu_sequence.py`,
+`imu_orientation.py`, `imu_base_frame.py`.*
+
+**`imu_joint` claimed `rpy="0 0 0"`. It is `rpy="0 0 1.5707963"`.** The sensor's
++X axis points along the robot's **left** (`base_link` +Y). Roll and pitch were
+swapped everywhere downstream, and had been since the URDF was written.
+
+Nothing below rests on a single measurement. An earlier version of this section
+did, and was deleted before it was committed.
+
+### 1 · Physical pitch shows up as sensor roll — three separate holds
+
+Named tilts kept contradicting each other, because "lift the left side" depends
+on where the operator is standing. What worked was a **visible feature instead
+of a direction** — the camera:
+
+| held pose | sensor roll | sensor pitch |
+|---|---|---|
+| camera end **up**, hold 1 | +21.86°, +23.45° | +1.14, +1.31 |
+| camera end **up**, hold 2 (29.8 s) | **+23.33°** | +1.21 |
+| camera end **down**, hold 3 | **−22.24°, −21.01°** | +0.01, +0.04 |
+
+Nose-up is *by definition* pitch. The sensor answered on **roll**, every time,
+in both directions.
+
+### 2 · The frame is a rotation, not a reflection — three rotations, both ways
+
+A roll↔pitch swap has two possible causes needing opposite fixes:
+
+- a **rotation** — frame turned, still right-handed → the URDF is wrong
+- a **reflection** — X and Y swapped without a sign change → left-handed, which
+  no mounting can produce, so it would be an index bug in firmware or driver
+
+They differ in **handedness**, which shows up in a *yaw* rotation — and a yaw
+rotation can be specified without the words left or right: *turn it clockwise
+seen from above.*
+
+| # | direction | gyro Z peak | yaw change |
+|---|---|---|---|
+| 1 | clockwise | **−25.38 °/s** | −22.00° |
+| 2 | clockwise | **−41.25 °/s** | **−90.13°** |
+| 3 | **counter-clockwise** | **+44.86 °/s** | **+84.04°** |
+
+Clockwise negative, counter-clockwise positive — the right-handed convention,
+and the sign flips with the direction. **Reflection is ruled out**, so the URDF
+is the right place to fix it.
+
+In a right-handed frame, nose-up → roll **positive** occurs for exactly one
+orientation: sensor +X along `base_link` +Y, **+90°**. The other way gives roll
+negative.
+
+### 3 · End-to-end, after the fix
+
+TF reports the new value, and a TF-aware consumer now sees the correct axis:
+
+```
+TF base_link ← imu_link :  yaw +90.00°
+
+camera end held UP:
+  on the topic  (imu_link)  roll  +8.32°   pitch  +0.95°   → "LEFT side up"  ✗
+  resolved into base_link   roll  -0.98°   pitch  +8.32°   → NOSE UP         ✓
+```
+
+### What this re-labels — the physics does not change
+
+Applying the transform to the resting readings of §9.7:
+
+| sensor reads | actually means |
+|---|---|
+| roll −0.935° | **rear raised 0.94°** |
+| pitch −0.018° | no side tilt |
+
+Which is what the operator said **first**, before anything was measured. §9.7's
+drift analysis stands — it was computed entirely in the sensor frame and is
+self-consistent — but its labels change: the leaking bias is the **sensor Y**
+gyro (−0.457 °/s), the robot's *roll* axis, leaking through a rear-up *pitch*.
+Magnitude, mechanism and remedy are unchanged: level the board, gain 5.6×.
+
+### How much this was costing, honestly
+
+**Very little today, and a great deal soon.** `imu0_config` fuses yaw and vyaw
+only; `imu0_relative: true` cancels a constant yaw offset; angular velocity
+about Z is invariant under a Z-rotation. The EKF's arithmetic was unaffected.
+
+It starts costing the moment any of these happen: `two_d_mode` turned off,
+accelerometer fusion enabled, roll/pitch used for a tilt or roll-over check, or
+anyone reading `/imu/data_filtered` orientation directly — a dashboard, a
+safety check, `ros2 topic echo`. It was also wrong in RViz the whole time.
+
+### Verification after the fix
+
+```
+/imu/data_raw       50.06 Hz      /odometry/filtered   50.00 Hz
+/imu/data_filtered  50.00 Hz      /scan                 8.07 Hz
+hardware_node 10.33 % of one core · zero errors in the launch log
+odom → base_footprint intact
+```
