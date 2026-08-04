@@ -72,8 +72,8 @@ matter first if this ever became tight again.
 | Topic | Measured | Documented | Verdict |
 |---|---|---|---|
 | `/odometry/filtered` | **24.0–24.5 Hz** | 25 configured | Within 4 %. HW-BUG-1's ~2.5 Hz does not occur here |
-| `/scan` | **7.9 Hz** | 10 Hz | ⚠️ **below spec** — open |
-| `/imu/data_raw` | **40–45 Hz** | 50 Hz | ⚠️ **below spec** — open |
+| `/scan` | **8.0 Hz** | 8 Hz | ✅ device rate — SENS-1 resolved 2026-08-04 |
+| `/imu/data_raw` | **40–45 Hz** | 50 Hz | ✅ re-measured 49.99 Hz on 2026-08-04 — HW-BUG-8 not reproducible |
 | `/odom` | 1.95 Hz | on-change + 0.5 s heartbeat | ✅ correct — robot stationary, so heartbeat only |
 
 The `/odom` figure is the one that looks wrong and is not: 1.95 Hz is the 0.5 s

@@ -15,7 +15,7 @@ This package provides sensor drivers and launch configurations for OrbiBot's per
 ### RPLidar A1 (Primary Navigation Sensor)
 - **Type**: 360° 2D laser scanner
 - **Range**: 0.15–8.0 meters
-- **Rate**: 10 Hz (scans per second)
+- **Rate**: 8.0 Hz (measured 2026-08-04; the A1's motor sets this, not the scan mode)
 - **Resolution**: ~0.5° (Express mode) or ~1° (Standard mode)
 - **Interface**: USB Serial (/dev/lidar)
 - **Topics**: `/scan`
@@ -108,7 +108,7 @@ ros2 launch orbibot_sensors sensors.launch.py sensors:=both enable_camera_to_sca
 
 | Topic | Type | QoS | Rate | Description |
 |-------|------|-----|------|-------------|
-| `/scan` | `sensor_msgs/LaserScan` | BEST_EFFORT, depth 5 | 10 Hz | 360° laser scan data |
+| `/scan` | `sensor_msgs/LaserScan` | BEST_EFFORT, depth 5 | 8.0 Hz | 360° laser scan, 720 pts/rev in Express |
 
 **Scan Parameters**:
 - `angle_min`: -π (-180°)

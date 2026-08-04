@@ -24,9 +24,10 @@ constraint that no longer exists.
 
 **Two limits are not CPU and do not move with the new machine:**
 
-- **`/scan` is 7.9 Hz** (SENS-1). A costmap updating faster than the scan
-  reprocesses the same data. Settle SENS-1 before raising any costmap or
-  controller rate.
+- **`/scan` is 8.0 Hz** — the A1's motor speed, not a setting. Measured
+  2026-08-04; SENS-1 is resolved, and the docs that said 10 Hz were quoting the
+  datasheet maximum. A costmap updating faster than 8 Hz reprocesses the same
+  scan, so derive costmap and controller rates from this number.
 - **The RealSense link is 480 Mbps** (SENS-2). Camera resolution, depth filters
   and pointcloud all stay blocked until that is 5000.
 

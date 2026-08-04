@@ -41,7 +41,7 @@ Repeat 360° for full scan!
 | Parameter | Value |
 |-----------|-------|
 | Range | 0.15 - 8.0 meters |
-| Update rate | 10 Hz |
+| Update rate | 8.0 Hz measured (datasheet: 5.5 Hz, up to 10) |
 | Angular resolution | 0.5° (Express) / 1° (Standard) |
 | Interface | USB Serial |
 | Power | 5V, ~400mA |
@@ -68,7 +68,7 @@ ros2 topic list | grep scan
 
 # Check rate
 ros2 topic hz /scan
-# Should be ~10Hz
+# Should be ~8.0 Hz on this robot
 
 # View data
 ros2 topic echo /scan --once
@@ -79,7 +79,7 @@ ros2 topic echo /scan --once
 ## 🎯 Key Takeaways
 
 1. **LiDAR** = Time-of-flight distance measurement
-2. **RPLidar A1** = 360° scanning, 10Hz, 8m range
+2. **RPLidar A1** = 360° scanning, 8.0 Hz measured, 8m range
 3. **Topic** = `/scan` with LaserScan message
 4. **Launch** = `lidar.launch.py`
 

@@ -68,10 +68,11 @@ read.
 The cost here is bytes on the wire and JSON parsing **in the operator's
 browser**, over WiFi. A faster robot computer changes neither.
 
-**LiDAR.** `/scan` is ~360 floats at 10 Hz. As JSON that is tens of KB per
+**LiDAR.** `/scan` is 720 floats at 8.0 Hz in Express mode (measured
+2026-08-04; Standard gives 360). As JSON that is tens of KB per
 second of pure serialisation and parse. Send a **decimated, quantised** scan
 instead — every Nth ray, ranges as `uint16` centimetres — inside the same
-bridge node. A 120-point scan at 10 Hz is plenty to draw a room and is roughly
+bridge node. A 120-point scan at 8 Hz is plenty to draw a room and is roughly
 an order of magnitude less work.
 
 **Map.** An occupancy grid is large and mostly static. Do not stream it. Serve

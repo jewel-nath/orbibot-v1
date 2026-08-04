@@ -456,7 +456,7 @@ Only after Stages 0–7 pass on the bench.
 - [ ] `colcon build` clean, 12 packages
 - [ ] `/dev/motordriver` and `/dev/lidar` appear on boot
 - [ ] RealSense enumerates at **5000 Mbps**, depth + colour stream together
-- [ ] `ros2 launch orbibot_bringup robot.launch.py` runs, `/scan` at 10 Hz,
+- [ ] `ros2 launch orbibot_bringup robot.launch.py` runs, `/scan` at 8.0 Hz,
       `/odom` publishing
 - [ ] Firmware builds with the new PlatformIO path
 - [ ] Frontend `npm run build` produces `dist/`

@@ -8,7 +8,7 @@ tags:
 
 # orbibot_slam
 
-slam_toolbox, wrapped for a 10 Hz 8 m RPLidar A1. Mapping and localization.
+slam_toolbox, wrapped for an 8 Hz 8 m RPLidar A1. Mapping and localization.
 
 > **The API reference is `src/orbibot_slam/README.md`.** This note is orientation:
 > what the package owns, where to look first, and what is open.

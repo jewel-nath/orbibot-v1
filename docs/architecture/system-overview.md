@@ -59,7 +59,7 @@ That property is what let the compute be swapped without touching the firmware.
 | firmware | `/imu/data` | 50 Hz | Firmware's own attitude estimate |
 | firmware | `/joint_states` | 50 Hz | Wheel positions for TF |
 | firmware | `/orbibot/system_status`, `/orbibot/safety_status`, `/diagnostics` | — | Battery, motor enable, faults |
-| RPLidar A1 | `/scan` | 10 Hz | 360°, ~8 m |
+| RPLidar A1 | `/scan` | 8.0 Hz | 360°, 720 pts/rev, ~8 m |
 | RealSense D435 | `/camera/color/*`, `/camera/depth/*` | TBD | **Depth enabled 2026-08-03** — needs a 5000 Mbps link and the driver installed; neither is done yet |
 
 **Depth is a new capability, not a restored one.** On the Pi the D435 sat on a

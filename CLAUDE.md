@@ -3,18 +3,23 @@
 Mecanum-wheeled indoor robot. ROS 2 Jazzy on a **Beelink SER5 Pro**, motor
 control on a Yahboom ROSMaster V3.0 (STM32F103RCT6) over serial.
 
-> ⚠️ **Migration in progress — 2026-08-03.** The Raspberry Pi 5 that ran this
-> stack saturated all four cores under any real load and has been replaced.
-> **The Beelink is on a bench, not on the robot.** Nothing is wired to it: no
-> motor board, no LiDAR, no camera, and ROS 2 is not installed yet.
+> ⚠️ **Migration in progress — updated 2026-08-04.** The Raspberry Pi 5 that
+> ran this stack saturated all four cores under any real load and has been
+> replaced by a Beelink SER5 Pro.
 >
-> So **commands here do not currently move wheels** — but that changes the
-> moment the hardware is plugged in, and the safety rules apply from that
-> moment. Read `.claude/rules/robot-safety.md` before commanding motion or
-> flashing firmware. Setup sequence: [docs/operations/computer-setup.md](docs/operations/computer-setup.md).
+> Software is up: ROS 2 Jazzy, all 12 packages build, udev works, PlatformIO
+> works. The ROSMaster board, RPLidar and RealSense are **connected**, so
+> **commands can move wheels** — read `.claude/rules/robot-safety.md` before
+> commanding motion or flashing firmware.
+>
+> **The Beelink is not yet bolted to the robot.** That is Phase 0.8, and it
+> gates Phase 1: mounting changes mass and centre of gravity, so calibrating
+> first means calibrating twice. Sequence:
+> [docs/operations/computer-setup.md](docs/operations/computer-setup.md).
 >
 > The Pi's state is preserved on the `raspberry_pi` branch. Do not delete it.
-> **Every CPU-derived tuning value in this repo is void** — see the roadmap.
+> **Every CPU-derived tuning value in this repo is void** —
+> [docs/plan/inherited-values.md](docs/plan/inherited-values.md) lists them.
 
 ---
 
@@ -140,7 +145,7 @@ Handy scripts: `.claude/scripts/preflight.sh` before operating,
   date and the robot's state beside the value. Do **not** rescale it, and do not
   raise it unmeasured either: both are the same error. The full list is in
   [docs/plan/inherited-values.md](docs/plan/inherited-values.md). Note that
-  `/scan` at 7.9 Hz and the camera's 480 Mbps link are sensor limits, not CPU
+  `/scan` at 8.0 Hz and the camera's 480 Mbps link are sensor limits, not CPU
   limits, and do not move with the faster machine
 - **No magnetometer.** Removed 2026-04-28 — indoor iron and motor currents made
   heading worse. Madgwick runs `use_mag: false`, EKF yaw is relative, and drift
@@ -174,7 +179,7 @@ profiles, test patterns — lives in skills and loads on demand.
 | Motors | JGB37-520, 30:1, 333 RPM no-load |
 | Battery | 4S LiFePO4 — 12.8 V nominal, 11.0 V warning, 10.5 V cutoff |
 | IMU | ICM-20948 on SPI2, ±500 dps, ±2 g |
-| LiDAR | RPLidar A1 → `/scan` 10 Hz on `/dev/lidar` |
+| LiDAR | RPLidar A1 → `/scan` **8.0 Hz** on `/dev/lidar` (measured 2026-08-04) |
 | Board link | 115200 baud on `/dev/motordriver` |
 
 Everything else — pinout, timers, power rails, spare capacity:

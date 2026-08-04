@@ -123,8 +123,8 @@ early work.
   machine has `dmesg_restrict` set and an unprivileged `dmesg` reads nothing)
 - ~~`colcon build` clean, **12 packages**~~ — **done**
 - ~~`ros2 launch orbibot_bringup robot.launch.py` runs~~ — **done**; `/odom`
-  publishing, `/scan` at **7.9 Hz not 10** — SENS-1 decides whether the rate or
-  the documentation is wrong
+  publishing, `/scan` at **8.0 Hz** — SENS-1 resolved 2026-08-04: that is the
+  A1's motor speed, and the docs claiming 10 Hz were quoting its maximum
 - RealSense at **5000 Mbps** with depth and colour streaming together
 - New mass and footprint written into [[inventory]]
 - CPU baseline recorded — Phases 3 and 6 have nothing to budget against without it

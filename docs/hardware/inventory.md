@@ -134,7 +134,7 @@ moment the robot is assembled.
 
 | Sensor | Bus | Link speed | Topic | Rate |
 |---|---|---|---|---|
-| RPLidar A1 | CP2102 USB serial (`/dev/lidar`) | 12 Mbps | `/scan` | 10 Hz |
+| RPLidar A1 | CP2102 USB serial (`/dev/lidar`) | 12 Mbps | `/scan` | 8.0 Hz |
 | ROSMaster board | CH340 USB serial (`/dev/motordriver`) | 12 Mbps | — | 115200 baud |
 | RealSense D435 | USB | **to be re-checked** | `/camera/*` | depth + colour, target |
 

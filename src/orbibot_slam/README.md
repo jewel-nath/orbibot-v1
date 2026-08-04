@@ -5,7 +5,7 @@ SLAM (Simultaneous Localization and Mapping) for OrbiBot using `slam_toolbox`. S
 ## Overview
 
 This package wraps `slam_toolbox` with OrbiBot-specific configurations optimized for:
-- **RPLidar A1** (360°, 8m range, 10Hz)
+- **RPLidar A1** (360°, 8m range, 8.0 Hz measured)
 - **Beelink SER5 Pro** (parameters still inherited from a Raspberry Pi 5 — see roadmap Phase 5)
 - **Mecanum wheel odometry** (velocity-only fusion via EKF)
 
@@ -260,7 +260,7 @@ ros2 launch orbibot_slam slam_localization.launch.py \
 ### Verify Data Flow
 ```bash
 # Check scan is arriving
-ros2 topic hz /scan  # Should be ~10Hz
+ros2 topic hz /scan  # Should be ~8.0 Hz (measured 2026-08-04)
 
 # Check TF is present
 ros2 run tf2_tools view_frames  # Verify odom → base_footprint

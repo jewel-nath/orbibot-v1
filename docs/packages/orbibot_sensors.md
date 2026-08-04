@@ -17,7 +17,7 @@ RPLidar A1 and the RealSense D435, plus a LiDAR-based obstacle detector.
 
 | | |
 |---|---|
-| RPLidar A1 | `/scan`, 10 Hz, 360°, ~8 m, on `/dev/lidar` |
+| RPLidar A1 | `/scan`, 8.0 Hz, 360°, 720 pts/rev, ~8 m, on `/dev/lidar` |
 | RealSense D435 | Off by default — too much CPU on the Pi |
 | `obstacle_detector.py` | Safety stop from `/scan` |
 
