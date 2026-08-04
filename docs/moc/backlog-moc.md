@@ -47,15 +47,23 @@ fight mid-drive, and nothing has priority or a timeout.
 
 Design and the fix: [[command-pipeline]]. Gate for Phase 2 in [[roadmap]].
 
-### CC-2 · Accel X/Y scale unconfirmed under real acceleration · **MEDIUM**
+### CC-2 · Accel X/Y scale unconfirmed under real acceleration · ~~MEDIUM~~ → **LOW**
 
 The Z-axis self-test fix (`test-report.md` §9.4) is verified static:
-`|a| = 9.802 m/s²`, ratio to g **0.9995** — **re-confirmed 2026-08-04 at
-1.0002 over 29 977 samples** (§9.7). But X and Y read ~0 on a static robot
-either way, so the corrected scale on those two axes — the ones a ground robot
-actually accelerates along — has not been shown. Needs a known acceleration
-with the robot **on the ground**. The static half is now well measured; the
-dynamic half is untouched.
+`|a| = 9.802 m/s²`, ratio to g **0.9995** — re-confirmed 2026-08-04 at 1.0002
+over 29 977 samples (§9.7).
+
+**Most of this is now answered (§9.8).** The premise — that X and Y read ~0 on a
+static robot, so their scale cannot be checked — had a way round it: *tilt the
+robot*. Gravity is a known 9.807 m/s², and tilting points it at whichever axis
+you like. Held at ±20–21°, which puts ~3.4 m/s² on X or Y, `|a|/g` stayed within
+**0.7 %** in every orientation. X and Y scale are good statically.
+
+**Still open:** scale under genuine *dynamic* acceleration, where the robot
+accelerates along the floor rather than being tilted. That is Phase 1.5 and
+needs the robot on the ground. Downgraded from MEDIUM to **LOW** — the failure
+mode it was written against (a compensation factor that fixed Z and broke X/Y)
+would have shown up in the tilt test and did not.
 
 ### CC-3 · Every pre-2026-08 localisation conclusion is suspect · **MEDIUM**
 

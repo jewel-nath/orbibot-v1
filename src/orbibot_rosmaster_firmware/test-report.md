@@ -632,3 +632,67 @@ dither to integrate.
 
 Yaw drift **with the sensor level**, and everything under vibration. Both wait
 on the Beelink being mounted (Phase 0.8).
+
+---
+
+## 9.8 Accelerometer scale off-axis, and an axis-convention check — 2026-08-04
+
+*Robot **held in the operator's hands**, motors disabled, full `robot.launch.py`.
+Five poses held ~5–19 s each, 3 741 samples over 75 s. Tool:
+`.claude/scripts/imu_sequence.py`, which finds held poses by looking for
+stretches where the gyro goes quiet, so the operator never has to type.*
+
+### Accelerometer magnitude through ±21° of tilt — **this is the new result**
+
+| pose | roll | pitch | `\|a\|/g` |
+|---|---|---|---|
+| level | −0.84° | +0.51° | **1.0026** |
+| tilt A | −1.41° | +20.01° | **1.0069** |
+| tilt B | +0.08° | −20.61° | **0.9947** |
+| tilt C | +21.18° | +1.04° | **1.0038** |
+| tilt D | −21.74° | +0.01° | **0.9953** |
+| level | −0.81° | +0.49° | **1.0022** |
+
+At 20° of tilt roughly **3.4 m/s²** lands on X or Y, so this is the first time
+those two axes have carried a large, known signal. Magnitude stays within
+**0.7 %** of g in every orientation.
+
+**This closes the half of CC-2 that was thought unmeasurable.** The concern was
+that X and Y read ~0 on a static robot, so the post-FW-BUG-2 scale could not be
+checked on them. Tilting is the way round that: gravity is a known 9.807 m/s²
+and tilting simply points it at a different axis. What remains open in CC-2 is
+genuinely dynamic scale — the robot accelerating along the floor, which needs
+Phase 1.
+
+### Axis convention — **not resolved, and deliberately not called either way**
+
+The same run was meant to verify roll/pitch signs by asking for four named
+tilts. The magnitudes were all correct, but the **pairing came out rotated 90°**:
+"lift the left side" produced pitch, "lift the front" produced roll.
+
+Two explanations fit equally well from the data alone:
+
+1. the IMU is mounted rotated 90° w.r.t. `base_link`, making the URDF's
+   `rpy="0 0 0"` wrong, or
+2. the robot was **held** rotated in the operator's hands, so their "left" was
+   the robot's front.
+
+**(2) is the more likely**, because the static baseline disagrees with (1): on
+the stool the sensor read `roll = −0.935°`, `pitch = −0.018°`, and the operator
+independently reported the **right side** sitting high. Under a 90° board
+rotation that same reading would have meant a *pitch*, i.e. nose up or down,
+which is not what was seen.
+
+Not being able to separate the two from this data is the finding. Resolving it
+takes one short run described **without the words left and right** — tilt the
+camera end up, then down — where a `pitch` response clears the sensor and a
+`roll` response convicts the URDF. Recorded rather than guessed.
+
+### Method note
+
+The operator could not press a key while holding the robot with both hands, so
+the poses were cued through `Monitor` at fixed intervals and the recorder found
+them afterwards by stillness. That worked, but the ~7 s between a cue being
+emitted and the operator acting is enough to mis-pair poses with instructions if
+anything is skipped — so `imu_sequence.py` reports **the measured angles first**
+and its own PASS/FAIL second, and says so when the counts do not line up.
