@@ -799,3 +799,59 @@ safety check, `ros2 topic echo`. It was also wrong in RViz the whole time.
 hardware_node 10.33 % of one core · zero errors in the launch log
 odom → base_footprint intact
 ```
+
+---
+
+## 9.10 Battery ADC calibrated against a meter (C1) — 2026-08-04
+
+*Robot fully assembled and **on the ground**, Beelink mounted and running from
+the battery, motors disabled, no motion. Full `robot.launch.py`. Meter held by
+the operator on the pack; firmware value from `/orbibot/system_status` averaged
+over 298 samples at 51.3 Hz.*
+
+| | |
+|---|---|
+| Multimeter | **12.95 V** |
+| Firmware | **12.700 V** |
+| **Offset** | **−0.250 V** — the firmware reads **low** |
+| Ratio | 0.98069 (1.93 % low) |
+
+### Which direction the error runs, and why that is the whole point
+
+The firmware **under**-reads, so every threshold fires **earlier** than its
+label:
+
+| firmware shows | true voltage | effect |
+|---|---|---|
+| 11.0 V — low warning | **~11.22–11.25 V** | warning arrives early ✅ |
+| 10.5 V — BMS cutoff | **~10.71–10.75 V** | cutoff arrives early ✅ |
+
+Had it run the other way, the cutoff would fire *below* its label — under the
+RBD-2767's 10 V minimum input — which is exactly the condition that corrupts
+the filesystem during an NVMe write. Worth knowing rather than assuming.
+
+**This corrects a number in `.claude/rules/robot-safety.md`.** That file states
+the converter's 10 V minimum sits **0.5 V** below the BMS cutoff, on the
+assumption that the cutoff fires at a true 10.5 V. It fires at ~10.7 V, so the
+real margin is **~0.71 V** — about 40 % more headroom than assumed.
+
+### Limits of this calibration, stated
+
+- **One point only.** Offset and scale cannot be separated from a single
+  reading. Both models are shown above and they agree to within 0.04 V in the
+  region that matters, so the distinction does not change any decision today.
+  A second reading on a partly discharged pack would settle it.
+- **The firmware quantises to 0.1 V.** Reported values step 12.6 → 12.7 with
+  nothing between, so the offset is 0.25 V ± 0.05. A sag smaller than 100 mV is
+  invisible to this path no matter how fast it is sampled.
+- 12.95 V resting is a healthy, mostly-charged 4S LiFePO4 pack (12.8 V nominal),
+  so this is a calibration near the top of the range. It says nothing yet about
+  linearity near the cutoff.
+
+### What this unlocks
+
+P-3 no longer needs a meter. `/orbibot/system_status` can be logged through
+`.claude/scripts/battery_sag_log.py`, which now prints the corrected voltage
+beside the raw one. Sampling was also raised from the 10 Hz default to **51.3 Hz**
+(19 ms) — see HW-BUG-10, which had to be fixed first because the rate parameter
+silently ignored being set.

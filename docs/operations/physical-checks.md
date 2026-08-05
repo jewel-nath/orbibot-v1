@@ -79,7 +79,7 @@ Beelink before C2 reads correctly.
 
 | # | Confirm | How | Wrong ⇒ what breaks | Checked | Found |
 |---|---|---|---|---|---|
-| C1 | **Reported battery voltage matches reality** | Multimeter across the pack vs `ros2 topic echo /orbibot/system_status` | The 11.0 V warning and 10.5 V cutoff are only as good as the ADC. A 0.4 V offset means the cutoff fires late — into a brown-out | — | |
+| C1 | **Reported battery voltage matches reality** | Multimeter across the pack vs `ros2 topic echo /orbibot/system_status` | The 11.0 V warning and 10.5 V cutoff are only as good as the ADC. A 0.4 V offset means the cutoff fires late — into a brown-out | ✅ 2026-08-04 | meter **12.95 V**, firmware **12.700 V** → offset **−0.25 V**, reads low. Thresholds fire **early** — the safe direction. §9.10 |
 | C2 | **Converter output is 19.0 V, before the Beelink is connected** (P-1) | Multimeter on the RBD-2767 output, adjust the pot | The pot ships anywhere in a range that reaches 35 V. Connecting first can destroy the computer | — | |
 | C3 | **Converter case temperature after 30 min under load** (P-4) | Touch/IR thermometer | A converter that runs hot fails later, on the floor, mid-drive | — | |
 | C4 | **Battery rail under a four-motor burst** (P-3) | Multimeter on the battery while driving, wheels **on the ground** | The converter's 10 V minimum sits 0.5 V below the BMS cutoff. A dip during an NVMe write corrupts the filesystem | — | |

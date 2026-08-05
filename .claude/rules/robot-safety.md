@@ -55,7 +55,11 @@ Three rules follow.
    machine it has been read: **19 V / 3.42 A**, 2026-08-03. If the computer is
    ever replaced, read the new label before quoting a number.
 3. **A brown-out is not a reboot.** The converter's 10 V minimum input sits
-   0.5 V below the BMS cutoff at 10.5 V. If the rail dips while the NVMe is
+   **~0.71 V** below where the BMS cutoff actually fires. The cutoff is
+   configured at 10.5 V, but the firmware's ADC reads **0.25 V low** — measured
+   against a meter 2026-08-04, `test-report.md` §9.10 — so it fires at a true
+   ~10.71 V. That is the safe direction, and 40 % more headroom than the 0.5 V
+   this rule assumed before anyone checked. If the rail dips while the NVMe is
    writing, the filesystem corrupts. Until P-1…P-5 in
    `docs/operations/computer-setup.md` are measured and recorded, treat *"can the
    robot drive on battery with the computer up"* as **unanswered** — do not
