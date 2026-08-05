@@ -65,6 +65,42 @@ turned out to be wrong; see the corrected measurements there.
 
 ---
 
+### HW-BUG-10: two rate parameters reported "Set parameter successful" and did nothing
+**Opened and FIXED:** 2026-08-04 · **Severity:** LOW, but the failure mode is the
+expensive kind · **File:** `hardware_node.py` `_on_set_parameters`
+
+`rates.sensor_rate` and `rates.status_rate` were declared, read once at startup,
+and never handled in the parameter callback:
+
+```
+$ ros2 param set /orbibot_hardware_node rates.status_rate 50.0
+Set parameter successful
+$ ros2 param get /orbibot_hardware_node rates.status_rate
+Double value is: 50.0
+                        ... measured publish rate, unchanged: 10.2 Hz
+```
+
+Success reported, value read back correctly, timer untouched. The node registers
+`add_on_set_parameters_callback`, so from outside it looks like it supports
+runtime reconfiguration — it did, for four other parameters, and silently did
+not for these two.
+
+**Fixed** by handling both in the callback and setting `Timer.timer_period_ns`
+directly, rather than destroying and recreating the timer inside a callback.
+Out-of-range values are rejected with a reason instead of silently clamped;
+bounds match `_validate_parameters` at `(0, 100]` Hz.
+
+**Verified live, no restart:** 10.2 Hz → **51.3 Hz**, 19 ms between samples.
+
+Found while preparing P-3, which needs battery samples fast enough to catch a
+dip — 100 ms apart is not. Worth recording because it belongs to the class this
+project keeps meeting: **the tool said it worked.** `dmesg` reading nothing and
+reporting 0, `pgrep -f` matching its own shell, an interactive test asking a
+human about a wheel that was never commanded. All confidently wrong, none of
+them failures.
+
+---
+
 ### HW-BUG-8: `/cmd_vel` traffic collapses the 50 Hz sensor rate — the executor, not the board
 **Opened:** 2026-08-03 · closed wrongly, reopened, cause found, **FIXED 2026-08-04 18:05**
 **Severity:** was MEDIUM → HIGH — it bit hardest exactly while the robot was being driven

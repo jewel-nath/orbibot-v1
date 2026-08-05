@@ -31,13 +31,12 @@ Publishes sensor data and accepts velocity/PID commands.
 
 | Topic | Type | QoS | Rate | Description |
 |-------|------|-----|------|-------------|
-| `/odom` | `nav_msgs/Odometry` | Reliable, TRANSIENT_LOCAL (depth 5) | ~20Hz (heartbeat when idle) | Firmware wheel odometry; deduplicated; re-published at `odometry.heartbeat_interval` when unchanged so late joiners (e.g. web GUI) get data |
+| `/odom` | `nav_msgs/Odometry` | Reliable, TRANSIENT_LOCAL (depth 5) | on change, **~1.95 Hz when stationary** | Firmware wheel odometry; deduplicated; re-published at `odometry.heartbeat_interval` when unchanged so late joiners (e.g. web GUI) get data. The low idle rate is by design — BRINGUP-3 |
 | `/imu/data` | `sensor_msgs/Imu` | Best Effort (depth 5) | 50Hz | Filtered attitude (orientation) + accel + gyro |
-| `/imu/data_raw` | `sensor_msgs/Imu` | Best Effort (depth 5) | ~20Hz (firmware) / 50Hz timer | Raw accel + gyro, no orientation (for imu_filter_madgwick). Firmware sends at 20Hz; node re-publishes at 50Hz timer rate (most recent frame). |
-| `/imu/mag` | `sensor_msgs/MagneticField` | Best Effort (depth 5) | ~20Hz (firmware) / 50Hz timer | Magnetometer in Tesla (skipped if all-zero). Same rate note as above. |
-| `/orbibot/encoders` | `std_msgs/Int32MultiArray` | Best Effort (depth 5) | ~20Hz (firmware) / 50Hz timer | Raw encoder counts `[FL, BL, FR, BR]` in ticks. Same rate note as above. |
+| `/imu/data_raw` | `sensor_msgs/Imu` | Best Effort (depth 5) | **50.0 Hz measured** | Raw accel + gyro, no orientation (for imu_filter_madgwick). The firmware auto-reports at **49.98 Hz measured at the serial layer** — the "~20 Hz" this once claimed was never right |
+| `/orbibot/encoders` | `std_msgs/Int32MultiArray` | Best Effort (depth 5) | **50 Hz** | Raw encoder counts `[FL, BL, FR, BR]` in ticks. `[m1, m2, m3, m4]` = `[FL, BL, FR, BR]` per the firmware — **not yet confirmed against the physical wheels**, `physical-checks.md` A2 |
 | `/joint_states` | `sensor_msgs/JointState` | Reliable (depth 10) | 50Hz | Wheel positions (rad) for RViz visualization |
-| `/orbibot/system_status` | `orbibot_msgs/SystemStatus` | Reliable (depth 10) | 10Hz | Battery voltage, motor state, hardware health |
+| `/orbibot/system_status` | `orbibot_msgs/SystemStatus` | Reliable (depth 10) | 10 Hz, **live-settable** | Battery voltage, motor state, hardware health. Battery is quantised to **0.1 V** by the firmware |
 | `/orbibot/safety_status` | `orbibot_msgs/SafetyStatus` | Reliable (depth 10) | 10Hz | Emergency stop, timeouts, faults |
 | `/diagnostics` | `diagnostic_msgs/DiagnosticArray` | Reliable (depth 10) | 10Hz | Standard ROS diagnostics |
 
@@ -46,11 +45,10 @@ Publishes sensor data and accepts velocity/PID commands.
 | Service | Type | Description |
 |---------|------|-------------|
 | `/orbibot/set_motor_enable` | `orbibot_msgs/SetMotorEnable` | Enable/disable motors |
-| `/orbibot/calibrate_imu` | `orbibot_msgs/CalibrateIMU` | **DEPRECATED.** Sends (0,0,0) to firmware (no-op). Use `ros2 run orbibot_localization calibrate_magnetometer` instead. |
+| `/orbibot/calibrate_imu` | `orbibot_msgs/CalibrateIMU` | **DEPRECATED and a no-op** — sends (0,0,0) to the firmware. It used to point at `calibrate_magnetometer`, which was deleted with magnetometer support on 2026-04-28. For gyro bias, measure it: `ros2 run orbibot_localization measure_imu_noise` |
 | `/orbibot/reset_odometry` | `orbibot_msgs/ResetOdometry` | Reset firmware odometry to `(0,0,0)`; encoder counts unchanged. `reset_pose` field is not supported — firmware always resets to zero. |
 | `/orbibot/reset_encoders` | `orbibot_msgs/ResetEncoders` | Reset encoder counts to zero (MCU + node state); odometry unchanged |
 | `/orbibot/get_firmware_version` | `orbibot_msgs/GetFirmwareVersion` | Request firmware version from STM32; returns `major`, `minor`, `version_string` |
-| `/orbibot/set_mag_calibration` | `orbibot_msgs/SetMagCalibration` | Set magnetometer hard-iron offsets explicitly in µT (`offset_x`, `offset_y`, `offset_z`) |
 
 ---
 
@@ -81,7 +79,7 @@ ros2 launch orbibot_hardware hardware.launch.py motors_enabled:=false
 | Argument | Default | Description |
 |----------|---------|-------------|
 | `serial_port` | `/dev/motordriver` | Serial port for motor driver board |
-| `motors_enabled` | `true` | Auto-enable motors 6s after startup (single call) |
+| `motors_enabled` | **`false`** | Arm the motors 6 s after startup. Defaulted to `true` until 2026-08-03, which armed four motors on a robot that might be on the floor — HW-BUG-9. Enabling is explicit now |
 
 Both nodes launch with `respawn=True` for automatic recovery.
 
@@ -97,19 +95,19 @@ See [config/hardware_params.yaml](config/hardware_params.yaml) for all parameter
 | `hardware` | `data_timeout` | `2.0` s | No firmware data for this long → hardware_connected=false |
 | `robot` | `wheel_radius` | `0.05` m | Wheel radius (50 mm) |
 | `robot` | `encoder_edges_per_rev` | `1320` | Encoder edges per wheel revolution |
-| `control` | `cmd_timeout` | `2.0` s | Stop if no `/cmd_vel` received in this window |
-| `control` | `max_velocity` | `1.0` m/s | Linear velocity clamp |
-| `control` | `max_angular_velocity` | `2.0` rad/s | Angular velocity clamp |
+| `control` | `cmd_timeout` | `2.0` s | Stop if no `/cmd_vel` received in this window. **live** |
+| `control` | `max_velocity` | `1.0` m/s | Linear velocity clamp. **live** |
+| `control` | `max_angular_velocity` | `2.0` rad/s | Angular velocity clamp. **live** |
 | `control` | `pid_rate_limit` | `0.1` s | Min interval between PID topic updates (max 10 Hz) |
-| `rates` | `sensor_rate` | `50.0` Hz | IMU, encoder, joint state publish rate |
-| `rates` | `status_rate` | `10.0` Hz | System/safety status publish rate |
+| `rates` | `sensor_rate` | `50.0` Hz | IMU, encoder, joint state publish rate. **live** since 2026-08-04 |
+| `rates` | `status_rate` | `10.0` Hz | System/safety status publish rate. **live** since 2026-08-04 — raise to 50 for a battery-sag run |
 | `safety` | `battery_low_threshold` | `11.0` V | Low battery warning level |
 | `safety` | `battery_critical_voltage` | `10.5` V | Emergency stop threshold |
-| `imu` | `accel_covariance_x/y/z` | `0.01` | Per-axis accel covariance (m/s^2)^2 |
-| `imu` | `gyro_covariance_x/y/z` | `0.0025` | Per-axis gyro covariance (rad/s)^2 |
-| `imu` | `orientation_covariance` | `0.0025` | Orientation covariance (rad^2) |
-| `imu` | `mag_hard_iron_x/y/z` | `0.0` T | Hard-iron bias (permanent magnet offset). Run `calibrate_magnetometer` to compute. |
-| `imu` | `mag_soft_iron_scale_x/y/z` | `1.0` | Soft-iron axis scale (ferromagnetic distortion). Run `calibrate_magnetometer` to compute. |
+| `imu` | `accel_covariance_x/y/z` | code default `0.01`; **`hardware_params.yaml` carries measured values** | Per-axis accel covariance (m/s^2)^2. Measured 2026-08-04, 29 977 stationary samples. Not read by the EKF — `ax/ay/az` are not fused |
+| `imu` | `gyro_covariance_x/y/z` | code default `0.0025`; **measured values in `hardware_params.yaml`** | Per-axis gyro covariance (rad/s)^2. Only `_z` reaches the EKF |
+| `imu` | `orientation_covariance` | `0.0025` | Orientation covariance (rad^2). The EKF uses Madgwick's `orientation_stddev` instead — see `orbibot_localization/README.md` |
+
+
 | `odometry` | `pose_base` | `0.001` | Base position variance (m²) |
 | `odometry` | `pose_drift` | `0.02` | Position variance drift per meter traveled |
 | `odometry` | `yaw_base` | `0.01` | Base yaw variance (rad²) |
@@ -118,6 +116,16 @@ See [config/hardware_params.yaml](config/hardware_params.yaml) for all parameter
 | `odometry` | `velocity_scale` | `0.1` | Velocity variance scale with speed |
 | `odometry` | `covariance_decay` | `0.99` | Exponential decay for accumulated drift (0–1) |
 | `odometry` | `heartbeat_interval` | `0.5` s | Re-publish unchanged odom so late-joining subscribers get data; `0` = disable |
+
+> **The magnetometer parameters are gone.** `mag_hard_iron_*` and
+> `mag_soft_iron_scale_*` were listed here until 2026-08-04, along with an
+> instruction to run `calibrate_magnetometer`. Magnetometer support was deleted
+> from firmware, driver and messages on 2026-04-28, and that tool with it.
+>
+> **Parameters marked "live"** can be changed with `ros2 param set` on a running
+> node and take effect immediately. Everything else is read once at startup —
+> setting it at runtime stores the value, reports success, and changes nothing.
+
 
 ---
 

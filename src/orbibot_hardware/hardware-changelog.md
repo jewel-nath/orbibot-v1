@@ -2,6 +2,53 @@
 
 ## [Unreleased] — 2026-08-04
 
+### Fixed — `rates.sensor_rate` and `rates.status_rate` were accepted and ignored
+
+Both were declared, read once at startup, and never handled in
+`_on_set_parameters`. Setting either on a running node did this:
+
+```
+$ ros2 param set /orbibot_hardware_node rates.status_rate 50.0
+Set parameter successful
+$ ros2 param get /orbibot_hardware_node rates.status_rate
+Double value is: 50.0
+                                     ... and the timer kept publishing at 10.2 Hz
+```
+
+Success reported, value read back, nothing changed. The node has a parameter
+callback, so it looks like it supports runtime reconfiguration — it just
+silently did not for these two.
+
+Both now take effect immediately, via `Timer.timer_period_ns` rather than
+destroying and recreating the timer. Bounds match `_validate_parameters`:
+`(0, 100]` Hz, rejected with a reason rather than clamped silently.
+
+Found while preparing P-3, which needs battery samples faster than the 10 Hz
+default: 100 ms between samples cannot be trusted to catch a dip. Verified live
+— **10.2 Hz → 51.3 Hz**, 19 ms apart, on a running node with no restart.
+
+### Documentation — the README had drifted badly
+
+Found while checking the above. All of these described things that no longer
+exist or never did:
+
+- **`motors_enabled` documented as defaulting to `true`.** HW-BUG-9 flipped it
+  to `false` on 2026-08-03 precisely because the old default armed four motors
+  six seconds after launch. The safety-relevant half of that fix had not
+  reached the README.
+- **`/imu/mag` topic and `/orbibot/set_mag_calibration` service** — both gone
+  with magnetometer support on 2026-04-28.
+- **`mag_hard_iron_*` / `mag_soft_iron_scale_*` parameters**, with an
+  instruction to run `calibrate_magnetometer` — a tool deleted the same day.
+- **`/imu/data_raw` and `/orbibot/encoders` at "~20 Hz (firmware)"** — the
+  firmware auto-reports at 49.98 Hz, measured at the serial layer.
+- **`/odom` at "~20 Hz"** — it is on-change plus a 0.5 s heartbeat, so ~1.95 Hz
+  stationary (BRINGUP-3).
+
+The parameter table now also marks which parameters are **live**, since the
+distinction is invisible from outside and the failure mode is silent.
+
+
 ### Fixed — HW-BUG-8: the node spins single-threaded now
 
 `main()` spins a `SingleThreadedExecutor`; it was `MultiThreadedExecutor(num_threads=4)`.

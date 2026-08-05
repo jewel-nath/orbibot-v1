@@ -49,6 +49,10 @@ try:
 except ImportError:
     ROSMASTER_AVAILABLE = False
 
+NANOSECONDS_PER_SECOND = 1_000_000_000
+# Upper bound for the sensor and status timers, matching _validate_parameters.
+MAX_TIMER_RATE_HZ = 100.0
+
 
 class OrbiBotHardwareNode(Node):
     """
@@ -231,6 +235,27 @@ class OrbiBotHardwareNode(Node):
                         result.reason = 'odometry.heartbeat_interval must be >= 0'
                         break
                     self._odom_heartbeat_interval = float(v)
+                elif p.name in ('rates.sensor_rate', 'rates.status_rate'):
+                    # These were declared and read once at startup, so setting
+                    # them at runtime stored the value and changed nothing:
+                    # `ros2 param set` answered "successful", `ros2 param get`
+                    # read back the new number, and the timer kept its old
+                    # period. Silent, and it reads exactly like success.
+                    v = p.value.double_value if hasattr(p.value, 'double_value') else p.value
+                    v = float(v)
+                    if v <= 0 or v > MAX_TIMER_RATE_HZ:
+                        result.successful = False
+                        result.reason = (f'{p.name} must be in (0, '
+                                         f'{MAX_TIMER_RATE_HZ:.0f}] Hz')
+                        break
+                    period_ns = int(NANOSECONDS_PER_SECOND / v)
+                    if p.name == 'rates.sensor_rate':
+                        self.sensor_rate = v
+                        self.sensor_timer.timer_period_ns = period_ns
+                    else:
+                        self.status_rate = v
+                        self.status_timer.timer_period_ns = period_ns
+                    self.get_logger().info(f'{p.name} -> {v:.1f} Hz, applied')
             except (TypeError, AttributeError) as e:
                 result.successful = False
                 result.reason = str(e)
