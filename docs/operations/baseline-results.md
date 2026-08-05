@@ -122,12 +122,17 @@ real CPU targets until it does:
 - [x] Whole stack up, robot stationary
 - [ ] Driving under teleop
 - [ ] Driving with Nav2 + SLAM + depth
-- [ ] **P-1…P-5** — rail behaviour with motors drawing current
+- [x] **P-3** — rail behaviour with motors drawing current, 2026-08-05
+- [ ] **P-1, P-2, P-4** — converter output, thermals; all need a meter
 
-The last one is the important one and it is not merely a CPU measurement. The
-battery reads 12.90–13.00 V with the Beelink idle on the shared rail, which is
-healthy — but no motor has drawn current yet, and that is the entire question
-the converter's 0.5 V margin poses.
+P-3 was the important one, and it is not merely a CPU measurement. The battery
+reads 12.90–13.00 V with the Beelink idle on the shared rail; driving the
+assembled robot at up to 0.45 m/s pulled the worst sample down **0.20 V**,
+against the **0.71 V** margin between the real BMS trip and the converter's
+minimum — 3.5×, with no reset and nothing in `journalctl` (§9.11). Healthy pack
+only; the sag near the cutoff is unmeasured.
+
+The CPU cost of driving is still unmeasured — P-3 recorded voltage, not load.
 
 > `powersave` is the governor the installer left. On `amd-pstate` that is not
 > the old ondemand behaviour and is probably fine, but it has **not** been

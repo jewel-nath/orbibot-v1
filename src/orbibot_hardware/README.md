@@ -35,7 +35,7 @@ Publishes sensor data and accepts velocity/PID commands.
 | `/imu/data` | `sensor_msgs/Imu` | Best Effort (depth 5) | 50Hz | Filtered attitude (orientation) + accel + gyro |
 | `/imu/data_raw` | `sensor_msgs/Imu` | Best Effort (depth 5) | **50.0 Hz measured** | Raw accel + gyro, no orientation (for imu_filter_madgwick). The firmware auto-reports at **49.98 Hz measured at the serial layer** — the "~20 Hz" this once claimed was never right |
 | `/orbibot/encoders` | `std_msgs/Int32MultiArray` | Best Effort (depth 5) | **50 Hz** | Raw encoder counts `[FL, BL, FR, BR]` in ticks. `[m1, m2, m3, m4]` = `[FL, BL, FR, BR]` per the firmware — **not yet confirmed against the physical wheels**, `physical-checks.md` A2 |
-| `/joint_states` | `sensor_msgs/JointState` | Reliable (depth 10) | 50Hz | Wheel positions (rad) for RViz visualization |
+| `/joint_states` | `sensor_msgs/JointState` | Reliable (depth 10) | 50Hz | Wheel positions (rad) for RViz visualization. **`velocity` and `effort` are published empty** — position only. Difference consecutive positions if you need speed; reading `velocity` yields nothing and looks like a stopped wheel |
 | `/orbibot/system_status` | `orbibot_msgs/SystemStatus` | Reliable (depth 10) | 10 Hz, **live-settable** | Battery voltage, motor state, hardware health. Battery is quantised to **0.1 V** by the firmware |
 | `/orbibot/safety_status` | `orbibot_msgs/SafetyStatus` | Reliable (depth 10) | 10Hz | Emergency stop, timeouts, faults |
 | `/diagnostics` | `diagnostic_msgs/DiagnosticArray` | Reliable (depth 10) | 10Hz | Standard ROS diagnostics |

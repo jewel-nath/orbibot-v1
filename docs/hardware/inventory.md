@@ -74,10 +74,17 @@ Load, at ~90 % efficiency and 19 V / 65 W: **3.4 A out**, **5.6 A in** at
 the input side because that is the only side where 10 A is a meaningful
 threshold — on the output only 3.4 A ever flows.
 
-**Open risk:** the converter's 10 V minimum input sits 0.5 V below the BMS
-cutoff at 10.5 V. Motor current transients could brown out the Beelink, and a
-brown-out with the NVMe writing corrupts the filesystem. Measurements P-1…P-5
-in [[computer-setup]] settle this; none have been taken.
+**Risk, now measured at one end.** The converter's 10 V minimum input sits
+**0.71 V** below where the BMS cutoff actually fires — configured at 10.5 V,
+but the firmware ADC reads 0.25 V low, so the true trip is ~10.71 V (§9.10).
+Motor transients land on that same rail, and a brown-out with the NVMe writing
+corrupts the filesystem.
+
+P-3, 2026-08-05: the worst sag driving the assembled robot at up to 0.45 m/s
+was **0.20 V** — 3.5× inside the margin, with no reset and nothing in
+`journalctl` (§9.11). That was a **healthy pack**; internal resistance rises as
+it empties, so the sag near the cutoff is still unmeasured. P-1, P-2 and P-4 in
+[[computer-setup]] also remain untaken and need a meter.
 
 ## MCU — Yahboom ROSMaster V3.0
 

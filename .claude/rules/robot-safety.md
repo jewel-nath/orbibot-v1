@@ -60,14 +60,19 @@ Three rules follow.
    against a meter 2026-08-04, `test-report.md` §9.10 — so it fires at a true
    ~10.71 V. That is the safe direction, and 40 % more headroom than the 0.5 V
    this rule assumed before anyone checked. If the rail dips while the NVMe is
-   writing, the filesystem corrupts. Until P-1…P-5 in
-   `docs/operations/computer-setup.md` are measured and recorded, treat *"can the
-   robot drive on battery with the computer up"* as **unanswered** — do not
-   assume it either way.
+   writing, the filesystem corrupts.
 
-Before any command that spins motors while the Beelink runs on battery: ask
-whether P-1…P-5 have been done. If not, say what could go wrong and let the
-operator decide.
+*"Can the robot drive on battery with the computer up?"* is **answered, with
+limits.** P-3, 2026-08-05, `test-report.md` §9.11: assembled robot on the
+ground, forward, backward, strafe, rotation and a hard reversal up to 0.45 m/s,
+worst dip **11.80 V raw**, sag **0.20 V** against the 0.71 V margin — 3.5×, and
+the computer never faltered.
+
+That covers a **healthy pack on hard flat floor below 0.45 m/s**, and nothing
+else. A cell's internal resistance rises as it empties, so the same manoeuvre
+digs deeper near the cutoff, and that measurement has not been taken. Neither
+has anything above 0.45 m/s, on carpet, or with a wheel stalled. Beyond that
+envelope, say so rather than extrapolating, and let the operator decide.
 
 ## Flashing firmware
 

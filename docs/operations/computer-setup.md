@@ -58,13 +58,20 @@ Verified working, not just installed:
 | URDF xacro expands | 13 links, 16 joints, `base_footprint` present |
 | Frontend `npm run build` | 816 K `dist/` |
 
-**Hardware: nothing attached.** No LiDAR, no `/dev/motordriver`, no camera.
+**Hardware: all attached** as of 2026-08-05 — `/dev/motordriver` and
+`/dev/lidar` both present, camera connected, and the Beelink, converter and
+fuse are **bolted to the robot** running from the battery.
 
-**Stage 0 is part-done.** The adapter label is read (**19 V / 3.42 A**) and the
-operator has wired the fuse and the battery/converter/ROSMaster harness. Still
-outstanding, and in this order: **set the converter output to 19.0 V with a
-multimeter before the Beelink is connected to it**, then P-1…P-5. Until then
-the Beelink runs from its mains brick.
+**Stage 0 is nearly done.** The adapter label is read (**19 V / 3.42 A**), the
+harness is wired, the computer is mounted, and **P-3 is measured** — the robot
+drives on its own battery with the computer up, worst sag 0.20 V against a
+0.71 V margin, no reset (`test-report.md` §9.11).
+
+Still outstanding, all needing a multimeter on the converter rather than the
+battery: **P-1** (converter output set to 19.0 V), **P-2**, and **P-4**
+(converter case temperature after 30 min under load). P-3 no longer needs one —
+the firmware's own ADC was calibrated against a meter (§9.10), so
+`.claude/scripts/drive_profile.py` measures the battery rail directly.
 
 Group membership (`dialout`, `plugdev`, `video`) is applied in `/etc/group` but
 needs a re-login to take effect in a running shell.

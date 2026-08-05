@@ -74,20 +74,25 @@ traction.
 | **Command timeout (2 s)** | `test_safety.py` | 2026-04-19 | motors stop 2.12 s after last command |
 | **Velocity clamp** | `test_motor_max_speed.py` | 2026-04-28 | 1023 mm/s peak on a 3000 mm/s command |
 | **Per-motor max speed** | `test_motor_max_speed.py` | 2026-04-28 | **M4 runs 12–15 % slow** — FW-ISSUE-4, open |
-| **Power rail under motor load (P-3/P-5)** | `test-report.md` §9.6 | 2026-08-03 | P-5 pass, no brown-out. **P-3 still unanswered** — needs traction load |
+| **Power rail, wheels free (P-5)** | `test-report.md` §9.6 | 2026-08-03 | pass, no brown-out. P-3 needed traction load and is now on the ground — see below |
 
 ---
 
 ## Needs the robot on the ground, ≥ 2 m clear
 
-**Nothing here has been done on this robot yet.** Every motion number on record
-was taken wheels-free, which cannot prove distance, drift or traction.
+**Unblocked 2026-08-05.** The Beelink is mounted, and the robot has driven on
+the floor under its own battery — P-3, `test-report.md` §9.11, using
+`.claude/scripts/drive_profile.py`, which commands the motion and records the
+rail together.
 
-Blocked on Phase 0.8 — mounting the Beelink changes mass and centre of gravity,
-so measuring first means measuring twice.
+None of the rows below has been taken. Every motion number still on record was
+taken wheels-free, which cannot prove distance, drift or traction. Phase 0.9
+(re-weigh, re-measure) should happen on the same trip — it is the same robot,
+on the same floor, and it gates the calibration these rows feed.
 
 | What | Roadmap | Gate |
 |---|---|---|
+| ✅ **Battery rail under traction load (P-3)** — `python3 .claude/scripts/drive_profile.py -p sprint -b 0.8`, run 2026-08-05 | 0.10 | raw firmware value **> 11.5 V**. Got **11.80 V** at 0.45 m/s, sag 0.20 V, no reset — §9.11 |
 | Wheel radius / encoder CPR — drive a measured 2 m | 1.1 | odometry error **< 3 %** both directions |
 | Rotation — 10 × 360° in place | 1.2 | accumulated yaw error **< 5°** |
 | Yaw drift, stationary, 10 min | 1.3 | recorded — replaces the magnetometer |

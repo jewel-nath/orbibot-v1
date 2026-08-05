@@ -274,10 +274,16 @@ side only 3.4A ever flows and a 10A fuse would never blow.
 connected.** The multi-turn pot ships at an arbitrary position and its range
 reaches 35V.
 
-⚠️ **Margin warning:** the converter's 10V minimum input is only 0.5V below the
-BMS cutoff at 10.5V. Motor transients could brown out the Beelink, and a
-brown-out during an NVMe write corrupts the filesystem. Measurements P-1…P-5
-in [[computer-setup]] settle this. None have been taken.
+⚠️ **Margin, measured.** The converter's 10 V minimum input sits **0.71 V**
+below where the BMS cutoff really fires — it is set at 10.5 V, but the firmware
+ADC reads 0.25 V low, so the true trip is ~10.71 V (`test-report.md` §9.10).
+Motor transients land on that rail, and a brown-out during an NVMe write
+corrupts the filesystem.
+
+P-3, 2026-08-05: worst sag **0.20 V** driving the assembled robot at up to
+0.45 m/s — 3.5× inside the margin, no reset (§9.11). Measured on a **healthy**
+pack; internal resistance rises as it empties, so the sag near the cutoff is
+still unmeasured. P-1, P-2 and P-4 in [[computer-setup]] also remain untaken.
 
 ### Power Distribution
 

@@ -82,7 +82,7 @@ Beelink before C2 reads correctly.
 | C1 | **Reported battery voltage matches reality** | Multimeter across the pack vs `ros2 topic echo /orbibot/system_status` | The 11.0 V warning and 10.5 V cutoff are only as good as the ADC. A 0.4 V offset means the cutoff fires late — into a brown-out | ✅ 2026-08-04 | meter **12.95 V**, firmware **12.700 V** → offset **−0.25 V**, reads low. Thresholds fire **early** — the safe direction. §9.10 |
 | C2 | **Converter output is 19.0 V, before the Beelink is connected** (P-1) | Multimeter on the RBD-2767 output, adjust the pot | The pot ships anywhere in a range that reaches 35 V. Connecting first can destroy the computer | — | |
 | C3 | **Converter case temperature after 30 min under load** (P-4) | Touch/IR thermometer | A converter that runs hot fails later, on the floor, mid-drive | — | |
-| C4 | **Battery rail under a four-motor burst** (P-3) | Multimeter on the battery while driving, wheels **on the ground** | The converter's 10 V minimum sits 0.5 V below the BMS cutoff. A dip during an NVMe write corrupts the filesystem | — | |
+| C4 | **Battery rail under a four-motor burst** (P-3) | ~~Multimeter~~ — C1 removed the meter from this loop. `python3 .claude/scripts/drive_profile.py -p sprint -b 0.8`, wheels **on the ground**, ~1 m clear | The converter's 10 V minimum sits **0.71 V** below where the BMS cutoff really fires (C1). A dip during an NVMe write corrupts the filesystem | ✅ 2026-08-05 | Worst dip **11.80 V raw** at 0.45 m/s, sag **0.20 V** against a **0.71 V** margin — **3.5×**. Computer never faltered, uptime unbroken. Healthy pack only. §9.11 |
 
 ---
 
@@ -117,8 +117,11 @@ elevated and confirm it is, each session — not once.
 
 ## F · On the ground, ≥ 2 m clear
 
-**Nothing here has been done on this robot.** Blocked on Phase 0.8 — mounting
-changes mass and centre of gravity, so measuring first means measuring twice.
+**Unblocked as of 2026-08-05** — the Beelink is mounted (0.8 done) and the
+robot has driven on the floor under its own battery (C4/P-3, §9.11). None of
+F1–F5 has been taken yet; they need tape on the floor and a measured distance,
+which P-3 did not provide. Worth doing together with Phase 0.9, since the
+re-weigh happens on the same trip to the robot.
 
 | # | Confirm | How | Gate | Checked | Found |
 |---|---|---|---|---|---|

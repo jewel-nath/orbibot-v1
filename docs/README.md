@@ -11,11 +11,13 @@ tags:
 Mecanum-wheeled indoor robot. ROS 2 Jazzy on a **Beelink SER5 Pro**, motor
 control on a Yahboom ROSMaster V3.0 (STM32F103RCT6) over serial at 115200 baud.
 
-> ⚠️ **Migration in progress — updated 2026-08-04.** The Raspberry Pi 5 hit
+> ⚠️ **Migration in progress — updated 2026-08-05.** The Raspberry Pi 5 hit
 > 100 % CPU under any real workload and has been replaced by a Beelink SER5 Pro.
-> ROS 2 and all 12 packages are up, and the board, LiDAR and camera are
-> connected — **commands can move wheels.** The Beelink is not yet bolted to the
-> robot; that is Phase 0.8 and it gates Phase 1. Start at [[computer-setup]].
+> ROS 2 and all 12 packages are up, the board, LiDAR and camera are connected,
+> and the computer is mounted — **commands move real wheels, on battery**
+> (P-3, `test-report.md` §9.11). What mounting changed has *not* been measured:
+> mass, centre of gravity and the sensor origins all moved, which is Phase 0.9
+> and now gates Phase 1. Start at [[computer-setup]].
 > The Pi's state lives on the `raspberry_pi` branch.
 
 Once the hardware is connected, commands here move real wheels —

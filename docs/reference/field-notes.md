@@ -397,6 +397,81 @@ agreement test, the original bug was reintroduced to confirm it was caught — i
 failed three ways and named the byte. Do that every time; the alternative is a
 regex that silently matches nothing and passes everything.
 
+### A load measurement needs proof the load was applied
+
+`/joint_states.velocity` is published **empty** by `hardware_node` — only
+`position` is filled. A "did the wheels turn?" check written against `velocity`
+read zero straight through a run in which the robot was visibly driving across
+the floor, and reported the run as invalid.
+
+The failure mode is worse in the other direction. Had the motors genuinely not
+turned, the battery would not have sagged and the run would have read as a
+clean pass. **Any measurement of a system under load has to record the load
+independently, or a disconnected test looks like a passing one.**
+
+Per-wheel positions are the right source here and are strictly better than
+`/odom`: odometry averages four wheels, so one dead motor still leaves it
+non-zero, while four separate deltas cannot hide it.
+
+### Path length and net displacement are different questions
+
+Wheel travel computed as `last - first` reported the hardest-working phase of a
+drive profile — forward straight into backward, no pause — as a **stopped
+motor**. The wheel rolled forward, decelerated, reversed, and the signed
+endpoints nearly cancelled.
+
+Sum `|Δ|` between consecutive samples when the question is "did this thing
+move", and reserve endpoint differences for "where did it end up". A validity
+check that goes wrong here fails loudest on exactly the phase you care about
+most, because that is the phase that changes direction.
+
+### Detrend against the neighbours, not the first sample
+
+Ranking manoeuvres by battery sag against a single baseline taken at the start
+put the **heaviest** manoeuvre at the top of the list as a voltage *rise*. The
+pack was recovering from an earlier run and the unloaded rail climbed 0.071 V
+across 36 s — larger than the 0.02–0.08 V being measured.
+
+Any baseline that can drift on its own must be resampled through the
+experiment, and each measurement compared to the interpolated local value.
+Interleave rest phases and use only their *tails*: the start of a rest still
+contains the motors decelerating.
+
+### Averaging beats quantisation only when the signal dithers
+
+The firmware reports battery voltage in 0.1 V steps. Where the true value sat
+near a code boundary, the reading flickered between two codes and the mean of
+1400 samples resolved sags of 0.02 V — genuinely sub-quantum. Where it sat
+mid-code, every sample read identically, the mean pinned to that value, and the
+same analysis produced confident numbers that were pure artefact.
+
+Two runs ranked the same manoeuvres differently for this reason alone. **Check
+that the samples actually vary before trusting a mean to beat the resolution.**
+A standard deviation of exactly zero is the tell.
+
+### A mirrored drive profile does not return to where it started
+
+Forward 0.8 m then backward 0.8 m left the robot 12–20 cm from its origin every
+time — slip, plus odometry error. Across four runs that accumulated into
+roughly half a metre, and the robot reached a wall mid-profile while the
+voltage log carried on recording numbers that no longer meant anything. The
+script printed the end-of-run offset each time; it was read and not acted on.
+
+Budget the floor per *session*, not per run, and re-centre between runs.
+
+### A distance limit strands the robot at the limit
+
+The obvious guard — stop when further than N metres from the start — was wrong
+twice in the same way. Cancelling the run leaves the robot outside the
+boundary. Cancelling each phase does too, because the mirrored leg that would
+bring it home is the very leg being cancelled, so every remaining phase aborts
+in milliseconds and the robot sits where it stopped.
+
+The workable rule is about **direction, not position**: outside the boundary, a
+motion may continue while the distance from the origin is falling. Judge that
+over a short interval so a leg starting from rest is not cut before it has
+moved.
+
 ---
 
 ## Environment facts worth knowing

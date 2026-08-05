@@ -86,9 +86,16 @@ term is the **sensor Y** gyro bias (−0.457 °/s) — the robot's *roll* axis �
 leaking through a rear-up *pitch*. The 0.47 % agreement, the 5.6×, and the
 remedy all stand.
 
-**Levelling still belongs in Phase 0.8**, not now: the board comes off anyway
-when the Beelink, converter and fuse are mounted, so adjusting it twice is
-wasted work.
+**That reasoning has expired.** It said levelling belongs in Phase 0.8 because
+the board would come off anyway when the Beelink, converter and fuse were
+mounted. Phase 0.8 was already done — long before, per the operator on
+2026-08-05 — so the board did not come off and nothing was levelled.
+
+Levelling now means unscrewing a board that is currently working, which is not
+free. **Before touching it, run the 180° test**: measure the tilt, rotate the
+robot 180° on the same floor, measure again. A tilt that follows the robot is
+in the mounting; a tilt that stays put is in the floor, and unscrewing anything
+would be chasing the room.
 
 **Also left open by the board being moved rearward:** `imu_joint`'s *translation*
 is still `xyz="0 0 0.02"`, the robot's centre, and the IMU is no longer there —

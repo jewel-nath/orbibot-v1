@@ -46,14 +46,13 @@ working as designed — see [[system-overview]].
 
 **Not solid:**
 
-- **The Beelink is set up but not mounted.** ROS 2, the toolchain and all 12
-  packages are working, and the motor board, LiDAR and camera are attached —
-  so commands now reach wheels. What remains is physical: bolting the computer,
-  converter and fuse to the robot. [[computer-setup]] is Phase 0.
-- **The robot's mass and centre of gravity are about to change.** Every Phase 1
-  number must be taken *after* the Beelink and its converter are bolted on.
-- Nothing on this robot has been calibrated **on the ground**. Every motion
-  number above was taken with the wheels free.
+- **The robot's mass and centre of gravity have changed and have not been
+  re-measured.** The Beelink, converter and fuse are mounted (0.8, done well
+  before 2026-08-05), so the ~6 kg and the footprint in [[inventory]] are
+  pre-mounting figures. Phase 1 depends on both — that is 0.9.
+- **Calibration on the ground has barely started.** P-3 drove the assembled
+  robot on the floor on 2026-08-05 and the power path holds (§9.11), but every
+  *motion* number in this document still comes from wheels spinning free.
 - Heading has no absolute reference since the magnetometer was removed, and
   nothing has measured how fast yaw drifts without it.
 - Four things publish `/cmd_vel` and nothing arbitrates — [[command-pipeline]].
@@ -102,25 +101,33 @@ The software half is done. What remains is physical, and it gates Phase 1.
 | 0.5 | udev rules; `/dev/motordriver` and `/dev/lidar` appear on boot | — | ✅ |
 | 0.6 | RealSense enumerates at **5000 Mbps**, depth + colour together | — | ⬜ 480 — SENS-2 |
 | 0.7 | PlatformIO toolchain; firmware builds; fix the `pio` path in the docs | — | ✅ 89 s |
-| 0.8 | **Mount the Beelink, converter and fuse on the robot** | robot | ⬜ |
+| 0.8 | **Mount the Beelink, converter and fuse on the robot** | robot | ✅ done — everything is bolted on and wired |
 | 0.9 | **Re-weigh the robot, re-measure the footprint, and re-measure the IMU/LiDAR/camera origins for the URDF** (DESC-1 — the ROSMaster board moved rearward 2026-08-04) | robot | ⬜ |
-| 0.10 | Power measurements P-1…P-5 — sag, thermals, brown-out | robot | ◐ P-5 only |
+| 0.10 | Power measurements P-1…P-5 — sag, thermals, brown-out | robot | ◐ P-3 ✅ (§9.11), P-5 ✅ — P-1, P-2, P-4 need a meter |
 | 0.11 | **Record a CPU and thermal baseline** — stack idle, and stack driving | robot | ◐ idle only |
 
 Full procedure, including the wiring order that matters: [[computer-setup]].
 
-**0.8 is the critical path.** Mounting changes mass and centre of gravity, and
-every Phase 1 number depends on both — so calibrating first is wasted work, not
-early work.
+**0.9 is now the critical path.** 0.8 is done — the computer, converter and
+fuse are on the robot. What that mounting changed has not been measured: mass
+and centre of gravity both moved, and every Phase 1 number depends on them, so
+calibrating before 0.9 is wasted work rather than early work.
 
 **Gate**
 
 - ~~Adapter label read~~ — **done, 19 V / 3.42 A**. Converter output verified at 19.0 V before the Beelink is connected
-- Battery rail stays **> 11.5 V** and converter output **> 18 V** through a
-  four-motor full-speed burst
-- Ten motor start/stop cycles with the Beelink logged in: **no reboot**, no
-  under-voltage or reset event in `journalctl -k` (**not** `dmesg` — this
-  machine has `dmesg_restrict` set and an unprivileged `dmesg` reads nothing)
+- ~~Battery rail stays **> 11.5 V** through a four-motor burst~~ — **done
+  2026-08-05, P-3.** Worst dip **11.80 V raw** (true ~12.05) at 0.45 m/s across
+  forward, backward, strafe, rotation and a hard reversal; sag **0.20 V**
+  against the **0.71 V** margin to the converter's minimum. Healthy pack only —
+  §9.11 lists what this does not cover
+- Converter output **> 18 V** through the same burst — **still open**, and it
+  needs a meter on the converter, which P-3 did not touch
+- ~~Motor start/stop cycles with the Beelink logged in: **no reboot**~~ — **done
+  2026-08-05**, four profiles totalling ~30 starts and stops on one unbroken
+  boot, `journalctl -b -p warning` clean of under-voltage, USB reset and disk
+  error (**not** `dmesg` — this machine has `dmesg_restrict` set and an
+  unprivileged `dmesg` reads nothing)
 - ~~`colcon build` clean, **12 packages**~~ — **done**
 - ~~`ros2 launch orbibot_bringup robot.launch.py` runs~~ — **done**; `/odom`
   publishing, `/scan` at **8.0 Hz** — SENS-1 resolved 2026-08-04: that is the
@@ -134,8 +141,11 @@ early work.
 - CPU baseline recorded — Phases 3 and 6 have nothing to budget against without it
 
 > 0.10 is the one people skip. A brown-out during an NVMe write corrupts the
-> filesystem, and the converter's 10 V minimum sits only 0.5 V below the BMS
-> cutoff. Measure it before trusting the robot to drive itself anywhere.
+> filesystem. The margin is **0.71 V** — from where the BMS cutoff actually
+> fires (true ~10.71 V, because the ADC reads 0.25 V low, C1) down to the
+> converter's 10 V minimum. The measured sag is 0.20 V at 0.45 m/s, so the
+> margin is 3.5×. That was measured on a **healthy** pack; internal resistance
+> rises as it empties, and the sag near the cutoff is still unmeasured.
 
 ---
 

@@ -66,6 +66,15 @@ should be `1.5 × measured worst-case max`.
 wheel (robot elevated), record steady-state encoder velocity, pick the
 largest and multiply by 1.5.
 
+**A second, unexplained spread — on the ground, 2026-08-05.** Driving straight
+at 0.45 m/s, front-left records ~5 % more wheel travel than front-right, in
+both directions, in every clean run (§9.11). On the ground every wheel covers
+the same distance, so this is slip, weight distribution or per-wheel PID — not
+speed capability, and **not the same measurement as the 12–15 % above**, which
+was taken elevated at full PWM. Whether the two are the same motor is unknown
+until the wheel-to-motor map is confirmed (`physical-checks.md` A2). Do not
+merge the numbers.
+
 > ⚠️ **This has been "measured" once already, incorrectly.** A 2026-03-24 run
 > reported 0.1 % variation between motors and concluded per-motor config was
 > unnecessary. That run commanded 1000 mm/s with the PID closing the loop, and

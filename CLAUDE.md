@@ -12,9 +12,15 @@ control on a Yahboom ROSMaster V3.0 (STM32F103RCT6) over serial.
 > **commands can move wheels** — read `.claude/rules/robot-safety.md` before
 > commanding motion or flashing firmware.
 >
-> **The Beelink is not yet bolted to the robot.** That is Phase 0.8, and it
-> gates Phase 1: mounting changes mass and centre of gravity, so calibrating
-> first means calibrating twice. Sequence:
+> **The Beelink, converter and fuse are mounted** (Phase 0.8, done). The robot
+> drives on its own battery with the computer up — P-3, 2026-08-05, worst sag
+> 0.20 V against a 0.71 V margin, no reset (`test-report.md` §9.11). That
+> covers a healthy pack on flat floor below 0.45 m/s and nothing beyond it.
+>
+> **What mounting changed has not been measured.** Mass and centre of gravity
+> both moved, and every Phase 1 number depends on them — so Phase 0.9
+> (re-weigh, re-measure the footprint and the sensor origins) now gates
+> calibration. Sequence:
 > [docs/operations/computer-setup.md](docs/operations/computer-setup.md).
 >
 > The Pi's state is preserved on the `raspberry_pi` branch. Do not delete it.
@@ -132,7 +138,10 @@ Frontend lives in `src/orbibot_webgui/frontend` — `npm run build` for a served
 bundle; do not run the Vite dev server on the robot.
 
 Handy scripts: `.claude/scripts/preflight.sh` before operating,
-`safety.sh` to cross-check firmware limits against the ROS 2 config.
+`safety.sh` to cross-check firmware limits against the ROS 2 config,
+`drive_profile.py` to drive a fixed set of manoeuvres while recording the
+battery rail and each wheel's travel (`-p gentle|full|stress|sprint`, and
+`-b` bounds how far it may wander from where it started).
 
 ---
 

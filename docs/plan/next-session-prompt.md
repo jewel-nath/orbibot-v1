@@ -56,7 +56,10 @@ sudo দিলে password prompt-এ আটকে যাবে। ইনস্�
 পাঁচটা জিনিস মনে রাখবে:
   - Power: এক ব্যাটারি থেকেই সব। 12.8V → RBD-2767 boost → 19V → Beelink,
     আর সেই একই পয়েন্ট থেকে ROSMaster board। 10A fuse ইনপুট দিকে।
-    P-1…P-5 এখনো সবগুলো হয়নি — test-report.md §9.6 দেখো।
+    P-3 মাপা হয়ে গেছে (§9.11) — রোবট নিজের ব্যাটারিতে চলে, ০.৪৫ m/s পর্যন্ত
+    সবচেয়ে বেশি সাগ ০.২০ V, মার্জিন ০.৭১ V, কম্পিউটার রিসেট হয়নি। তবে
+    প্যাকটা ভরা ছিল — কাটঅফের কাছে সাগ এখনো মাপা হয়নি। P-1/P-2/P-4 বাকি,
+    ওগুলোয় কনভার্টারে মাল্টিমিটার লাগবে।
   - CPU দিয়ে justify করা প্রতিটা tuning value অচল — nav2_params,
     slam_params, dashboard budget। scale করবে না, নতুন করে মেপে বের করবে।
   - Magnetometer নেই, ইচ্ছে করেই বাদ। ফেরত আনার প্রস্তাব দেবে না।
@@ -127,7 +130,7 @@ after start. `motors_enabled` now defaults to `false`.
 
 | Decision | Consequence |
 |---|---|
-| One battery for robot and computer | Motor transients land on the computer's rail. P-1…P-5 exist for this |
+| One battery for robot and computer | Motor transients land on the computer's rail. P-1…P-5 exist for this; **P-3 measured 2026-08-05 — 0.20 V sag, 0.71 V margin, healthy pack only** (§9.11) |
 | Pi 5 removed entirely, not kept | No multi-machine DDS setup to maintain |
 | RealSense depth **enabled** | The driver owns the device; the v4l2 bypass in [[dashboard-design]] is superseded |
 | Simulation possible, not now | Off the critical path — see *Optional* in [[roadmap]] |

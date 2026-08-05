@@ -630,8 +630,10 @@ dither to integrate.
 
 ### Not covered
 
-Yaw drift **with the sensor level**, and everything under vibration. Both wait
-on the Beelink being mounted (Phase 0.8).
+Yaw drift **with the sensor level**, and everything under vibration. Neither is
+blocked any more — Phase 0.8 turned out to be already done, and §9.11 drove the
+assembled robot on the floor. Levelling now costs unscrewing a working board,
+so run the 180° test first (`localization-issue.md` LOC-1).
 
 ---
 
@@ -850,8 +852,118 @@ real margin is **~0.71 V** — about 40 % more headroom than assumed.
 
 ### What this unlocks
 
-P-3 no longer needs a meter. `/orbibot/system_status` can be logged through
-`.claude/scripts/battery_sag_log.py`, which now prints the corrected voltage
-beside the raw one. Sampling was also raised from the 10 Hz default to **51.3 Hz**
+P-3 no longer needs a meter, and was taken the next day — §9.11.
+`/orbibot/system_status` can be logged through
+`.claude/scripts/battery_sag_log.py` while someone else drives, or through
+`.claude/scripts/drive_profile.py`, which commands the manoeuvres itself and so
+can attribute each dip to the manoeuvre that caused it. Both print the
+corrected voltage beside the raw one. Sampling was also raised from the 10 Hz default to **51.3 Hz**
 (19 ms) — see HW-BUG-10, which had to be fixed first because the rate parameter
 silently ignored being set.
+
+---
+
+## 9.11 Battery rail under motor load (P-3) — 2026-08-05
+
+*Robot fully assembled and **on the ground**, ~1 m clear, Beelink mounted and
+running **from the battery** through the RBD-2767. Full `robot.launch.py`.
+Voltage from `/orbibot/system_status` at ~50 Hz (20 ms), logged by
+`.claude/scripts/drive_profile.py`, which commands the motion itself so each
+manoeuvre owns its samples. Raw firmware values throughout; add 0.25 V for true
+voltage (§9.10).*
+
+### The question, and the answer
+
+P-3 asks whether this robot can drive on battery with the computer up. It can.
+
+| profile | top speed | rest | worst dip | sag | ≥ 11.5 V gate |
+|---|---|---|---|---|---|
+| gentle ×2 | 0.15 m/s | 12.40 | 12.30 | 0.10 | +0.80 V ✅ |
+| full | 0.15 m/s | 12.40 | 12.30 | 0.10 | +0.80 V ✅ |
+| sprint | 0.45 m/s | 12.00 | **11.80** | **0.20** | +0.30 V ✅ |
+
+`full` and `sprint` each cover forward, backward, strafe both ways, an in-place
+rotation and a forward-into-backward reversal with no pause. **All four wheels
+turned in every commanded phase** — checked per wheel from `/joint_states`
+positions, not inferred from `/odom`.
+
+**The computer never faltered.** Uptime is unbroken across every run — one boot,
+16:57, still running. `journalctl -b -p warning` has no undervoltage, no USB
+reset, no disk error. The stack that measured this is the stack that was being
+measured, on the machine being powered.
+
+### The number that matters for the filesystem
+
+The failure P-3 exists to rule out: the pack sits near cutoff, a manoeuvre digs
+a transient into the rail, the rail crosses the converter's 10 V minimum, and
+the Beelink drops while the NVMe is writing.
+
+| | |
+|---|---|
+| BMS cutoff fires at | raw 10.5 V = **true ~10.71 V** (§9.10) |
+| Converter dies below | **10.0 V** |
+| Margin between them | **0.71 V** |
+| Worst measured sag, 0.45 m/s | **0.20 V** |
+| Ratio | **3.5×** |
+
+**This is not a guarantee at the cutoff.** The sag was measured on a healthy
+pack. A cell's internal resistance rises as it empties, so the same manoeuvre
+digs deeper at 10.7 V than at 12.0 V — by how much is unmeasured. What is
+established is that the margin is real and has a measured size at one end of
+the range, instead of being assumed at both.
+
+### Sag grows with speed
+
+0.10 V at 0.15 m/s, 0.20 V at 0.45 m/s. The 0.15 m/s figure is a single
+quantisation step, so the true sag there is *at most* 0.1 V and possibly much
+less — the instrument bottoms out, the robot does not.
+
+### What is NOT established
+
+- **Beyond 0.45 m/s.** Nothing was driven faster. `control.max_velocity` is
+  1.0 m/s and Nav2 accelerates harder than a step command does.
+- **A discharged pack.** Every run started above 12.0 V raw. The interesting
+  measurement is the one taken near 10.7 V, and it has not been taken.
+- **Carpet, a ramp, or a stall.** All runs were on hard flat floor with the
+  wheels free to turn. A wheel held against an obstacle draws far more.
+- **Which manoeuvre is heaviest.** Two `stress` runs ranked them differently and
+  are quarantined in `logs/suspect/` — the robot reached a wall mid-session and
+  was lifted, so those numbers describe an unknown mixture of free wheels,
+  loaded wheels and a stall. One clean run at 0.45 m/s put both strafe
+  directions at −0.084 and −0.083 V against a −0.002 V/24 s baseline drift,
+  about 4× the straight-line load, which is what mecanum roller slip predicts.
+  **One run is not a result** — it is repeated to three before it is recorded.
+
+### Method notes worth keeping
+
+- **Compare each manoeuvre to the rest phases around it, not to the first one.**
+  The unloaded rail moves on its own — a pack recovering from an earlier run
+  climbed 0.071 V across 36 s, larger than the sag being measured. Ranked
+  against a fixed first baseline, the heaviest manoeuvre came out as a *rise*.
+- **The mean resolves below the quantum, but only sometimes.** With the true
+  voltage near a code boundary the reading dithers and the mean is a genuine
+  sub-quantum estimator; parked mid-code it pins to one value and the mean says
+  nothing. Two runs ranked loads differently for exactly this reason.
+- **Wheel travel must be path length, not net displacement.** A reversal phase
+  drives out and back, so first-to-last cancels and a hard-working motor reads
+  as stopped. It did, and flagged the single heaviest phase as a dead motor.
+- **`/joint_states.velocity` is published empty** by `hardware_node` — only
+  `position` is filled. A velocity-based motion check reads zero through a run
+  in which the robot is visibly driving.
+
+### Wheel travel spread — an observation, not a conclusion
+
+Front-left consistently records the most travel and front-right the least, on
+straight legs in both directions, across every clean run:
+
+| leg | FL | BL | FR | BR | FL over FR |
+|---|---|---|---|---|---|
+| sprint forward | 56.1 | 54.0 | 53.1 | 53.6 | +5.6 % |
+| sprint backward | 56.6 | 54.9 | 53.9 | 54.5 | +5.0 % |
+
+In a straight line every wheel covers the same ground, so a repeatable
+difference in encoder counts is slip, weight distribution, or per-wheel PID —
+not distance. It is recorded here because it is repeatable and because the
+centre of gravity moved when the Beelink was mounted. It is **not** yet
+evidence for or against the M4 deficit; that needs the wheel-to-motor map
+(`physical-checks.md` A2), which is still unknown.
