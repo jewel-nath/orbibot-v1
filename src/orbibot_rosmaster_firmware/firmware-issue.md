@@ -66,14 +66,21 @@ should be `1.5 × measured worst-case max`.
 wheel (robot elevated), record steady-state encoder velocity, pick the
 largest and multiply by 1.5.
 
-**A second, unexplained spread — on the ground, 2026-08-05.** Driving straight
-at 0.45 m/s, front-left records ~5 % more wheel travel than front-right, in
-both directions, in every clean run (§9.11). On the ground every wheel covers
-the same distance, so this is slip, weight distribution or per-wheel PID — not
-speed capability, and **not the same measurement as the 12–15 % above**, which
-was taken elevated at full PWM. Whether the two are the same motor is unknown
-until the wheel-to-motor map is confirmed (`physical-checks.md` A2). Do not
-merge the numbers.
+**A different spread, on the ground, 2026-08-05 — and it is not this issue.**
+Driving straight at 0.45 m/s, front-left logs ~5 % more wheel travel than
+front-right, both directions, every clean run (§9.11). M4 is the back-right
+wheel (A2, operator-confirmed 2026-08-05) and back-right is **not** the outlier
+there.
+
+That is not a contradiction, because the two numbers measure different things.
+**On the floor the wheels are coupled through the ground:** the robot has one
+velocity, so each wheel turns at `v/r` or slips, and a weak motor covers the
+same distance while contributing less force. Torque simply does not appear in a
+ground-run encoder count. The 12–15 % above was taken **elevated at full PWM**,
+where the wheels are free and the number really is about the motor.
+
+Keep them apart. Merging them would "resolve" a conflict that does not exist and
+lose both measurements.
 
 > ⚠️ **This has been "measured" once already, incorrectly.** A 2026-03-24 run
 > reported 0.1 % variation between motors and concluded per-motor config was

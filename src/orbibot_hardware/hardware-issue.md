@@ -7,10 +7,61 @@
 
 ## 🔴 Open
 
-*HW-BUG-8 has a **cause**, found 2026-08-04: 20 Hz of `/cmd_vel` costs the node a
-third of its 50 Hz sensor rate, in the executor thread. It is neither a firmware
-fault nor a decay, and both earlier characterisations were wrong.
-HW-BUG-9 is fixed and HW-BUG-1 does not reproduce.*
+*HW-BUG-11 is new, 2026-08-05: the battery thresholds are lead-acid values on a
+LiFePO4 pack, so the low-voltage warning fires only once the pack is already
+empty. HW-BUG-8 has a **cause**, found 2026-08-04: 20 Hz of `/cmd_vel` costs the
+node a third of its 50 Hz sensor rate, in the executor thread. It is neither a
+firmware fault nor a decay, and both earlier characterisations were wrong.
+HW-BUG-9 and HW-BUG-10 are fixed and HW-BUG-1 does not reproduce.*
+
+### HW-BUG-11: the battery thresholds are lead-acid values on a LiFePO4 pack
+**Opened:** 2026-08-05 · **Severity:** MEDIUM — the warning cannot warn
+**Files:** `config/hardware_params.yaml:30-31`,
+`../orbibot_rosmaster_firmware/include/orbibot_config.h:141-142`
+
+```yaml
+battery_low_threshold:    11.0   # 2.75 V/cell
+battery_critical_voltage: 10.5   # 2.63 V/cell
+```
+
+Both files agree with each other, and both are wrong for the chemistry. A 4S
+LiFePO4 pack holds ~3.2 V/cell across almost its entire discharge and then
+falls off a cliff below **3.0 V/cell — 12.0 V at the pack**. Under 3.0 V/cell
+there is only a few percent of capacity left and the voltage drops fast.
+
+Both thresholds sit **past** that cliff:
+
+| threshold | raw | true (ADC reads 0.25 V low) | per cell |
+|---|---|---|---|
+| low warning | 11.0 | ~11.25 | **2.81 V** |
+| critical stop | 10.5 | ~10.75 | **2.69 V** |
+
+So the warning fires when the pack is already empty. There is no window in
+which it means "finish what you are doing" — which is the only thing a warning
+is for.
+
+**Observed 2026-08-05.** A drive session ended at **11.90 V raw = ~12.15 V true
+= 3.04 V/cell** — right at the knee, with **no warning having fired**. Roughly
+15 minutes later, with the robot parked and only the computer, LiDAR and board
+drawing, the machine lost power: the previous boot's journal ends mid-cron at
+18:17:01 with no shutdown sequence at all, which is what an abrupt cut looks
+like.
+
+**The cause of that particular cut is not established** — the operator was also
+connecting a charger around then, and cutting the battery to do so produces an
+identical log signature. What *is* established is the arithmetic above, and it
+does not depend on which happened.
+
+**What to change, and what to measure first.** Do not simply raise the numbers:
+that repeats the mistake in the other direction. Discharge the pack under a
+known load while logging `/orbibot/system_status`, find where the curve actually
+knees on **this** pack, and set the warning above it — 12.0-12.2 V raw is the
+value the chemistry suggests, and this robot has never checked. The critical
+stop is a separate decision: it protects the cells, and it must stay above the
+converter's 10 V minimum, which it does.
+
+**Related:** C1 (`test-report.md` §9.10) for the ADC offset; §9.11 for the sag
+measurement whose margin these thresholds define.
 
 ### HW-BUG-9: `robot.launch.py` silently arms the motors 6 s after startup
 **Opened:** 2026-08-03 · **FIXED 2026-08-03** · **Severity:** HIGH — safety

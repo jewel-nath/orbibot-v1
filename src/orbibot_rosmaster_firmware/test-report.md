@@ -961,9 +961,44 @@ straight legs in both directions, across every clean run:
 | sprint forward | 56.1 | 54.0 | 53.1 | 53.6 | +5.6 % |
 | sprint backward | 56.6 | 54.9 | 53.9 | 54.5 | +5.0 % |
 
-In a straight line every wheel covers the same ground, so a repeatable
-difference in encoder counts is slip, weight distribution, or per-wheel PID —
-not distance. It is recorded here because it is repeatable and because the
-centre of gravity moved when the Beelink was mounted. It is **not** yet
-evidence for or against the M4 deficit; that needs the wheel-to-motor map
-(`physical-checks.md` A2), which is still unknown.
+**This cannot be a motor-strength measurement, and that is the point.** On the
+floor the four wheels are coupled through the ground: the robot has one
+velocity, so every wheel must turn at `v/r` or slip. A weak motor does not
+travel less — it contributes less force while covering the same distance. So a
+repeatable difference in encoder counts is **slip, effective rolling radius, or
+encoder scale**, never torque.
+
+M4 is the **back-right** wheel — operator-confirmed 2026-08-05, matching
+`rosmaster-board.md`, `hardware-doc.md` and the firmware README (A2). BR is not
+the outlier here; FL is, and it runs *high*. That does **not** contradict
+FW-ISSUE-4's 12–15 %: that figure was taken **elevated at full PWM**, where
+wheels are free and the number really is about the motor. Two different
+quantities, measured two different ways. Do not reconcile them.
+
+Recorded because it is repeatable and because the centre of gravity moved when
+the Beelink was mounted — less weight on a wheel means less traction and more
+slip, which is one candidate among several. Phase 0.9 measures the geometry
+that would let anyone test it.
+
+### Postscript — how the session ended, 2026-08-05
+
+Driving stopped at ~18:02 with the pack at **11.90 V raw = ~12.15 V true =
+3.04 V/cell**, which is the knee of a LiFePO4 discharge curve. No low-voltage
+warning had fired, because the warning is set at 11.0 V raw — **below** the
+knee (HW-BUG-11).
+
+About fifteen minutes later, robot parked and only the computer, LiDAR and
+board drawing, the machine lost power. The previous boot's journal ends
+mid-`cron` at 18:17:01 with no shutdown sequence: the 42 matches for "shutdown"
+in that boot are all systemd setting up its shutdown infrastructure at
+**16:57:50**, boot time. That is what an abrupt cut looks like, not a
+`poweroff`.
+
+**The cause is not established, and is not being guessed at.** The operator was
+connecting a charger around then, and cutting the battery to do so leaves an
+identical signature. Both remain open.
+
+What it does say plainly: this pack ran from 12.70 V raw to 11.90 V raw across
+roughly 25 minutes of intermittent driving, and 11.90 V is much closer to the
+end than the number suggests, because LiFePO4 hides its state of charge until
+it does not. **The 0.71 V margin in §9.11 is a margin in volts, not in time.**

@@ -37,7 +37,7 @@ not.
 | # | Confirm | How | Wrong ⇒ what breaks | Checked | Found |
 |---|---|---|---|---|---|
 | A1 | **Mecanum rollers form an X seen from above** (ABBA) | Look down at all four wheels. Front-left and back-right rollers run one way; front-right and back-left the other | Sideways motion goes the wrong way, or the robot crabs when told to go straight. Kinematics cannot detect it | — | |
-| A2 | **M1=FL, M2=BL, M3=FR, M4=BR** | Trace each motor cable to its board connector, or drive one motor at a time and watch which wheel turns | FW-ISSUE-4 says "M4 is 12–15 % slow". Useless until M4 is known to be the **back-right** wheel. Every per-wheel fix depends on this | — | |
+| A2 | **M1=FL, M2=BL, M3=FR, M4=BR** | Trace each motor cable to its board connector, or drive one motor at a time and watch which wheel turns | FW-ISSUE-4 says "M4 is 12–15 % slow". Useless until M4 is known to be the **back-right** wheel. Every per-wheel fix depends on this | ✅ 2026-08-05 | **M4 = Back Right**, operator-confirmed. Matches `hardware-doc.md` and the firmware README — the map was right, and is now checked rather than assumed |
 | A3 | **LiDAR 0° points forward (+X)** | Find the marker on the A1 housing; it must face the robot's front | Obstacles appear rotated. SLAM builds a consistent but wrong map, and nothing errors | — | |
 | A4 | **ROSMaster board is not rotated w.r.t. the chassis** | Board's own X/Y must line up with robot forward/left | roll and pitch swap through the whole pipeline; URDF says `rpy="0 0 0"` | ✅ 2026-08-04 | not rotated — moved rearward only |
 | A5 | **Fuse is 10 A and on the converter *input*** | Follow the wire from the battery: fuse must come **before** the RBD-2767 | A fuse on the output does not protect the battery-side short, which is the one that matters | — | |
@@ -51,24 +51,62 @@ not.
 ## B · Tape measure, calipers, kitchen scale
 
 Every number here is currently in `CLAUDE.md` or the URDF as an **inherited
-figure**, not a measured one. All of them change when the Beelink is mounted.
+figure**, not a measured one. The Beelink is now mounted, so all of them are
+stale by an unknown amount. This is Phase 0.9 and it gates Phase 1.
+
+### Measure from these two things, not from "the chassis"
+
+The URDF's origin is not a mark on the robot, which is why "tape from the
+chassis reference point" has never been actionable. It is defined by the
+wheels:
+
+> **`base_link` sits at the centre of the rectangle through the four wheel
+> centres, at axle height. `base_footprint` is the same point on the floor.
+> `+x` is forward (the camera side), `+y` is left, `+z` is up.**
+
+Nothing needs to be measured from that point directly. Measure from two lines
+that *are* visible on the robot, and the conversion is arithmetic:
+
+| Datum | What it is |
+|---|---|
+| **Front axle line** | Through the centres of the two front wheel hubs |
+| **Centreline** | Midway between the left and right hubs, running front to back |
+
+Then, for every sensor:
+
+```
+x = wheelbase/2 − (distance behind the front axle line)      # negative = behind centre
+y = distance left of the centreline                          # negative = right
+z = (height above the floor) − (loaded axle height)          # negative = below the axle
+```
+
+Record **which way you measured** with each number — "40 mm behind the front
+axle" is unambiguous; "40 mm" is not, and a sign error here puts a sensor on
+the wrong side of the robot without anything failing loudly.
+
+**Robot on the floor, on its wheels, fully assembled, for every measurement.**
+Height off a bench is a different number, and B2 exists precisely because the
+loaded radius is the one odometry uses.
 
 | # | Confirm | Claimed | How | Wrong ⇒ what breaks | Checked | Found |
 |---|---|---|---|---|---|---|
 | B1 | **Wheel radius, unloaded** | 50 mm (100 mm dia.) | Calipers across the wheel, off the ground | Odometry scales by the error — 2 % here is 2 % on every distance | — | |
 | B2 | **Wheel radius, loaded** | *not recorded* | Measure axle height above the floor with the robot standing, ×1 | The rolling radius is the loaded one. Using the unloaded figure makes the robot think it went further than it did | — | |
 | B3 | **Wheelbase** (front axle ↔ rear axle) | 260 mm | Tape, centre to centre | Rotation and strafe kinematics; yaw from wheels comes out wrong | — | |
-| B4 | **Track** (left wheel ↔ right wheel) | 360 mm | Tape, centre to centre | Same as B3 | — | |
-| B5 | **Footprint** | 350 × 250 mm | Tape over the widest points | Nav2 inflation and clearance. Too small and it clips doorframes | — | |
-| B6 | **Mass** | ~6 kg | Kitchen/luggage scale, robot complete | PID response and traction. Must be re-taken **after** the Beelink, converter and fuse are on | — | |
-| B7 | **IMU offset from `base_link`** | `0, 0, 0.02` | Tape from the chassis reference point to the IMU chip | DESC-1. Matters during turns: a lever arm `d` adds ω²d that Madgwick reads as tilt | — | |
-| B8 | **LiDAR offset and height** | see URDF | Tape | Scans land at the wrong place in the map | — | |
-| B9 | **Camera offset and height** | see URDF | Tape | Depth obstacles land at the wrong place | — | |
-| B10 | **Ground → `base_link` height** | see URDF | Tape, robot standing | `base_footprint` is the frame everything navigates in | — | |
+| B4 | **Track** (left wheel ↔ right wheel) | 360 mm | Tape, hub centre to hub centre. Easier: outer tyre face to outer tyre face, minus one tyre width | Same as B3 | — | |
+| B5 | **Footprint** | 350 × 250 mm | Tape over the widest points, **including** wheels and anything that protrudes | Nav2 inflation and clearance. Too small and it clips doorframes | — | |
+| B6 | **Mass** | ~6 kg | Kitchen/luggage scale, robot complete | PID response and traction. **Deferred 2026-08-05** — no scale available. Everything else in this section can be taken without one | ⏸ | needs a scale |
+| B7 | **IMU offset from `base_link`** | `0, 0, 0.02` | To the **ICM-20948 chip** on the ROSMaster board, using the datums above. If the chip is not visible, measure to the board's geometric centre and **say so** | DESC-1. Matters during turns: a lever arm `d` adds ω²d that Madgwick reads as tilt. The board was moved rearward 2026-08-04, so the claimed `0, 0` is known wrong | — | |
+| B8 | **LiDAR offset and height** | `0, 0, 0.18` | To the **centre of the rotating disc**, not the housing corner | Scans land at the wrong place in the map. `x=0, y=0` is an assumption nobody has checked | — | |
+| B9 | **Camera offset and height** | `0.175, 0, 0.02` | To the **centre of the front glass face**. The colour and depth imagers are offset from there in the URDF already — do not measure to a lens | Depth obstacles land at the wrong place | — | |
+| B10 | **Ground → `base_link` height** | = wheel radius | This is B2, not a separate measurement — `base_link` is at axle height by definition | `base_footprint` is the frame everything navigates in | — | |
 
 > Take B1 and B2 on **all four wheels**, not one. A single squashed or
 > mis-seated tyre shows up as a persistent curve in odometry and gets blamed on
-> the gyro.
+> the gyro. There is already a reason to look: driving straight on 2026-08-05,
+> front-left logged ~5 % more wheel travel than front-right, repeatably
+> (`test-report.md` §9.11). A difference in loaded radius is one of the few
+> explanations that a tape measure can confirm or kill outright.
 
 ---
 
