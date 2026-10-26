@@ -1,13 +1,3 @@
----
-title: "04 - TF Tree"
-type: learn
-area: description
-package: orbibot_description
-tags:
-  - learn
-  - description
----
-
 # 04 - TF Tree
 
 **Coordinate frames and transforms**
@@ -79,7 +69,7 @@ ros2 topic hz /tf
 
 Learn visualization:
 
-**→ Continue to:** [[05-visualization]]
+**→ Continue to:** [05 - Visualization](05-visualization.md)
 
 ---
 

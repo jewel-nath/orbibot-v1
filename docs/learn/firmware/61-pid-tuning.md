@@ -1,18 +1,7 @@
----
-title: "Part 6: PID Tuning Methods"
-type: learn
-area: firmware
-package: orbibot_rosmaster_firmware
-duration: "30 minutes"
-tags:
-  - learn
-  - firmware
----
-
 # Part 6: PID Tuning Methods
 
 **Duration**: 30 minutes  
-**Prerequisites**: [[60-pid-controllers]]
+**Prerequisites**: [Part 6: PID Controllers](60-pid-controllers.md)
 
 ---
 
@@ -406,7 +395,7 @@ Then fine-tune!
 
 ## Next Lesson
 
-[[62-pid-implementation]] - Hands-on tuning guide with examples
+[Part 6: PID Implementation in Firmware](62-pid-implementation.md) - Hands-on tuning guide with examples
 
 ---
 

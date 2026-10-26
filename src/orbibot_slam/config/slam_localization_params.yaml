@@ -21,7 +21,7 @@ slam_toolbox:
     use_map_saver: false
 
     # Map file to localize against (set via launch argument)
-    # map_file_name: /home/orbitax/maps/bed_room_serialized
+    # map_file_name: $HOME/maps/my_map
 
     # Performance Parameters
     debug_logging: false

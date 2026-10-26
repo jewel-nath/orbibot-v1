@@ -1,13 +1,3 @@
----
-title: "05 - EKF Basics"
-type: learn
-area: localization
-package: orbibot_localization
-tags:
-  - learn
-  - localization
----
-
 # 05 - EKF Basics
 
 **Extended Kalman Filter for state estimation**
@@ -82,7 +72,7 @@ Larger = less confident
 
 Learn EKF configuration:
 
-**→ Continue to:** [[06-ekf-configuration]]
+**→ Continue to:** [06 - EKF Configuration](06-ekf-configuration.md)
 
 ---
 

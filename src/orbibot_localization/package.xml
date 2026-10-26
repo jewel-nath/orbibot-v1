@@ -4,8 +4,8 @@
   <name>orbibot_localization</name>
   <version>1.0.0</version>
   <description>EKF localization for OrbiBot — fuses wheel odometry and IMU</description>
-  <maintainer email="jewel.nath@orbitax.com">Jewel Nath</maintainer>
-  <license>MIT</license>
+  <maintainer email="58494211+jewel-nath@users.noreply.github.com">Jewel Nath</maintainer>
+  <license>Apache-2.0</license>
 
   <exec_depend>robot_localization</exec_depend>
   <exec_depend>imu_filter_madgwick</exec_depend>

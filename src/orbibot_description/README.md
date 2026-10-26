@@ -1,238 +1,81 @@
 # orbibot_description
 
-URDF/Xacro robot model for OrbiBot — a mecanum-wheeled mobile robot using Yahboom ROSMaster V3.0 expansion board.
+OrbiBot's robot model: one Xacro file, three meshes and two RViz setups. It
+gives the `base_footprint → base_link → sensor` part of the TF tree.
 
-## Overview
+**Status:** used on the robot, through `robot.launch.py`.
 
-This package defines the robot's physical structure, coordinate frames, and visual representation for RViz, Gazebo (future), and the TF tree used throughout the navigation stack.
-
----
-
-## Robot Geometry
-
-| Parameter | Value | Description |
-|-----------|-------|-------------|
-| **Wheel radius** | 50 mm | 100mm diameter mecanum wheels |
-| **Track width** | 360 mm | Left-to-right wheel center distance |
-| **Wheelbase** | 260 mm | Front-to-rear wheel center distance |
-| **Base dimensions** | 350 × 250 × 100 mm | Chassis footprint (L×W×H) |
-| **Mecanum pattern** | ABBA | A-type (+45°), B-type (-45°) rollers |
-
-### Mecanum Wheel Layout (ABBA)
-```
-          Front
-    FL (A)     FR (B)
-       ╲     ╱
-        ╲   ╱
-         ╲ ╱
-         ╱ ╲
-        ╱   ╲
-    BL (B)     BR (A)
-          
-    A-type: rollers at +45° (top-left to bottom-right)
-    B-type: rollers at -45° (top-right to bottom-left)
-```
-
----
-
-## TF Frame Tree
-
-```
-map (world frame)
-└── odom (odometry origin)
-    └── base_footprint (robot footprint on ground)
-        └── base_link (robot center, 100mm above ground)
-            ├── wheel_front_left_link
-            ├── wheel_back_left_link
-            ├── wheel_front_right_link
-            ├── wheel_back_right_link
-            ├── lidar_link (RPLidar A1, 200mm above base)
-            ├── imu_link (ICM-20948, at base_link)
-            └── camera_link (RealSense D435, 150mm above base)
-                ├── camera_color_frame → camera_color_optical_frame
-                └── camera_depth_frame → camera_depth_optical_frame
-```
-
-### Key Frame Definitions
-
-| Frame | Origin | Purpose |
-|-------|--------|---------|
-| `base_footprint` | Ground projection of robot center | Navigation reference frame |
-| `base_link` | Robot geometric center | Main robot body frame |
-| `lidar_link` | LiDAR sensor origin | Scan data frame_id |
-| `imu_link` | IMU chip location | IMU data frame_id |
-| `camera_link` | Camera mounting point | Camera data frame_id |
-
----
-
-## File Structure
-
-```
-orbibot_description/
-├── urdf/
-│   ├── orbibot.urdf.xacro          # Main robot model (includes all components)
-│   ├── orbibot_base.xacro          # Chassis and base geometry
-│   ├── orbibot_wheels.xacro        # 4 mecanum wheels with transmissions
-│   ├── orbibot_sensors.xacro       # LiDAR, IMU, Camera mounts
-│   └── materials.xacro             # Color/material definitions
-├── meshes/
-│   ├── wheel_mecanum_a.stl         # A-type wheel mesh (+45° rollers)
-│   ├── wheel_mecanum_b.stl         # B-type wheel mesh (-45° rollers)
-│   └── rplidar_a1.stl              # RPLidar A1 housing mesh
-├── launch/
-│   ├── description.launch.py       # Publish robot description + TF tree
-│   └── rviz.launch.py              # Launch RViz with saved config
-└── rviz/
-    └── orbibot.rviz                # Pre-configured RViz display
-```
-
----
-
-## Launch Usage
-
-### Publish Robot Description
-```bash
-# Standard launch (used by robot.launch.py)
-ros2 launch orbibot_description description.launch.py
-
-# Verify TF tree
-ros2 run tf2_tools view_frames  # Generates frames.pdf
-```
-
-### Visualize in RViz
-```bash
-# From robot (requires hardware running for joint states)
-ros2 launch orbibot_description rviz.launch.py
-
-# From fixed frame (no hardware needed)
-ros2 launch orbibot_description rviz.launch.py fixed_frame:=true
-```
-
-### Check URDF
-```bash
-# Validate URDF syntax
-check_urdf src/orbibot_description/urdf/orbibot.urdf.xacro
-
-# View URDF structure
-urdf_to_graphviz src/orbibot_description/urdf/orbibot.urdf.xacro
-```
-
----
-
-## Xacro Macros
-
-### Main Robot
-```xml
-<xacro:orbibot_base name="base" 
-                    wheel_radius="0.05"
-                    wheel_separation_x="0.26"
-                    wheel_separation_y="0.36"/>
-```
-
-### Mecanum Wheels
-```xml
-<xacro:wheel name="wheel_front_left" 
-             type="a" 
-             radius="0.05"
-             width="0.04"/>
-```
-
-### Sensors
-```xml
-<xacro:rplidar_a1 parent="base_link" 
-                  xyz="0.15 0 0.20" 
-                  rpy="0 0 0"/>
-
-<xacro:realsense_d435 parent="base_link"
-                      xyz="0.10 0 0.15"
-                      rpy="0 0 0"/>
-
-<xacro:imu_icm20948 parent="base_link"
-                    xyz="0 0 0.10"
-                    rpy="0 0 0"/>
-```
-
----
-
-## Joint Configuration
-
-| Joint | Type | Parent → Child | Axis | Limits |
-|-------|------|----------------|------|--------|
-| `wheel_front_left_joint` | continuous | base_link → wheel_front_left_link | Y axis | ±inf rad |
-| `wheel_back_left_joint` | continuous | base_link → wheel_back_left_link | Y axis | ±inf rad |
-| `wheel_front_right_joint` | continuous | base_link → wheel_front_right_link | Y axis | ±inf rad |
-| `wheel_back_right_joint` | continuous | base_link → wheel_back_right_link | Y axis | ±inf rad |
-
-**Note**: Joint states are published by `orbibot_hardware` at 50Hz. No `joint_state_publisher` is needed when hardware is running.
-
----
-
-## Sensor Mounting Positions
-
-### RPLidar A1
-- **Position**: Forward of center, 200mm above ground
-- **Orientation**: Z-up (standard)
-- **Topic**: `/scan` (frame_id: `lidar_link`)
-- **Parameters**: 360°, 10Hz, 0.15-8.0m range
-
-### ICM-20948 IMU
-- **Position**: Robot center, 100mm above ground
-- **Orientation**: X-forward, Y-left, Z-up (ENU convention)
-- **Topics**: `/imu/data_raw`, `/imu/mag` (frame_id: `imu_link`)
-
-### RealSense D435 (Optional)
-- **Position**: Forward of center, 150mm above ground
-- **Orientation**: X-forward (optical frame has Z-forward)
-- **Topics**: 
-  - `/camera/color/image_raw` (frame_id: `camera_color_optical_frame`)
-  - `/camera/depth/image_rect_raw` (frame_id: `camera_depth_optical_frame`)
-
----
-
-## Debugging
-
-### Verify TF Tree
-```bash
-# Echo a specific transform
-ros2 run tf2_ros tf2_echo odom base_footprint
-
-# Check all frames
-ros2 run tf2_tools view_frames
-
-# Monitor TF rate
-ros2 topic hz /tf  # Should be ~100Hz
-```
-
-### Common Issues
-
-| Issue | Cause | Solution |
-|-------|-------|----------|
-| `lidar_link` not in TF tree | Description not published | Launch `description.launch.py` |
-| Wheels not visible in RViz | No joint states | Hardware must be running, or use `fixed_frame:=true` |
-| Robot appears offset | Wrong fixed frame | Set RViz fixed frame to `odom` or `map` |
-| Camera image misaligned | Wrong optical frame | Use `camera_color_optical_frame` for image display |
-
----
-
-## Dependencies
+## Launch
 
 ```bash
-# Required packages
-sudo apt install ros-jazzy-robot-state-publisher
-sudo apt install ros-jazzy-joint-state-publisher  # Optional, for testing without hardware
-sudo apt install ros-jazzy-tf2-tools
+ros2 launch orbibot_description description.launch.py   # robot_state_publisher (robot.launch.py runs this)
+ros2 launch orbibot_description description.launch.py use_jsp:=true   # with joint_state_publisher, without the robot
+ros2 launch orbibot_description rviz.launch.py          # RViz with rviz/orbibot.rviz
 ```
 
----
+## Files
 
-## References
+| Path | What it is |
+|---|---|
+| `urdf/orbibot.urdf.xacro` | The whole model: base, wheels, LiDAR, camera, IMU |
+| `meshes/mechanical-wheel-FrontLeft-BackRight.stl` | Mecanum wheel mesh, used front-left and back-right |
+| `meshes/mechanical-wheel-FrontRight-BackLeft.stl` | Mecanum wheel mesh, used front-right and back-left |
+| `meshes/RPLidar-A1.stl` | The RPLIDAR A1 housing |
+| `rviz/orbibot.rviz`, `rviz/description.rviz` | RViz setups |
 
-- **URDF Tutorial**: http://wiki.ros.org/urdf/Tutorials
-- **Xacro Documentation**: http://wiki.ros.org/xacro
-- **TF2 Overview**: https://docs.ros.org/en/jazzy/Tutorials/Intermediate/Tf2/Introduction-To-Tf2.html
-- **Yahboom ROSMaster V3.0**: Robot dimensions and mounting points
+The model also keeps the Gazebo plugin and sensor blocks from an earlier
+simulation package. V1 has no simulation, and nothing uses them.
 
----
+## Dimensions
 
-**Last Updated**: 2026-02-24  
-**Maintainer**: Jewel Nath
+| | |
+|---|---|
+| Wheel radius | 50 mm (100 mm mecanum wheels) |
+| Wheelbase × track | 260 × 360 mm (front to back × left to right, wheel centres) |
+| Base box | 350 × 250 × 100 mm |
+| Mass | 6.0 kg (a model value, not a weighing) |
+
+## Frames
+
+```
+base_footprint                 on the floor, under the robot's centre
+└── base_link                  50 mm up, at the wheel axles
+    ├── wheel_front_left_link   ┐
+    ├── wheel_back_left_link    │ continuous joints,
+    ├── wheel_front_right_link  │ in the M1 to M4 order of the motor board
+    ├── wheel_back_right_link   ┘
+    ├── lidar_link             180 mm above base_link
+    ├── imu_link               20 mm above base_link
+    └── camera_link            at the front edge, 20 mm above base_link
+        ├── camera_color_frame → camera_color_optical_frame
+        └── camera_depth_frame → camera_depth_optical_frame
+```
+
+**The base frame is `base_footprint`, never `base_link`.** Every config in
+the workspace uses it. The full chain on the robot is
+`map → odom → base_footprint → base_link → sensors`: slam_toolbox or AMCL
+publish `map → odom`, and the EKF publishes `odom → base_footprint`.
+
+The right-hand wheels use a flipped frame, so their joint axis is `0 0 -1`.
+Front-left and back-right share one wheel mesh, and front-right and back-left
+the other, because a mecanum set has two mirrored roller directions.
+
+## Checking it
+
+```bash
+ros2 run tf2_ros tf2_echo odom base_footprint   # one transform
+ros2 run tf2_tools view_frames                  # the whole tree, as a PDF
+ros2 topic echo /joint_states --once            # the wheel joints
+```
+
+| Problem | Likely cause |
+|---|---|
+| The robot floats or sinks in RViz | RViz's fixed frame is `base_link`; use `odom` or `map` |
+| Wheels don't turn in RViz | `/joint_states` is missing: is `hardware_node` running? |
+| The camera image is rotated | Use `camera_color_optical_frame` for images |
+
+## Meshes
+
+Where the three STL meshes came from is not recorded: the wheel files were
+exported from CAD Exchanger, and the LiDAR file from Blender. If you know
+their source, please open an issue so it can be credited.

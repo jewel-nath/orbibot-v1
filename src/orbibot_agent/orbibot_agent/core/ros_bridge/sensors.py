@@ -1,6 +1,6 @@
 """Sensor data reading — battery, IMU, encoders, odometry, LiDAR, etc.
 
-Magnetometer support was removed 2026-04-28 — see firmware-changelog.md.
+Magnetometer support was removed 2026-04-28 — see CHANGELOG.md.
 """
 
 import logging

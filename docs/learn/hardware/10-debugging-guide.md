@@ -1,13 +1,3 @@
----
-title: "10 - Debugging Guide"
-type: learn
-area: hardware
-package: orbibot_hardware
-tags:
-  - learn
-  - hardware
----
-
 # 10 - Debugging Guide
 
 **Troubleshooting techniques for hardware issues**
@@ -441,7 +431,7 @@ ros2 topic hz /imu/data    # Should be ~50Hz
 If stuck:
 
 1. **Check this guide** - Most common issues covered here
-2. **Check hardware-issue.md** - Known bugs and workarounds
+2. **Check known-issues.md** - Known bugs and workarounds
 3. **Run diagnostic script** - comprehensive_diagnostic.py
 4. **Collect info:**
    ```bash
@@ -460,7 +450,7 @@ If stuck:
 
 Practice your skills:
 
-**→ Continue to:** [[11-practical-exercises]]
+**→ Continue to:** [11 - Practical Exercises](11-practical-exercises.md)
 
 ---
 

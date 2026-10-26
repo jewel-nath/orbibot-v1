@@ -50,6 +50,17 @@ in those environments.
 
 ---
 
+### [BUG] Nothing serves the built frontend
+
+`setup.py` installs `frontend/dist` into the package's share folder only if it
+was built before `colcon build`, and no launch file or node serves it. Serve it
+by hand: `python3 -m http.server 5173 --directory dist`.
+
+### [DEBT] `config/webgui_params.yaml` is never loaded
+
+`webgui.launch.py` sets the same ports and camera topic itself, so editing the
+YAML file changes nothing.
+
 ## Technical Debt
 
 ### [DEBT] No unit or integration tests

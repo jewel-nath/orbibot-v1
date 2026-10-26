@@ -1,18 +1,7 @@
----
-title: "Part 8: From Encoders to Distance"
-type: learn
-area: firmware
-package: orbibot_rosmaster_firmware
-duration: "20 minutes"
-tags:
-  - learn
-  - firmware
----
-
 # Part 8: From Encoders to Distance
 
 **Duration**: 20 minutes  
-**Prerequisites**: [[80-odometry-concept]]
+**Prerequisites**: [Part 8: What is Odometry?](80-odometry-concept.md)
 
 ---
 
@@ -322,7 +311,7 @@ void calculate_robot_velocity(float *vx, float *vy, float *omega)
 
 ## Next Lesson
 
-[[82-odometry-math]] - Mathematical derivation of position update
+[Part 8: Odometry Mathematics](82-odometry-math.md) - Mathematical derivation of position update
 
 ---
 

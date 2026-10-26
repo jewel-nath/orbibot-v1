@@ -1,13 +1,3 @@
----
-title: "OrbiBot Sensors Study Guide"
-type: learn
-area: sensors
-package: orbibot_sensors
-tags:
-  - learn
-  - sensors
----
-
 # OrbiBot Sensors Study Guide
 
 **LiDAR, camera, and obstacle detection**
@@ -44,13 +34,13 @@ By completing this guide, you will understand:
 
 | File | Topic | Time |
 |------|-------|------|
-| [[00-sensor-overview]] | Types of robot sensors | 10 min |
-| [[01-lidar-basics]] | RPLidar A1 operation | 25 min |
-| [[02-laserscan-message]] | LaserScan data structure | 20 min |
-| [[03-camera-basics]] | RealSense D435 | 25 min |
-| [[04-image-transport]] | Camera data in ROS2 | 20 min |
-| [[05-obstacle-detection]] | Safety system | 25 min |
-| [[06-device-setup]] | udev and permissions | 20 min |
+| [00 - Sensor Overview](00-sensor-overview.md) | Types of robot sensors | 10 min |
+| [01 - LiDAR Basics](01-lidar-basics.md) | RPLidar A1 operation | 25 min |
+| [02 - LaserScan Message](02-laserscan-message.md) | LaserScan data structure | 20 min |
+| [03 - Camera Basics](03-camera-basics.md) | RealSense D435 | 25 min |
+| [04 - Image Transport](04-image-transport.md) | Camera data in ROS2 | 20 min |
+| [05 - Obstacle Detection](05-obstacle-detection.md) | Safety system | 25 min |
+| [06 - Device Setup](06-device-setup.md) | udev and permissions | 20 min |
 
 ---
 
@@ -88,7 +78,7 @@ src/orbibot_sensors/
 
 ## Start Here
 
-**Begin with:** [[00-sensor-overview]]
+**Begin with:** [00 - Sensor Overview](00-sensor-overview.md)
 
 ---
 

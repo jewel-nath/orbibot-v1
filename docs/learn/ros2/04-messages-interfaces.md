@@ -1,12 +1,3 @@
----
-title: "04 - Messages and Interfaces"
-type: learn
-area: ros2
-tags:
-  - learn
-  - ros2
----
-
 # 04 - Messages and Interfaces
 
 **ROS2 data types and custom messages**
@@ -75,7 +66,7 @@ Build to generate Python code.
 
 ## 📖 Next Steps
 
-**→ Continue to:** [[05-services]]
+**→ Continue to:** [05 - Services](05-services.md)
 
 ---
 

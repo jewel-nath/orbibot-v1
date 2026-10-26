@@ -1,12 +1,3 @@
----
-title: "08 - Launch Files"
-type: learn
-area: ros2
-tags:
-  - learn
-  - ros2
----
-
 # 08 - Launch Files
 
 **Starting multiple nodes together**
@@ -151,7 +142,7 @@ ros2 launch --show-args orbibot_hardware hardware.launch.py
 
 Learn CLI tools:
 
-**→ Continue to:** [[12-cli-tools]]
+**→ Continue to:** [12 - CLI Tools](12-cli-tools.md)
 
 ---
 

@@ -1,86 +1,85 @@
 # orbibot_teleop
 
-Advanced teleoperation package for OrbiBot with full mecanum wheel control support.
+Gamepad driving for OrbiBot: a PlayStation controller on `/joy` becomes
+`/cmd_vel`, with mecanum movement modes, a dead-man trigger and speed gears.
 
-## Quick Start
+**Status:** written, and switched off. The robot was driven with a gamepad
+in 2025; since the web dashboard arrived, driving goes through the dashboard
+only (its on-screen controls and keyboard, sent over rosbridge). This package stays as a fallback that does not
+depend on the network. Until it is needed:
+
+- don't start `controller.launch.py`;
+- `rosdep install` pulls in `joy`, because `package.xml` depends on it. That
+  doesn't mean the package is in use.
+
+It publishes straight to `/cmd_vel`, so before it comes back it needs its
+own topic and a priority below the safety stop; see
+[the command pipeline design](../../docs/architecture/command-pipeline.md).
+
+## Launch
 
 ```bash
-# Gamepad control (PS4/PS5 DualSense)
-ros2 launch orbibot_teleop controller.launch.py
-
-# Keyboard control (alternative)
-ros2 launch orbibot_teleop controller.launch.py use_keyboard:=true
-
-# Custom device
+ros2 launch orbibot_teleop controller.launch.py                      # PS4 or PS5 controller
 ros2 launch orbibot_teleop controller.launch.py device:=/dev/input/js1
+ros2 launch orbibot_teleop controller.launch.py use_keyboard:=true   # keyboard instead
 ```
 
-## Features
+| Argument | Default |
+|---|---|
+| `device` | `/dev/input/js0` |
+| `max_linear_speed` | `0.3` (m/s) |
+| `max_angular_speed` | `1.0` (rad/s) |
+| `use_keyboard` | `false` (uses `teleop_twist_keyboard` in an xterm) |
 
-- Full mecanum control: forward/backward, strafe, rotation, diagonal, crab walk
-- 7 movement modes covering all holonomic capabilities
-- Safety: dead-man switch (R2), emergency stop, motor enable/disable
-- Multi-gear: speed (33%/66%/100%) and angular (25%/50%/75%/100%) gears
-- PS4/PS5 DualSense and keyboard support
+## Controls
 
-## Controller Mapping
+| Control | What it does |
+|---|---|
+| Left stick | Forward and back, and sideways |
+| Right stick, left and right | Turn |
+| R2 (hold) | Dead-man switch: the robot moves only while it is held |
+| L1 | Motors on or off (calls `/orbibot/set_motor_enable`) |
+| Triangle / X | Speed gear up or down: 33 %, 66 %, 100 % |
+| Square / Circle | Turning gear up or down: 25 %, 50 %, 75 %, 100 % |
+| Share | Emergency stop |
 
-**Sticks:**
-- Left Stick: Forward/back + strafe left/right (in NORMAL mode)
-- Right Stick X: Rotation
+### Movement modes
 
-**Buttons:**
-- R2: Hold to enable movement (dead-man switch)
-- L1: Toggle motor enable/disable
-- Triangle/X: Speed gear up/down
-- Square/Circle: Angular gear up/down
-- Share: Emergency stop
+A mecanum robot has three independent motions: forward (vx), sideways (vy)
+and turning (wz). The modes limit the sticks to one pattern at a time.
 
-**Movement Modes:**
-
-| Mode | Activation | Description |
-|------|------------|-------------|
-| NORMAL | D-pad UP | Full 3-DOF control |
-| STRAFE | D-pad RIGHT | Sideways movement only |
-| DIAGONAL | D-pad DOWN | 45-degree diagonal movements |
-| ROTATE | D-pad LEFT | Rotation in place only |
-| CRAB | R3 button | Rotate while strafing |
-| CIRCLE | L3 button | Drive in arcs (forward + turn) |
-| PIVOT_STRAFE | — | Strafe + rotate combined |
+| Mode | Select with | Motion |
+|---|---|---|
+| Normal | D-pad up | All three motions freely |
+| Strafe | D-pad right | Sideways only |
+| Diagonal | D-pad down | 45° diagonals |
+| Rotate | D-pad left | Turning on the spot only |
+| Crab | R3 | Sideways while turning |
+| Circle | L3 | Arcs: forward while turning |
 
 ## Topics
 
-**Published:**
-- `/cmd_vel` (Twist) — Velocity commands
-
-**Subscribed:**
-- `/joy` (Joy) — Joystick input
-
-**Services Called:**
-- `/orbibot/set_motor_enable` (SetMotorEnable) — Motor control
+| Topic | Type | Direction |
+|---|---|---|
+| `/joy` | `sensor_msgs/Joy` | in |
+| `/cmd_vel` | `geometry_msgs/Twist` | out |
 
 ## Configuration
 
-Edit `config/controller.yaml`:
+`config/controller.yaml`:
 
 ```yaml
 controller:
   ros__parameters:
-    max_linear_speed: 0.3      # m/s
-    max_angular_speed: 1.0     # rad/s
-    deadzone: 0.08             # Joystick deadzone
-    enable_motors_on_start: false
+    max_linear_speed: 0.3          # m/s
+    max_angular_speed: 1.0         # rad/s
+    deadzone: 0.08                 # stick dead zone
+    enable_motors_on_start: false  # turn the motors on with L1
 ```
 
-## Troubleshooting
+## If the robot doesn't move
 
-### Controller not detected
-```bash
-ls -l /dev/input/js*
-ros2 run joy joy_node
-```
-
-### Robot doesn't move
-1. Check motors are enabled (L1 button or service call)
-2. Hold R2 trigger (dead-man switch)
-3. Check battery voltage
+1. Check that the controller is seen: `ls -l /dev/input/js*`, then
+   `ros2 run joy joy_node` and `ros2 topic echo /joy`.
+2. Turn the motors on with L1, and hold R2 while you move the sticks.
+3. Check the battery voltage on `/orbibot/system_status`.

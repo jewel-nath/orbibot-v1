@@ -1,13 +1,3 @@
----
-title: "07 - Localization Launch"
-type: learn
-area: localization
-package: orbibot_localization
-tags:
-  - learn
-  - localization
----
-
 # 07 - Localization Launch
 
 **Running the sensor fusion stack**
@@ -56,7 +46,7 @@ ros2 topic echo /odometry/filtered --once
 | Issue | Cause | Solution |
 |-------|-------|----------|
 | No output | Missing inputs | Check /odom and /imu/* |
-| Yaw drifts | Magnetometer issue | Calibrate IMU |
+| Yaw drifts slowly | No absolute heading (no magnetometer) | Expected; SLAM or AMCL correct it through map → odom |
 | Jumpy position | Wheel slip | Increase rejection threshold |
 
 ---

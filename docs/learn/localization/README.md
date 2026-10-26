@@ -1,13 +1,3 @@
----
-title: "OrbiBot Localization Study Guide"
-type: learn
-area: localization
-package: orbibot_localization
-tags:
-  - learn
-  - localization
----
-
 # OrbiBot Localization Study Guide
 
 **Robot position estimation using sensor fusion**
@@ -33,7 +23,7 @@ tags:
 By completing this guide, you will understand:
 
 - **Odometry** - Position estimation from wheel encoders
-- **IMU data** - Orientation from accelerometer, gyroscope, magnetometer
+- **IMU data** - Orientation from the accelerometer and gyroscope
 - **Sensor fusion** - Combining multiple sensors for better accuracy
 - **EKF (Extended Kalman Filter)** - State estimation algorithm
 - **Madgwick filter** - IMU orientation fusion
@@ -45,14 +35,14 @@ By completing this guide, you will understand:
 
 | File | Topic | Time |
 |------|-------|------|
-| [[00-what-is-localization]] | Why estimate position? | 10 min |
-| [[01-odometry-basics]] | Wheel encoder odometry | 20 min |
-| [[02-imu-sensors]] | IMU: accel, gyro, mag | 25 min |
-| [[03-sensor-fusion-concept]] | Why fuse sensors? | 15 min |
-| [[04-madgwick-filter]] | Orientation fusion | 25 min |
-| [[05-ekf-basics]] | Kalman filtering | 30 min |
-| [[06-ekf-configuration]] | Tuning parameters | 25 min |
-| [[07-localization-launch]] | Running the stack | 15 min |
+| [00 - What is Localization?](00-what-is-localization.md) | Why estimate position? | 10 min |
+| [01 - Odometry Basics](01-odometry-basics.md) | Wheel encoder odometry | 20 min |
+| [02 - IMU Sensors](02-imu-sensors.md) | IMU: accel, gyro, and why no mag | 25 min |
+| [03 - Sensor Fusion Concept](03-sensor-fusion-concept.md) | Why fuse sensors? | 15 min |
+| [04 - Madgwick Filter](04-madgwick-filter.md) | Orientation fusion | 25 min |
+| [05 - EKF Basics](05-ekf-basics.md) | Kalman filtering | 30 min |
+| [06 - EKF Configuration](06-ekf-configuration.md) | Tuning parameters | 25 min |
+| [07 - Localization Launch](07-localization-launch.md) | Running the stack | 15 min |
 
 ---
 
@@ -82,14 +72,14 @@ src/orbibot_localization/
 │   └── localization.launch.py   ← Main launch file
 ├── config/
 │   └── ekf_params.yaml          ← EKF configuration
-└── localization-changelog.md    ← Version history
+└── CHANGELOG.md    ← Version history
 ```
 
 ---
 
 ## Start Here
 
-**Begin with:** [[00-what-is-localization]]
+**Begin with:** [00 - What is Localization?](00-what-is-localization.md)
 
 ---
 

@@ -1,18 +1,7 @@
----
-title: "Part 8: Odometry Errors and Drift"
-type: learn
-area: firmware
-package: orbibot_rosmaster_firmware
-duration: "20 minutes"
-tags:
-  - learn
-  - firmware
----
-
 # Part 8: Odometry Errors and Drift
 
 **Duration**: 20 minutes  
-**Prerequisites**: [[83-odometry-implementation]]
+**Prerequisites**: [Part 8: Odometry Implementation](83-odometry-implementation.md)
 
 ---
 
@@ -319,7 +308,7 @@ void on_localize_with_landmarks(float x, float y, float theta)
 
 ## Next Lesson
 
-[[90-project-structure]] - Complete project overview (or continue to Part 9)
+[Part 9: Project Structure](90-project-structure.md) - Complete project overview (or continue to Part 9)
 
 ---
 

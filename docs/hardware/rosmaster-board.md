@@ -1,12 +1,3 @@
----
-title: "ROSMaster V3.0 Board"
-type: hardware
-tags:
-  - hardware
-  - board
-  - stm32
----
-
 # OrbiBot Hardware Documentation
 
 Complete hardware specifications for the Yahboom ROSMaster V3.0 Expansion Board used in OrbiBot.
@@ -114,7 +105,8 @@ Filter: TIM_ICFILTER_10 (noise rejection)
 ### ICM-20948 Specifications
 - **Accelerometer**: ±2g, ±4g, ±8g, ±16g (±16g default)
 - **Gyroscope**: ±250, ±500, ±1000, ±2000 dps (±2000 dps default)
-- **Magnetometer**: AK09916 (auxiliary I2C, ±4900 µT)
+- **Magnetometer**: AK09916 (auxiliary I2C, ±4900 µT); not used by OrbiBot since 2026-04-28
+- **OrbiBot uses**: ±2 g and ±500 dps, gyro and accelerometer only
 - **FIFO**: 512 bytes
 - **Bank Switching**: 4 register banks (0-3) via REG_BANK_SEL
 
@@ -182,7 +174,7 @@ Additive sum truncated to 8 bits (not XOR).
 | 0x0A | REPORT_SPEED | TX | Motion speed (Vx, Vy, Vz) + battery |
 | 0x0C | REPORT_IMU_ATT | TX | IMU attitude (roll, pitch, yaw) |
 | 0x0D | REPORT_ENCODER | TX | Encoder counts (4 motors) |
-| 0x0B | REPORT_IMU_RAW | TX | Raw gyro/accel/mag data |
+| 0x0E | REPORT_ICM_RAW | TX | Raw gyro and accel data (12 bytes) |
 | 0x12 | MOTION | RX | 3D velocity command (Vx, Vy, Vz) |
 
 ---
@@ -393,7 +385,7 @@ Vy = (-ωFL + ωFR + ωRL - ωRR) × r / 4
 ### Flash Layout (256 KB total)
 - **Firmware**: 0x0800 0000 - 0x0803 F7FF (254 KB)
   - No bootloader offset — PlatformIO default linker starts at base
-- **Flash Storage**: 0x0803 F800 - 0x0803 FFFF (2 KB, last page — PID gains, mag cal)
+- **Flash Storage**: 0x0803 F800 - 0x0803 FFFF (2 KB, last page — PID gains)
 - **Current Usage**: 28.4 KB (10.9%) — measured 2026-08-02 with GCC 12.3
 
 ### RAM Layout (48 KB total)
@@ -425,14 +417,14 @@ Vy = (-ωFL + ωFR + ωRL - ωRR) × r / 4
 
 ### Datasheets
 - STM32F103RCT6: [STM32F103xC Datasheet](https://www.st.com/resource/en/datasheet/stm32f103rc.pdf)
-- ICM-20948: [9-Axis IMU Datasheet](https://invensense.tdk.com/products/motion-tracking/9-axis/icm-20948/)
+- ICM-20948: [product page and datasheet](https://www.invensense.tdk.com/en-us/products/9-axis/icm-20948)
 - AM2857: Dual H-Bridge Motor Driver
 - SN65HVD230: CAN Transceiver
 
 ### Related Documentation
-- [[firmware-architecture]] — firmware design and structure
-- [[orbibot_rosmaster_firmware]] — package hub note
-- [[components]] — the rest of the robot's hardware
+- [OrbiBot ROSMaster Firmware - Architecture Design](../../src/orbibot_rosmaster_firmware/firmware-architecture.md) — firmware design and structure
+- [orbibot_rosmaster_firmware](../../src/orbibot_rosmaster_firmware/README.md) — package hub note
+- [Hardware](README.md) — the rest of the robot's hardware
 - [orbibot_config.h](../../src/orbibot_rosmaster_firmware/include/orbibot_config.h) —
   robot-specific configuration values
 

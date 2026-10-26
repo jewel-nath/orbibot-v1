@@ -1,62 +1,52 @@
----
-title: "Package Index"
-type: moc
-tags:
-  - moc
-  - packages
----
+# Packages
 
-# Package Index
-
-Thirteen packages. Each one's `README.md` is the API reference — this page is
-the map, and the hub notes are the orientation.
+The workspace has 13 packages in `src/`: 12 ROS 2 packages built by colcon,
+and the STM32 firmware, which is a PlatformIO project (it carries a
+`COLCON_IGNORE`). Each package's `README.md` is its reference: topics,
+services, parameters and launch files.
 
 ## Layers
 
 ```
-orbibot_agent · orbibot_webgui              interfaces (AI, web)
+orbibot_agent · orbibot_webgui              interfaces: AI and web
 orbibot_navigation · orbibot_exploration    autonomy
 orbibot_slam · orbibot_localization         state estimation
-orbibot_sensors · orbibot_description       perception & model
-orbibot_hardware · orbibot_msgs             ROS 2 ↔ firmware bridge
-orbibot_rosmaster_firmware                  STM32, bare metal
-orbibot_bringup · orbibot_teleop            orchestration & manual control
+orbibot_sensors · orbibot_description       sensors and the robot model
+orbibot_hardware · orbibot_msgs             the bridge between ROS 2 and the firmware
+orbibot_rosmaster_firmware                  the STM32
+orbibot_bringup · orbibot_teleop            starting it all, and manual driving
 ```
 
 ## All packages
 
-| Package | Build | Owns | Hub note |
+| Package | Build | What it does | Status |
 |---|---|---|---|
-| `orbibot_rosmaster_firmware` | PlatformIO | Motor PID, encoders, IMU, odometry, serial protocol | [[orbibot_rosmaster_firmware]] |
-| `orbibot_hardware` | ament_python | Serial bridge → `/odom`, `/imu/*`, `/joint_states` | [[orbibot_hardware]] |
-| `orbibot_msgs` | ament_cmake | Custom messages and services | [[orbibot_msgs]] |
-| `orbibot_description` | ament_cmake | URDF/Xacro, meshes, RViz configs | [[orbibot_description]] |
-| `orbibot_sensors` | ament_python | RPLidar A1, RealSense D435, obstacle detector | [[orbibot_sensors]] |
-| `orbibot_localization` | ament_python | Madgwick + EKF → `odom → base_footprint` | [[orbibot_localization]] |
-| `orbibot_slam` | ament_python | slam_toolbox mapping and localization | [[orbibot_slam]] |
-| `orbibot_navigation` | ament_cmake | Nav2 params, launch, saved maps | [[orbibot_navigation]] |
-| `orbibot_exploration` | ament_python | BFS frontier explorer | [[orbibot_exploration]] |
-| `orbibot_teleop` | ament_python | Gamepad teleop — **dormant** | [[orbibot_teleop]] |
-| `orbibot_bringup` | ament_python | Cross-package launch orchestration | [[orbibot_bringup]] |
-| `orbibot_webgui` | ament_python | rosbridge + WebRTC backend, React frontend | [[orbibot_webgui]] |
-| `orbibot_agent` | ament_python | Multi-LLM agent, MCP server, CLI, 62 tools | [[orbibot_agent]] |
+| [orbibot_rosmaster_firmware](../src/orbibot_rosmaster_firmware/README.md) | PlatformIO | Motor PID, encoders, IMU, odometry, the serial protocol, the safety timeout | Runs on the robot; bench-tested |
+| [orbibot_hardware](../src/orbibot_hardware/README.md) | ament_python | Serial bridge: `/odom`, `/imu/*`, `/joint_states`, motor services | Used on the robot |
+| [orbibot_msgs](../src/orbibot_msgs/README.md) | ament_cmake | Custom messages and services | Used on the robot |
+| [orbibot_description](../src/orbibot_description/README.md) | ament_cmake | URDF/Xacro model, meshes, RViz setups | Used on the robot |
+| [orbibot_sensors](../src/orbibot_sensors/README.md) | ament_python | RPLIDAR A1, RealSense D435, obstacle detector | LiDAR used; camera off by default; detector untested |
+| [orbibot_localization](../src/orbibot_localization/README.md) | ament_python | Madgwick and the EKF: `odom → base_footprint` | Used on the robot; not tuned |
+| [orbibot_slam](../src/orbibot_slam/README.md) | ament_python | slam_toolbox mapping and localisation | Used on the robot |
+| [orbibot_navigation](../src/orbibot_navigation/README.md) | ament_cmake | Nav2 parameters, launch file, saved maps | Set up and run on the robot; not measured |
+| [orbibot_exploration](../src/orbibot_exploration/README.md) | ament_python | Frontier exploration on top of Nav2 | Written, untested |
+| [orbibot_bringup](../src/orbibot_bringup/README.md) | ament_python | The launch files that start several packages | Used on the robot |
+| [orbibot_webgui](../src/orbibot_webgui/README.md) | ament_python | rosbridge and WebRTC back end, React dashboard | Used on the robot |
+| [orbibot_agent](../src/orbibot_agent/README.md) | ament_python | LLM agent with 58 robot tools: HTTP chat, terminal CLI, MCP server | Runs on the robot |
+| [orbibot_teleop](../src/orbibot_teleop/README.md) | ament_python | Gamepad driving | Switched off |
 
-## Gone, and staying gone
+## Removed packages
 
 | Package | Removed | Why |
 |---|---|---|
-| `orbibot_gazebo` | 2026-08-03 | Claude Code runs on the Pi, which *is* the robot. Pulled 202 MB of `gz` onto a GPU-less machine. In history if it is ever needed on a laptop. |
-| `orbibot_ai`, `orbibot_mcp_server` | earlier | Replaced by `orbibot_agent`. Do not recreate. |
+| `orbibot_gazebo` | 2026-08-03 | V1 runs on the Raspberry Pi, which has no GPU for simulation; it pulled 202 MB of Gazebo onto it. It is in the git history. |
+| `orbibot_ai`, `orbibot_mcp_server` | before this repository | Replaced by `orbibot_agent`. |
 
-## Rules that apply to every package
+## Rules for every package
 
-- Read the hub note **and** `src/<pkg>/README.md` before editing; update both
-  **after** any change to functionality, API, launch, config or dependencies —
-  including deletions. See `.claude/rules/docs-sync.md`.
-- Each package launches only its own nodes. Cross-package composition belongs
-  in [[orbibot_bringup]].
-- Naming follows `.claude/rules/code-style.md`.
-
-## Related
-
-[[docs/README|Docs home]] · [[system-overview]] · [[backlog-moc]] · [[learn-moc]]
+- Each package launches only its own nodes. Launch files that start several
+  packages belong in `orbibot_bringup`.
+- When you change a package's behaviour, its API, launch files, config or
+  dependencies, update its `README.md` in the same change, and its
+  `CHANGELOG.md` and `known-issues.md` where they apply. See
+  [CONTRIBUTING.md](../CONTRIBUTING.md).

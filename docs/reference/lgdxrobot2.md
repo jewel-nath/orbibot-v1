@@ -1,10 +1,3 @@
----
-title: "LGDXRobot2"
-type: reference
-tags:
-  - reference
----
-
 # LGDXRobot2 — Reference Notes
 
 ## Robot Overview
@@ -14,11 +7,11 @@ It uses a mechanical (non-mecanum) wheel drive with a Raspberry Pi 5 and the sam
 JGB37-520 geared motors as OrbiBot. It's notable for its clean ROS 2 architecture, well-structured
 Nav2 multi-config parameter system, and production-quality autonomous navigation.
 
-**GitHub:** https://github.com/lgdxrobot/lgdxrobot2
+**Project site:** https://lgdxrobot.uk/ · **Code:**
+[ROS 2](https://github.com/yukaitung/lgdxrobot2-ros2), [MCU firmware](https://github.com/yukaitung/lgdxrobot2-mcu)
 **Why it's useful:** Best-in-class Nav2 parameter organization, EKF + IMU Madgwick fusion config,
 and clean bringup architecture. Its PID, odometry and IMU handling were compared
-against OrbiBot's in `improve-plan.md`; the webgui comparison is in
-[[lgdxrobot2-chassistuner]].
+against OrbiBot's; the webgui comparison is in [OrbiBot WebGUI vs LGDXRobot2 ChassisTuner](lgdxrobot2-chassistuner.md).
 
 ---
 

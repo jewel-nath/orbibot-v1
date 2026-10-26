@@ -1,6 +1,12 @@
 # OrbiBot Agent
 
-AI agent for OrbiBot — a Mecanum-wheeled ROS 2 mobile robot (Raspberry Pi 5 + Yahboom ROSMaster V3.0). Supports multiple LLM providers (Gemini, Claude, Kimi, Ollama) and exposes 62 robot tools through three interfaces: HTTP API, terminal CLI, and MCP server.
+AI agent for OrbiBot — a Mecanum-wheeled ROS 2 mobile robot (Raspberry Pi 5 + Yahboom ROSMaster V3.0). Supports multiple LLM providers (Gemini, Claude, Kimi, Ollama) and exposes 58 robot tools through three interfaces: HTTP API, terminal CLI, and MCP server.
+
+**Status:** runs on the robot; its chat server is what the web dashboard's chat panel talks to.
+It talks to ROS 2 through its own rclpy bridge (`core/ros_bridge/`), not through rosbridge.
+`core/ros_bridge/motion.py` publishes `/cmd_vel` directly, so the agent is one of four
+unarbitrated `/cmd_vel` sources; in the [command pipeline design](../../docs/architecture/command-pipeline.md)
+it gets its own topic at a priority below the dashboard, so a person can always override it.
 
 ## What This Package Does
 
@@ -18,7 +24,7 @@ AgentNode  ─── LLM Provider (Gemini / Claude / Kimi / Ollama)
   |          tool call decisions
   |                  |
   v                  v
-ToolRegistry (62 tools)
+ToolRegistry (58 tools)
   |
   v
 RosBridge (native rclpy)  ───>  ROS 2 topics, services, actions
@@ -36,7 +42,7 @@ SafetyManager (velocity/duration limits, e-stop)
 | **AgentNode** | Orchestrator — manages providers, tools, and message processing |
 | **RosBridge** | Native rclpy bridge to ROS 2 (pub/sub, services, actions) |
 | **SafetyManager** | Enforces velocity limits (0.5 m/s), duration caps (10s), e-stop |
-| **ToolRegistry** | Registers 62 tools with JSON schemas for LLM function calling |
+| **ToolRegistry** | Registers 58 tools with JSON schemas for LLM function calling |
 | **LLM Providers** | Pluggable backends — each handles chat history and streaming |
 
 ### Data Flow
@@ -62,7 +68,7 @@ SafetyManager (velocity/duration limits, e-stop)
 
 RosBridge (`core/ros_bridge/`) creates subscriptions and publishers on the host ROS node. It does **not** use rosbridge_suite or WebSocket — it's direct rclpy.
 
-**Subscribed topics:** `/odom`, `/imu/data`, `/imu/data_raw`, `/imu/mag`, `/scan`, `/orbibot/system_status`, `/orbibot/encoders`, `/joint_states`, etc.
+**Subscribed topics:** `/odom`, `/imu/data`, `/imu/data_raw`, `/scan`, `/orbibot/system_status`, `/orbibot/encoders`, `/joint_states`, etc.
 
 **Published topics:** `/cmd_vel` (velocity commands)
 
@@ -175,7 +181,7 @@ Validates and clamps velocity/duration before any motion command. Manages emerge
 
 ### `core/test_suite_runner.py` — Deterministic Tests
 
-Runs fixed, reproducible hardware test sequences using the tool registry directly (no LLM). Used by the `run_health_check` tool. Tests: battery, IMU, encoders, motors, magnetometer.
+Runs fixed, reproducible hardware test sequences using the tool registry directly (no LLM). Used by the `run_health_check` tool. Tests: battery, IMU, encoders, motors.
 
 ### `tools/` — Tool Definitions
 
@@ -185,10 +191,10 @@ Split into 7 focused modules:
 |--------|-------|
 | `tool_registry.py` | Thin dispatcher (register, get_schemas, execute) |
 | `motion_tools.py` | move, stop, motor enable, firmware reset (4) |
-| `sensor_tools.py` | battery, IMU, encoders, odometry, LiDAR (15) |
-| `firmware_tools.py` | PID set/save, beep, calibration, reset (9) |
-| `ros_tools.py` | topics, services, actions, generic publish (11) |
-| `navigation_tools.py` | SLAM, Nav2, AMCL, exploration (18) |
+| `sensor_tools.py` | battery, IMU, encoders, odometry, LiDAR (13) |
+| `firmware_tools.py` | PID set/save, beep, calibration, reset (7) |
+| `ros_tools.py` | topics, services, actions, generic publish (10) |
+| `navigation_tools.py` | SLAM, Nav2, AMCL, exploration (19) |
 | `diagnostics_tools.py` | run_health_check, record_timeseries, get_ros_diagnostics (3) |
 | `analysis_tools.py` | compare_values, compute_statistics (2) |
 
@@ -337,9 +343,9 @@ orbibot_agent/
 - **Single concurrent session** — the chat server uses a lock; only one chat request at a time
 - **No vision tools yet** — camera image capture and object detection are planned
 - **No persistent conversation** — chat history resets on server restart
-- **No unit tests** — test infrastructure needed (see `agent-issues.md`)
+- **No unit tests** — test infrastructure needed (see [known-issues.md](known-issues.md))
 - **Ollama tool calling** — depends on model support; not all local models handle function calling well
 
 ## License
 
-MIT
+Apache-2.0, as the rest of the repository.

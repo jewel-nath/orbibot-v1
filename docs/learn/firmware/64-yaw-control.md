@@ -1,18 +1,7 @@
----
-title: "Part 6: Yaw Control (Heading Control)"
-type: learn
-area: firmware
-package: orbibot_rosmaster_firmware
-duration: "25 minutes"
-tags:
-  - learn
-  - firmware
----
-
 # Part 6: Yaw Control (Heading Control)
 
 **Duration**: 25 minutes  
-**Prerequisites**: [[63-multi-level-pid]]
+**Prerequisites**: [Part 6: Multi-Level PID](63-multi-level-pid.md)
 
 ---
 
@@ -445,7 +434,7 @@ At this rate, it would take ~0.5s to reach target (assuming constant rate).
 
 ## Next Lesson
 
-[[02-imu-sensors]] - Introduction to IMU sensors
+[02 - IMU Sensors](../localization/02-imu-sensors.md) - Introduction to IMU sensors
 
 ---
 

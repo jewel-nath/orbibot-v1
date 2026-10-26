@@ -1,13 +1,3 @@
----
-title: "OrbiBot Firmware Study Guide (English Edition)"
-type: learn
-area: firmware
-package: orbibot_rosmaster_firmware
-tags:
-  - learn
-  - firmware
----
-
 # OrbiBot Firmware Study Guide (English Edition)
 
 **Complete Learning Path: From Zero to Embedded Systems Developer**
@@ -41,64 +31,64 @@ This comprehensive study guide will take you from complete beginner to proficien
 ### Part 0: Getting Started ✅
 | File | Topic | Duration | Status |
 |------|-------|----------|--------|
-| [[00-what-is-embedded]] | What is an Embedded System? | 15 min | ✅ |
-| [[01-microcontroller-basics]] | Microcontroller vs Microprocessor | 20 min | ✅ |
-| [[02-electronics-fundamentals]] | Voltage, Current, Digital Signals | 25 min | ✅ |
-| [[03-number-systems]] | Binary, Hexadecimal, Decimal | 20 min | ✅ |
-| [[04-memory-and-registers]] | Memory Types and Registers | 25 min | ✅ |
+| [Part 0: What is an Embedded System?](00-what-is-embedded.md) | What is an Embedded System? | 15 min | ✅ |
+| [Part 0: Microcontroller Basics](01-microcontroller-basics.md) | Microcontroller vs Microprocessor | 20 min | ✅ |
+| [Part 0: Electronics Fundamentals](02-electronics-fundamentals.md) | Voltage, Current, Digital Signals | 25 min | ✅ |
+| [Part 0: Number Systems](03-number-systems.md) | Binary, Hexadecimal, Decimal | 20 min | ✅ |
+| [Part 0: Memory and Registers](04-memory-and-registers.md) | Memory Types and Registers | 25 min | ✅ |
 
 ### Part 1: STM32 Hardware 📋
 | File | Topic | Duration | Status |
 |------|-------|----------|--------|
-| [[10-stm32-introduction]] | STM32F103RCT6 Overview | 20 min | ✅ |
+| [Part 1: STM32 Introduction](10-stm32-introduction.md) | STM32F103RCT6 Overview | 20 min | ✅ |
 
 *Note: GPIO, Timers, PWM details are embedded in other parts where used*
 
 ### Part 2: FreeRTOS ✅
 | File | Topic | Duration | Status |
 |------|-------|----------|--------|
-| [[20-what-is-rtos]] | What is a Real-Time OS? | 20 min | ✅ |
-| [[21-tasks-and-scheduler]] | Tasks and Scheduling | 30 min | ✅ |
-| [[22-inter-task-communication]] | Queues and Semaphores | 30 min | ✅ |
-| [[23-orbibot-task-architecture]] | OrbiBot's 4-Task Design | 25 min | ✅ |
+| [Part 2: What is a Real-Time Operating System?](20-what-is-rtos.md) | What is a Real-Time OS? | 20 min | ✅ |
+| [Part 2: Tasks and Scheduler](21-tasks-and-scheduler.md) | Tasks and Scheduling | 30 min | ✅ |
+| [Part 2: Inter-Task Communication](22-inter-task-communication.md) | Queues and Semaphores | 30 min | ✅ |
+| [Part 2: OrbiBot Task Architecture](23-orbibot-task-architecture.md) | OrbiBot's 4-Task Design | 25 min | ✅ |
 
 ### Part 3: Communication Protocol ✅
 | File | Topic | Duration | Status |
 |------|-------|----------|--------|
-| [[30-serial-protocol-basics]] | Serial Communication | 20 min | ✅ |
-| [[31-packet-structure]] | Packet Format and Checksum | 25 min | ✅ |
-| [[32-command-handlers]] | Command Processing | 30 min | ✅ |
-| [[33-auto-reporting]] | Data Streaming | 20 min | ✅ |
+| [Part 3: Serial Communication Protocol](30-serial-protocol-basics.md) | Serial Communication | 20 min | ✅ |
+| [Part 3: Packet Structure](31-packet-structure.md) | Packet Format and Checksum | 25 min | ✅ |
+| [Part 3: Command Handlers](32-command-handlers.md) | Command Processing | 30 min | ✅ |
+| [Part 3: Auto-Reporting](33-auto-reporting.md) | Data Streaming | 20 min | ✅ |
 
 ### Part 5: Mecanum Kinematics ✅
 | File | Topic | Duration | Status |
 |------|-------|----------|--------|
-| [[50-mecanum-wheel-theory]] | How Mecanum Wheels Work | 30 min | ✅ |
-| [[51-inverse-kinematics]] | Robot to Wheel Velocities | 35 min | ✅ |
-| [[52-forward-kinematics]] | Wheels to Robot Velocity | 30 min | ✅ |
+| [Part 5: Mecanum Wheel Theory](50-mecanum-wheel-theory.md) | How Mecanum Wheels Work | 30 min | ✅ |
+| [Part 5: Inverse Kinematics](51-inverse-kinematics.md) | Robot to Wheel Velocities | 35 min | ✅ |
+| [Part 5: Forward Kinematics](52-forward-kinematics.md) | Wheels to Robot Velocity | 30 min | ✅ |
 
 ### Part 6: Control Theory ✅
 | File | Topic | Duration | Status |
 |------|-------|----------|--------|
-| [[60-pid-controllers]] | PID Control Theory | 35 min | ✅ |
-| [[61-pid-tuning]] | PID Tuning Methods | 30 min | ✅ |
-| [[62-pid-implementation]] | PID in Firmware | 25 min | ✅ |
-| [[63-multi-level-pid]] | Speed-Dependent Gains | 20 min | ✅ |
-| [[64-yaw-control]] | Heading Control | 25 min | ✅ |
+| [Part 6: PID Controllers](60-pid-controllers.md) | PID Control Theory | 35 min | ✅ |
+| [Part 6: PID Tuning Methods](61-pid-tuning.md) | PID Tuning Methods | 30 min | ✅ |
+| [Part 6: PID Implementation in Firmware](62-pid-implementation.md) | PID in Firmware | 25 min | ✅ |
+| [Part 6: Multi-Level PID](63-multi-level-pid.md) | Speed-Dependent Gains | 20 min | ✅ |
+| [Part 6: Yaw Control (Heading Control)](64-yaw-control.md) | Heading Control | 25 min | ✅ |
 
 ### Part 8: Odometry ✅
 | File | Topic | Duration | Status |
 |------|-------|----------|--------|
-| [[80-odometry-concept]] | What is Odometry? | 20 min | ✅ |
-| [[81-encoder-to-distance]] | Encoder Count to Distance | 25 min | ✅ |
-| [[82-odometry-math]] | Position Integration Math | 30 min | ✅ |
-| [[83-odometry-implementation]] | Firmware Implementation | 25 min | ✅ |
-| [[84-odometry-errors]] | Error Handling | 20 min | ✅ |
+| [Part 8: What is Odometry?](80-odometry-concept.md) | What is Odometry? | 20 min | ✅ |
+| [Part 8: From Encoders to Distance](81-encoder-to-distance.md) | Encoder Count to Distance | 25 min | ✅ |
+| [Part 8: Odometry Mathematics](82-odometry-math.md) | Position Integration Math | 30 min | ✅ |
+| [Part 8: Odometry Implementation](83-odometry-implementation.md) | Firmware Implementation | 25 min | ✅ |
+| [Part 8: Odometry Errors and Drift](84-odometry-errors.md) | Error Handling | 20 min | ✅ |
 
 ### Part 9: Project Overview 📋
 | File | Topic | Duration | Status |
 |------|-------|----------|--------|
-| [[90-project-structure]] | Directory Layout | 15 min | ✅ |
+| [Part 9: Project Structure](90-project-structure.md) | Directory Layout | 15 min | ✅ |
 
 ---
 
@@ -244,17 +234,17 @@ A learner completing this guide will understand:
 
 ## Additional Resources
 
-- [[orbibot_rosmaster_firmware]] — package hub note: build, flash, test, open items
-- [[firmware-architecture]] — task design, control flow, memory budget
-- [[rosmaster-board]] — pinout, timers, peripherals, power rails
-- [[backlog-moc]] — open firmware findings
+- [orbibot_rosmaster_firmware](../../../src/orbibot_rosmaster_firmware/README.md) — package hub note: build, flash, test, open items
+- [OrbiBot ROSMaster Firmware - Architecture Design](../../../src/orbibot_rosmaster_firmware/firmware-architecture.md) — task design, control flow, memory budget
+- [OrbiBot Hardware Documentation](../../hardware/rosmaster-board.md) — pinout, timers, peripherals, power rails
+- [Status](../../status.md) — open firmware findings
 - Firmware source: [src/orbibot_rosmaster_firmware/](../../../src/orbibot_rosmaster_firmware/)
 
 ---
 
 ## Let's Begin!
 
-**Start here**: [[00-what-is-embedded]]
+**Start here**: [Part 0: What is an Embedded System?](00-what-is-embedded.md)
 
 Or jump to a specific topic using the index above.
 

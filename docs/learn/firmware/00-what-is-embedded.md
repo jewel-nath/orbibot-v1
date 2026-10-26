@@ -1,14 +1,3 @@
----
-title: "Part 0: What is an Embedded System?"
-type: learn
-area: firmware
-package: orbibot_rosmaster_firmware
-duration: "15 minutes"
-tags:
-  - learn
-  - firmware
----
-
 # Part 0: What is an Embedded System?
 
 **Duration**: 15 minutes  
@@ -185,7 +174,7 @@ Look around your room. Which devices contain embedded systems?
 
 ## Next Lesson
 
-[[01-microcontroller-basics]] - Learn about microcontrollers vs microprocessors
+[Part 0: Microcontroller Basics](01-microcontroller-basics.md) - Learn about microcontrollers vs microprocessors
 
 ---
 

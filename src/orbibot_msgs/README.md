@@ -1,25 +1,36 @@
 # orbibot_msgs
 
-Custom ROS 2 message and service definitions for OrbiBot.
+OrbiBot's own message and service definitions. The set is small on purpose:
+standard ROS 2 types are used wherever they fit.
+
+**Status:** used on the robot, by `orbibot_hardware` and the agent.
 
 ## Messages
 
-| Message | Description | Status |
-|---------|-------------|--------|
-| `SystemStatus` | Battery voltage, motor enable state, hardware health | Active — used by hardware_node, system_monitor |
-| `SafetyStatus` | Emergency stop, timeouts, faults, velocity limit flag | Active — used by hardware_node, control_manager |
-| `WheelSpeeds` | Individual mecanum wheel speeds (m/s) | Reserved for future use |
-| `MotorFeedback` | Encoder counts, positions, velocities, motor status | Reserved for future use |
+| Message | What it carries | Used by |
+|---|---|---|
+| `SystemStatus` | Battery voltage, motor enable state, hardware health | `hardware_node` and `system_monitor` publish it; the agent reads it |
+| `SafetyStatus` | Emergency stop, timeouts, faults, the velocity-limit flag | `hardware_node` publishes it; the agent reads it |
+| `WheelSpeeds` | The four mecanum wheel speeds (m/s) | Defined, not used yet |
+| `MotorFeedback` | Encoder counts, positions, velocities, motor status | Defined, not used yet |
 
 ## Services
 
-| Service | Description | Status |
-|---------|-------------|--------|
-| `SetMotorEnable` | Enable or disable motors | Active — hardware_node server |
-| `ResetOdometry` | Reset odometry to zero or a given pose | Active — control_manager server |
-| `CalibrateIMU` | Run IMU calibration for a specified duration | Placeholder |
+All five are served by `hardware_node` in
+[orbibot_hardware](../orbibot_hardware/README.md).
+
+| Service | What it does |
+|---|---|
+| `SetMotorEnable` | Turns the motors on or off |
+| `ResetOdometry` | Resets the odometry to zero or to a given pose |
+| `ResetEncoders` | Sets the encoder counts back to zero |
+| `CalibrateIMU` | Runs an IMU calibration for a given time |
+| `GetFirmwareVersion` | Asks the STM32 for its firmware version |
+
+`SetMagCalibration` was removed on 2026-04-28 with the rest of the
+magnetometer code.
 
 ## Dependencies
 
-- `std_msgs` — Header timestamps
-- `geometry_msgs` — Pose type for odometry reset
+`std_msgs` (header timestamps) and `geometry_msgs` (the pose for
+`ResetOdometry`).

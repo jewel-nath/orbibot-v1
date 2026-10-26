@@ -41,9 +41,9 @@ setup(
     ],
     zip_safe=True,
     maintainer='Jewel Nath',
-    maintainer_email='jewel.nath@orbitax.com',
+    maintainer_email='58494211+jewel-nath@users.noreply.github.com',
     description='Web-based dashboard for OrbiBot monitoring and control',
-    license='MIT',
+    license='Apache-2.0',
     extras_require={
         'test': [
             'pytest',

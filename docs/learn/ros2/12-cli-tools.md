@@ -1,12 +1,3 @@
----
-title: "12 - CLI Tools"
-type: learn
-area: ros2
-tags:
-  - learn
-  - ros2
----
-
 # 12 - CLI Tools
 
 **Command line tools for ROS2 debugging**
@@ -174,7 +165,7 @@ ros2 launch --show-args hardware hardware.launch.py
 
 Practice with your robot!
 
-**Or review:** [[03-topics-pub-sub]] for topic details
+**Or review:** [03 - Topics and Pub/Sub](03-topics-pub-sub.md) for topic details
 
 ---
 

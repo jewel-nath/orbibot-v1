@@ -10,7 +10,8 @@ echo ""
 read -p "Press Enter to start (Ctrl+C to cancel)..."
 
 # Check if test script exists
-TEST_SCRIPT="src/orbibot_rosmaster_firmware/tests/test_motor_direction.py"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+TEST_SCRIPT="$ROOT/src/orbibot_rosmaster_firmware/tests/test_motor_direction.py"
 
 if [ ! -f "$TEST_SCRIPT" ]; then
     echo "Error: Motor test script not found"

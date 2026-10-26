@@ -1,13 +1,3 @@
----
-title: "01 - URDF Basics"
-type: learn
-area: description
-package: orbibot_description
-tags:
-  - learn
-  - description
----
-
 # 01 - URDF Basics
 
 **Links, joints, and geometry**
@@ -104,7 +94,7 @@ rpy = rotation (radians)
 
 Learn Xacro macros:
 
-**→ Continue to:** [[02-xacro-macros]]
+**→ Continue to:** [02 - Xacro Macros](02-xacro-macros.md)
 
 ---
 

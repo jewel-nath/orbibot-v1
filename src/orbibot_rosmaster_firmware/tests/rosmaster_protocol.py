@@ -65,7 +65,7 @@ class IMURawData:
     """Parsed raw IMU data (ICM-20948).
 
     Firmware sends 12 bytes: [Gyro X,Y,Z][Accel X,Y,Z], each as int16 LE.
-    Magnetometer fields were removed 2026-04-28 — see firmware-changelog.md.
+    Magnetometer fields were removed 2026-04-28 — see CHANGELOG.md.
     """
     gyro_x: int
     gyro_y: int

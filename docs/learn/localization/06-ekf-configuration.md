@@ -1,13 +1,3 @@
----
-title: "06 - EKF Configuration"
-type: learn
-area: localization
-package: orbibot_localization
-tags:
-  - learn
-  - localization
----
-
 # 06 - EKF Configuration
 
 **Tuning robot_localization**
@@ -86,7 +76,7 @@ ekf_filter_node:
 
 Learn to launch:
 
-**→ Continue to:** [[07-localization-launch]]
+**→ Continue to:** [07 - Localization Launch](07-localization-launch.md)
 
 ---
 

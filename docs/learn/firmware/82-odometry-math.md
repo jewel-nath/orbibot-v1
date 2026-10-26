@@ -1,18 +1,7 @@
----
-title: "Part 8: Odometry Mathematics"
-type: learn
-area: firmware
-package: orbibot_rosmaster_firmware
-duration: "25 minutes"
-tags:
-  - learn
-  - firmware
----
-
 # Part 8: Odometry Mathematics
 
 **Duration**: 25 minutes  
-**Prerequisites**: [[81-encoder-to-distance]]
+**Prerequisites**: [Part 8: From Encoders to Distance](81-encoder-to-distance.md)
 
 ---
 
@@ -362,7 +351,7 @@ OrbiBot uses simple Euler (sufficient at 100Hz).
 
 ## Next Lesson
 
-[[83-odometry-implementation]] - Firmware implementation details
+[Part 8: Odometry Implementation](83-odometry-implementation.md) - Firmware implementation details
 
 ---
 

@@ -1,18 +1,7 @@
----
-title: "Part 3: Packet Structure"
-type: learn
-area: firmware
-package: orbibot_rosmaster_firmware
-duration: "25 minutes"
-tags:
-  - learn
-  - firmware
----
-
 # Part 3: Packet Structure
 
 **Duration**: 25 minutes  
-**Prerequisites**: [[30-serial-protocol-basics]]
+**Prerequisites**: [Part 3: Serial Communication Protocol](30-serial-protocol-basics.md)
 
 ---
 
@@ -122,7 +111,6 @@ Let me just use: Length field = (Total bytes - 2) as that's what the code shows.
 | 0x12 | MOTION | 7 | Set robot velocity |
 | 0x13 | SET_MOTOR_PID | 7 | Update motor PID gains |
 | 0x14 | SET_YAW_PID | 7 | Update yaw PID gains |
-| 0x16 | SET_MAG_CAL | 6 | Set magnetometer calibration |
 | 0x18 | SET_PID_MULTILEVEL | 25 | Set multi-level PID params |
 | 0x51 | VERSION | 0 | Request firmware version |
 
@@ -404,7 +392,7 @@ void encode_int32(int32_t value, uint8_t *bytes) {
 
 ## Next Lesson
 
-[[32-command-handlers]] - How firmware processes commands
+[Part 3: Command Handlers](32-command-handlers.md) - How firmware processes commands
 
 ---
 

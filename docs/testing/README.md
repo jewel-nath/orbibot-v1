@@ -1,8 +1,11 @@
-# OrbiBot Comprehensive Testing Guide
+# Testing guide
 
-**Version**: 1.0  
-**Last Updated**: 2026-03-02  
-**Purpose**: Step-by-step testing procedures for all OrbiBot subsystems
+Step-by-step test procedures for each part of OrbiBot V1, from the firmware up
+to localisation, with what each step should show. Written on 2026-03-02 and
+updated since. What has actually been tested, and when, is in
+[the status page](../status.md) and the
+[firmware test report](../../src/orbibot_rosmaster_firmware/test-report.md).
+An older baseline run is in [2026-03-14-baseline.md](2026-03-14-baseline.md).
 
 ---
 
@@ -25,7 +28,7 @@
 - OrbiBot robot with charged 4S LiFePO4 battery (12.8V nominal)
 - USB-C cable for STM32 programming
 - Micro-USB cable for serial monitoring
-- Computer with Ubuntu 22.04+ and ROS 2 Jazzy
+- Raspberry Pi 5 with Ubuntu 24.04 and ROS 2 Jazzy (see [getting started](../getting-started.md))
 
 ### Software Requirements
 
@@ -34,7 +37,8 @@
 source /opt/ros/jazzy/setup.bash
 
 # PlatformIO for firmware
-pip install platformio
+curl -fsSL -o get-platformio.py https://raw.githubusercontent.com/platformio/platformio-core-installer/master/get-platformio.py
+python3 get-platformio.py   # installs ~/.platformio/penv
 
 # OrbiBot workspace built
 cd ~/orbibot_ws
@@ -66,20 +70,19 @@ cd src/orbibot_rosmaster_firmware
 
 # Expected output:
 # RAM:   [====      ]  ~40% (used ~19,560 bytes from 49,152 bytes)
-# Flash: [==        ]  ~15% (used ~38,000 bytes from 262,144 bytes)
+# Flash: [=         ]  ~11% (28.4 KB of 256 KB, measured 2026-08-02)
 ```
 
 **Upload Procedure:**
 
 1. Set BOOT0 jumper to HIGH (connect to 3.3V)
-2. \
-3. Press RESET button on ROSMaster board
-4. Run upload command:
+2. Press RESET button on ROSMaster board
+3. Run upload command:
   ```bash
    ~/.platformio/penv/bin/pio run --target upload
   ```
-5. Set BOOT0 jumper to LOW (connect to GND)
-6. Press RESET button again
+4. Set BOOT0 jumper to LOW (connect to GND)
+5. Press RESET button again
 
 ### 1.2 Serial Communication Test
 
@@ -174,7 +177,6 @@ ros2 launch orbibot_hardware hardware.launch.py
 
 ros2 topic hz /odom                          # Expected: ~20 Hz
 ros2 topic hz /imu/data_raw                  # Expected: ~50 Hz
-ros2 topic hz /imu/mag                       # Expected: ~50 Hz
 ros2 topic hz /orbibot/encoders              # Expected: ~50 Hz
 ros2 topic hz /joint_states                  # Expected: ~50 Hz
 ros2 topic hz /orbibot/system_status         # Expected: ~10 Hz
@@ -251,50 +253,43 @@ Verify data flows correctly through the stack:
 
 ## Phase 3: PID Tuning & Calibration
 
-### 3.1 Understanding OrbiBot PID Architecture
+### 3.1 OrbiBot's PID
 
-**Multi-Level Incremental PID System:**
+- One incremental PID per wheel, with the same gains for all four wheels
+- 100 Hz in the firmware
+- A separate yaw PID for holding the heading while turning
 
-- 3 speed levels with different PID gains
-- Interpolation between levels based on current wheel speed
-- 100Hz update rate in firmware
+The firmware once had three speed levels with their own gains; that was
+removed, and the gains are now one set.
 
-### 3.2 Current Default PID Values
+### 3.2 Default gains
 
 ```c
-// From orbibot_config.h (firmware)
-#define PID_KP_LEVEL0  0.8f   // Low speed:    0-100 mm/s
-#define PID_KI_LEVEL0  0.06f
-#define PID_KD_LEVEL0  0.5f
+// src/orbibot_rosmaster_firmware/include/orbibot_config.h
+#define PID_KP      0.8f
+#define PID_KI      0.06f
+#define PID_KD      0.5f
 
-#define PID_KP_LEVEL1  0.8f   // Medium speed: 100-300 mm/s
-#define PID_KI_LEVEL1  0.06f
-#define PID_KD_LEVEL1  0.5f
-
-#define PID_KP_LEVEL2  0.8f   // High speed:   300+ mm/s
-#define PID_KI_LEVEL2  0.06f
-#define PID_KD_LEVEL2  0.5f
+#define YAW_PID_KP  0.4f
+#define YAW_PID_KI  0.0f
+#define YAW_PID_KD  0.1f
 ```
 
-### 3.3 PID Tuning via ROS 2 Topics
+### 3.3 PID tuning through ROS 2 topics
 
-**Temporary tuning (RAM only, lost on reboot):**
+**Try gains (kept in RAM, lost on reboot):**
 
 ```bash
-# Format: [t0, t1, t2, kp0, ki0, kd0, kp1, ki1, kd1, kp2, ki2, kd2]
-# t0, t1, t2 = speed thresholds in mm/s
-# kp, ki, kd = gains for each level
-
-ros2 topic pub --once /orbibot/pid_multilevel std_msgs/msg/Float32MultiArray \
-  "data: [100.0, 300.0, 600.0, 0.8, 0.06, 0.5, 0.8, 0.06, 0.5, 0.8, 0.06, 0.5]"
+ros2 topic pub --once /orbibot/pid_params std_msgs/msg/Float32MultiArray "data: [0.8, 0.06, 0.5]"
 ```
 
-**Save to flash (persistent):**
+**Save them to flash:**
 
 ```bash
-ros2 topic pub --once /orbibot/pid_save std_msgs/msg/Float32MultiArray \
-  "data: [100.0, 300.0, 600.0, 0.8, 0.06, 0.5, 0.8, 0.06, 0.5, 0.8, 0.06, 0.5]"
+ros2 topic pub --once /orbibot/pid_save std_msgs/msg/Float32MultiArray "data: [0.8, 0.06, 0.5]"
 ```
+
+Keeping the gains in flash across a reboot has not been tested yet.
 
 ### 3.4 Systematic PID Tuning Procedure
 
@@ -465,7 +460,7 @@ Open browser to `http://localhost:5173` and verify:
 ### 4.4 WebGUI PID Tuning via UI
 
 1. Navigate to PID Tuning panel
-2. Modify Level 0 Kp: 0.8 → 1.0
+2. Change Kp: 0.8 → 1.0
 3. Click **Apply**
 4. Test robot motion → Should be more responsive
 5. If oscillation occurs, reduce Kp
@@ -494,7 +489,6 @@ ros2 topic list | grep -E "(imu|odometry|ekf)"
 # Expected:
 # /imu/data_filtered
 # /imu/data_raw
-# /imu/mag
 # /odometry/filtered
 ```
 
@@ -662,10 +656,8 @@ ros2 service call /orbibot/set_motor_enable orbibot_msgs/srv/SetMotorEnable '{en
 ros2 topic pub --once /cmd_vel geometry_msgs/msg/Twist "linear: {x: 0.2}, angular: {z: 0.0}"
 
 # PID tuning
-ros2 topic pub --once /orbibot/pid_multilevel std_msgs/msg/Float32MultiArray \
-  "data: [100.0, 300.0, 600.0, 0.8, 0.06, 0.5, 0.8, 0.06, 0.5, 0.8, 0.06, 0.5]"
-ros2 topic pub --once /orbibot/pid_save std_msgs/msg/Float32MultiArray \
-  "data: [100.0, 300.0, 600.0, 0.8, 0.06, 0.5, 0.8, 0.06, 0.5, 0.8, 0.06, 0.5]"
+ros2 topic pub --once /orbibot/pid_params std_msgs/msg/Float32MultiArray "data: [0.8, 0.06, 0.5]"
+ros2 topic pub --once /orbibot/pid_save std_msgs/msg/Float32MultiArray "data: [0.8, 0.06, 0.5]"
 
 # Reset and diagnostics
 ros2 service call /orbibot/reset_odometry std_srvs/srv/Empty

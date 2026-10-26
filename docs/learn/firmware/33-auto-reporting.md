@@ -1,18 +1,9 @@
----
-title: "Part 3: Auto-Reporting"
-type: learn
-area: firmware
-package: orbibot_rosmaster_firmware
-duration: "20 minutes"
-tags:
-  - learn
-  - firmware
----
-
 # Part 3: Auto-Reporting
 
+> **Note:** this lesson was written before 2026-04-28, when OrbiBot stopped using the ICM-20948's magnetometer. The 0x0E report below still carries magnetometer bytes. Today the IMU sends gyro and accelerometer only, in a 12-byte packet, and the yaw comes from the gyro alone.
+
 **Duration**: 20 minutes  
-**Prerequisites**: [[32-command-handlers]]
+**Prerequisites**: [Part 3: Command Handlers](32-command-handlers.md)
 
 ---
 
@@ -470,7 +461,7 @@ void parse_speed_report(uint8_t *packet)
 
 ## Next Lesson
 
-[[09-tf2-transforms]] - Frames and coordinate conventions
+[09 - TF2 Transforms](../ros2/09-tf2-transforms.md) - Frames and coordinate conventions
 
 ---
 

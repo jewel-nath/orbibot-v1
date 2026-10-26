@@ -1,18 +1,7 @@
----
-title: "Part 9: Project Structure"
-type: learn
-area: firmware
-package: orbibot_rosmaster_firmware
-duration: "15 minutes"
-tags:
-  - learn
-  - firmware
----
-
 # Part 9: Project Structure
 
 **Duration**: 15 minutes  
-**Prerequisites**: [[60-pid-controllers]]
+**Prerequisites**: [Part 6: PID Controllers](60-pid-controllers.md)
 
 ---
 
@@ -77,7 +66,7 @@ orbibot_rosmaster_firmware/
 ├── platformio.ini              # Build configuration
 ├── README.md                   # Documentation
 ├── firmware-architecture.md    # Architecture details
-└── firmware-issue.md           # Known issues
+└── known-issues.md           # Known issues
 ```
 
 ---
@@ -412,7 +401,7 @@ void task_monitoring(void *params) {
 
 ## Next Lesson
 
-[[23-orbibot-task-architecture]] - How `main.c` hands control to the FreeRTOS tasks
+[Part 2: OrbiBot Task Architecture](23-orbibot-task-architecture.md) - How `main.c` hands control to the FreeRTOS tasks
 
 ---
 

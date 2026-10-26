@@ -11,24 +11,25 @@ before commanding motion or flashing firmware.
 
 ## Find things
 
-Documentation sits **beside the code it describes**. `docs/` holds only what has
-nowhere else to live — why the system is shaped this way, what is planned, what
-was measured, and how to learn it. Start at [docs/README.md](docs/README.md).
+Start at [README.md](README.md) for what the robot is, and
+[docs/README.md](docs/README.md) for the documentation map. Documentation sits
+**beside the code it describes**; `docs/` holds what belongs to the robot as a
+whole.
 
 | Looking for | Read |
 |---|---|
-| **What to build next** | [docs/plan/roadmap.md](docs/plan/roadmap.md) — phases and gates |
-| **What is broken** | `src/<pkg>/<pkg>-issue.md`; [docs/moc/backlog-moc.md](docs/moc/backlog-moc.md) maps them |
-| A package's API | `src/<pkg>/README.md` |
-| A package's orientation and open items | `docs/packages/<pkg>.md` |
+| **What works, what was tested, what is wrong** | [docs/status.md](docs/status.md) |
+| **What is broken in a package** | `src/<pkg>/known-issues.md` |
+| A package's API and status | `src/<pkg>/README.md`; the list is [docs/packages.md](docs/packages.md) |
 | How the system fits together | [docs/architecture/system-overview.md](docs/architecture/system-overview.md) |
 | Who is allowed to drive the robot | [docs/architecture/command-pipeline.md](docs/architecture/command-pipeline.md) |
 | Dashboard architecture and CPU budget | [docs/architecture/dashboard-design.md](docs/architecture/dashboard-design.md) |
 | Board pinout, timers, peripherals | [docs/hardware/rosmaster-board.md](docs/hardware/rosmaster-board.md) |
-| What hardware is actually fitted | [docs/hardware/inventory.md](docs/hardware/inventory.md) |
-| Bring-up and test procedures | [testing-guide.md](testing-guide.md) |
+| What hardware is actually fitted | [docs/hardware/README.md](docs/hardware/README.md) |
+| Setting up and launching | [docs/getting-started.md](docs/getting-started.md), [docs/operations/running.md](docs/operations/running.md) |
+| Bring-up and test procedures | [docs/testing/README.md](docs/testing/README.md) |
 | What has been verified on hardware, and when | `src/orbibot_rosmaster_firmware/test-report.md` |
-| Learning a subsystem from zero | [docs/learn/learn-moc.md](docs/learn/learn-moc.md) — 71 lessons |
+| Learning a subsystem from zero | [docs/learn/README.md](docs/learn/README.md) — 70 lessons |
 
 **Source of truth**: the code. If a note disagrees with it, the note is a bug —
 fix it.
@@ -50,10 +51,10 @@ fix it.
 | `orbibot_exploration` | ament_python | BFS frontier explorer |
 | `orbibot_bringup` | ament_python | Cross-package launch orchestration |
 | `orbibot_webgui` | ament_python | rosbridge + WebRTC backend, React frontend |
-| `orbibot_agent` | ament_python | Multi-LLM agent, MCP server, CLI, 62 tools |
+| `orbibot_agent` | ament_python | Multi-LLM agent, MCP server, CLI, 58 tools |
 | `orbibot_teleop` | ament_python | Gamepad teleop — **dormant**, teleop is web-only |
 
-Details: [docs/moc/packages-moc.md](docs/moc/packages-moc.md).
+Details: [docs/packages.md](docs/packages.md).
 
 **Deleted, do not recreate:** `orbibot_gazebo` (the Pi is the robot),
 `orbibot_ai` and `orbibot_mcp_server` (replaced by `orbibot_agent`). Ignore
@@ -83,15 +84,15 @@ cd src/orbibot_rosmaster_firmware
 ```
 
 ```bash
-# base: description + hardware + LiDAR + EKF
+# base: description + hardware + EKF + LiDAR
 ros2 launch orbibot_bringup robot.launch.py
 
-# mapping, or exploration instead
+# mapping, or exploration instead (start the base first)
 ros2 launch orbibot_bringup mapping.launch.py
 ros2 launch orbibot_bringup exploration.launch.py
 
 # navigation against a saved map
-ros2 launch orbibot_navigation navigation.launch.py map:=$HOME/maps/my_map.yaml
+ros2 launch orbibot_navigation navigation.launch.py map_file:=$HOME/maps/my_map.yaml
 
 # web dashboard: rosbridge :9090 + WebRTC :8081
 ros2 launch orbibot_webgui webgui.launch.py
@@ -128,10 +129,8 @@ Handy scripts: `.claude/scripts/preflight.sh` before operating,
 - **Launch messages**: `[PackageName] Description — key: value`
 - **Single-package launches** start only their own nodes; cross-package
   composition belongs in `orbibot_bringup`
-- **Maintainer**: Jewel Nath <jewel.nath@orbitax.com>
 
-Full detail in `.claude/rules/`. Longer reference material — node templates, QoS
-profiles, test patterns — lives in skills and loads on demand.
+Full detail in `.claude/rules/`.
 
 ---
 
@@ -145,7 +144,7 @@ profiles, test patterns — lives in skills and loads on demand.
 | Motors | JGB37-520, 30:1, 333 RPM no-load |
 | Battery | 4S LiFePO4 — 12.8 V nominal, 11.0 V warning, 10.5 V cutoff |
 | IMU | ICM-20948 on SPI2, ±500 dps, ±2 g |
-| LiDAR | RPLidar A1 → `/scan` 10 Hz on `/dev/lidar` |
+| LiDAR | RPLidar A1 → `/scan` (nominal 5.5 Hz) on `/dev/lidar` |
 | Board link | 115200 baud on `/dev/motordriver` |
 
 Everything else — pinout, timers, power rails, spare capacity:
@@ -155,7 +154,7 @@ Everything else — pinout, timers, power rails, spare capacity:
 
 ## Working here
 
-1. Read `docs/packages/<pkg>.md` **and** `src/<pkg>/README.md` before touching a
+1. Read `src/<pkg>/README.md` and `src/<pkg>/known-issues.md` before touching a
    package
 2. After **any** change — added, changed, or deleted — ask whether it made a
    document untrue, and fix it. `.claude/rules/docs-sync.md` has the map; a
@@ -164,4 +163,3 @@ Everything else — pinout, timers, power rails, spare capacity:
 4. Report measurements as numbers, not adjectives, and write them down with the
    date and the robot's state
 
-Skills in `.claude/skills/` are auto-discovered and load only when used.

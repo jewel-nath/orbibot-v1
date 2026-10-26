@@ -4,8 +4,9 @@
 set -e
 
 ISSUES=0
-HARDWARE_CONFIG="src/orbibot_hardware/config/hardware_params.yaml"
-FIRMWARE_CONFIG="src/orbibot_rosmaster_firmware/include/orbibot_config.h"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+HARDWARE_CONFIG="$ROOT/src/orbibot_hardware/config/hardware_params.yaml"
+FIRMWARE_CONFIG="$ROOT/src/orbibot_rosmaster_firmware/include/orbibot_config.h"
 
 echo "OrbiBot Safety Check"
 echo "===================="

@@ -1,11 +1,3 @@
----
-title: "LGDXRobot2 ChassisTuner"
-type: reference
-tags:
-  - reference
-  - webgui
----
-
 # OrbiBot WebGUI vs LGDXRobot2 ChassisTuner
 
 Comparison and improvement ideas for orbibot_webgui based on studying the [LGDXRobot2 ChassisTuner](https://gitlab.com/lgdxrobotics/lgdxrobot2-chassistuner) reference.
@@ -144,5 +136,5 @@ No backend (ROS 2) changes required for 1–4 except possibly documenting the ex
 ## References
 
 - LGDXRobot2 ChassisTuner: [GitLab](https://gitlab.com/lgdxrobotics/lgdxrobot2-chassistuner) | [GitHub](https://github.com/yukaitung/lgdxrobot2-chassistuner)
-- OrbiBot WebGUI: [[orbibot_webgui]] (package hub note),
-  [README](../../src/orbibot_webgui/README.md), [[backlog-moc|open items]]
+- OrbiBot WebGUI: [orbibot_webgui](../../src/orbibot_webgui/README.md) (package hub note),
+  [README](../../src/orbibot_webgui/README.md), [open items](../status.md)

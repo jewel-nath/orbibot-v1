@@ -245,3 +245,7 @@ src/orbibot_webgui/.claude/settings.local.json
 
 .claude/settings.local.json
 src/orbibot_webgui/frontend/package-lock.json
+
+# Node and editor folders
+node_modules/
+.obsidian/

@@ -1,18 +1,7 @@
----
-title: "Part 6: PID Controllers"
-type: learn
-area: firmware
-package: orbibot_rosmaster_firmware
-duration: "35 minutes"
-tags:
-  - learn
-  - firmware
----
-
 # Part 6: PID Controllers
 
 **Duration**: 35 minutes  
-**Prerequisites**: [[52-forward-kinematics]]
+**Prerequisites**: [Part 5: Forward Kinematics](52-forward-kinematics.md)
 
 ---
 
@@ -457,7 +446,7 @@ Step 3: Fine-tune by observation
 
 ## Next Lesson
 
-[[61-pid-tuning]] - Advanced tuning methods and practical tips
+[Part 6: PID Tuning Methods](61-pid-tuning.md) - Advanced tuning methods and practical tips
 
 ---
 

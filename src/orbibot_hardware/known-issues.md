@@ -69,6 +69,17 @@ called. This wastes 256 bytes RAM and ISR cycles.
 
 ---
 
+## Setup script
+
+- **`setup_permissions.sh` contradicts itself:** when run as root it says
+  "Run: sudo ./setup_permissions.sh" and exits. Run it as your normal user; it
+  calls `sudo` itself.
+- **It still checks for `Rosmaster_Lib`:** the driver is now
+  `orbibot_hardware/rosmaster_driver.py`, so its "ROSMaster_Lib not found"
+  message can be ignored.
+
+---
+
 ## ✅ Closed
 
-*(See hardware-changelog.md for resolved bugs and improvements)*
+*(See CHANGELOG.md for resolved bugs and improvements)*

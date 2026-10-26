@@ -1,18 +1,7 @@
----
-title: "Part 2: Inter-Task Communication"
-type: learn
-area: firmware
-package: orbibot_rosmaster_firmware
-duration: "25 minutes"
-tags:
-  - learn
-  - firmware
----
-
 # Part 2: Inter-Task Communication
 
 **Duration**: 25 minutes  
-**Prerequisites**: [[21-tasks-and-scheduler]]
+**Prerequisites**: [Part 2: Tasks and Scheduler](21-tasks-and-scheduler.md)
 
 ---
 
@@ -335,7 +324,7 @@ Why? Fast, simple, sufficient for simple data types
 
 ## Next Lesson
 
-[[23-orbibot-task-architecture]] - OrbiBot's 4 tasks in detail
+[Part 2: OrbiBot Task Architecture](23-orbibot-task-architecture.md) - OrbiBot's 4 tasks in detail
 
 ---
 

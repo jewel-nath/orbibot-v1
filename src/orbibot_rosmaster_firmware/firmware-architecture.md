@@ -27,9 +27,9 @@ src/orbibot_rosmaster_firmware/
 ├── git_version.py              # Pre-build script (git hash injection)
 ├── README.md                   # Firmware documentation
 ├── firmware-architecture.md    # This file
-├── hardware-doc.md             # Hardware specifications
-├── firmware-issue.md           # Issue tracker
-├── firmware-changelog.md       # Change history
+├── test-report.md              # What was tested on the hardware, and when
+├── known-issues.md             # Open issues
+├── CHANGELOG.md                # Change history
 │
 ├── include/                    # Public headers
 │   ├── orbibot_config.h        # Robot-specific parameters
@@ -60,7 +60,7 @@ src/orbibot_rosmaster_firmware/
 │   │   ├── imu_driver.c        # ICM-20948 IMU (SPI2)
 │   │   ├── oled_driver.c       # SSD1306 OLED (optional)
 │   │   ├── battery_monitor.c   # Battery voltage + EMA filter
-│   │   └── flash_storage.c     # Flash persistence (PID, mag cal)
+│   │   └── flash_storage.c     # Flash persistence (PID gains)
 │   │
 │   ├── control/                # Motion control
 │   │   ├── mecanum_kinematics.c # Forward/inverse kinematics
@@ -159,7 +159,7 @@ src/orbibot_rosmaster_firmware/
 | Priority | Task | Rate | Responsibility |
 |----------|------|------|----------------|
 | 10 | `task_control` | 100Hz | Encoder read, PID, mecanum kinematics, odometry accumulation |
-| 8 | `task_imu` | 50Hz | ICM-20948 read; accel→roll/pitch; gyro+mag→yaw (complementary filter) |
+| 8 | `task_imu` | 50Hz | ICM-20948 read; accel→roll/pitch; gyro→yaw (integrated, no magnetometer) |
 | 7 | `task_communication` | 1ms tick | USART RX command parse; 5-type auto-report at 50Hz each |
 | 5 | `task_monitoring` | 1Hz | Watchdog feed, battery voltage, buzzer, LED heartbeat |
 
@@ -190,7 +190,7 @@ cycle, five report types are emitted 4ms apart.
 
 ```
  1ms ─ report_count=1  → REPORT_SPEED   (0x0A) — Vx/Vy/Vz + battery
- 5ms ─ report_count=5  → REPORT_ICM_RAW (0x0E) — gyro/accel milli-units + raw mag
+ 5ms ─ report_count=5  → REPORT_ICM_RAW (0x0E) — gyro/accel milli-units (12 bytes)
  9ms ─ report_count=9  → REPORT_IMU_ATT (0x0C) — roll/pitch/yaw
 13ms ─ report_count=13 → REPORT_ENCODER (0x0D) — 4 encoder counts
 17ms ─ report_count=17 → REPORT_ODOM    (0x15) — x/y/theta/vx/vy/omega
@@ -226,7 +226,6 @@ cycle, five report types are emitted 4ms apart.
 | `0x12` | MOTION | 3D velocity: Vx, Vy, Vz as int16 (mm/s × 1000) |
 | `0x13` | SET_MOTOR_PID | Single-level gains (Kp/Ki/Kd int16 × 1000) + save byte |
 | `0x14` | SET_YAW_PID | Yaw gains (Kp/Ki/Kd int16 × 1000) + save byte |
-| `0x16` | SET_MAG_CAL | Hard-iron offsets (int16 × 100 µT per axis) |
 | `0x08` | RESET_ENCODERS | Reset encoder counts to zero (odometry unchanged) |
 | `0x51` | VERSION | Direct request — firmware replies with `[major, minor]` |
 | `0x50`+`0x51` | VERSION (legacy) | REQUEST_DATA (0x50) with sub-byte 0x51 — same response |
@@ -235,7 +234,7 @@ cycle, five report types are emitted 4ms apart.
 | Code | Name | Description |
 |------|------|-------------|
 | `0x0A` | REPORT_SPEED | Vx, Vy, Vz (int16 mm/s) + battery (uint8 × 0.1V) |
-| `0x0E` | REPORT_ICM_RAW | Gyro milli-rad/s + accel milli-m/s² + mag raw counts (int16) |
+| `0x0E` | REPORT_ICM_RAW | Gyro milli-rad/s + accel milli-m/s² (int16, 12 bytes; the magnetometer was removed 2026-04-28) |
 | `0x0C` | REPORT_IMU_ATT | Roll, pitch, yaw (int16 × 10000 rad) |
 | `0x0D` | REPORT_ENCODER | FL, BL, FR, BR encoder counts (int32 LE ticks) |
 | `0x15` | REPORT_ODOM | x, y, theta (int32) + vx, vy, omega (int32) — mm/mrad units |
@@ -493,7 +492,7 @@ test: Add motor driver unit tests
 ## References
 
 ### OrbiBot Documentation
-- [HARDWARE_DOC.md](HARDWARE_DOC.md) - Complete hardware specifications
+- [rosmaster-board.md](../../docs/hardware/rosmaster-board.md) - Complete hardware specifications
 - [README.md](README.md) - Build instructions and firmware overview
 - [OrbiBot ROS 2 Packages](../../src/)
 

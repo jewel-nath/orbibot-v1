@@ -1,18 +1,7 @@
----
-title: "Part 0: Memory and Registers"
-type: learn
-area: firmware
-package: orbibot_rosmaster_firmware
-duration: "25 minutes"
-tags:
-  - learn
-  - firmware
----
-
 # Part 0: Memory and Registers
 
 **Duration**: 25 minutes  
-**Prerequisites**: [[03-number-systems]]
+**Prerequisites**: [Part 0: Number Systems](03-number-systems.md)
 
 ---
 
@@ -481,7 +470,7 @@ int main(void) {
 
 ## Next Lesson
 
-[[10-stm32-introduction]] - Detailed STM32F103 overview
+[Part 1: STM32 Introduction](10-stm32-introduction.md) - Detailed STM32F103 overview
 
 ---
 

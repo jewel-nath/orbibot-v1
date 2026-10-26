@@ -1,10 +1,3 @@
----
-title: "Yahboom ROSMaster X3"
-type: reference
-tags:
-  - reference
----
-
 # Yahboom RosMaster X3 — Reference Notes
 
 ## Robot Overview

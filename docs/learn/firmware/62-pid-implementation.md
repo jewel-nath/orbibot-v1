@@ -1,18 +1,7 @@
----
-title: "Part 6: PID Implementation in Firmware"
-type: learn
-area: firmware
-package: orbibot_rosmaster_firmware
-duration: "25 minutes"
-tags:
-  - learn
-  - firmware
----
-
 # Part 6: PID Implementation in Firmware
 
 **Duration**: 25 minutes  
-**Prerequisites**: [[61-pid-tuning]]
+**Prerequisites**: [Part 6: PID Tuning Methods](61-pid-tuning.md)
 
 ---
 
@@ -406,7 +395,7 @@ void pid_print_debug(pid_controller_t *pid, int motor_id)
 
 ## Next Lesson
 
-[[63-multi-level-pid]] - Different gains for different speeds
+[Part 6: Multi-Level PID](63-multi-level-pid.md) - Different gains for different speeds
 
 ---
 

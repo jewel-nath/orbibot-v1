@@ -1,13 +1,3 @@
----
-title: "05 - Visualization"
-type: learn
-area: description
-package: orbibot_description
-tags:
-  - learn
-  - description
----
-
 # 05 - Visualization
 
 **Seeing your robot in RViz**

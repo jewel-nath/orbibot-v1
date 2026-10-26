@@ -1,12 +1,3 @@
----
-title: "05 - Services"
-type: learn
-area: ros2
-tags:
-  - learn
-  - ros2
----
-
 # 05 - Services
 
 **Request-response communication pattern**
@@ -348,11 +339,11 @@ bool low_battery  # True if < 11.0V
 
 Learn about actions for long-running tasks:
 
-**→ Continue to:** [[06-actions]]
+**→ Continue to:** [06 - Actions](06-actions.md)
 
 Or learn about parameters:
 
-**→ Or go to:** [[07-parameters]]
+**→ Or go to:** [07 - Parameters](07-parameters.md)
 
 ---
 

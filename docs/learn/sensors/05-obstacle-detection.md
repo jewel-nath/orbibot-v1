@@ -1,13 +1,3 @@
----
-title: "05 - Obstacle Detection"
-type: learn
-area: sensors
-package: orbibot_sensors
-tags:
-  - learn
-  - sensors
----
-
 # 05 - Obstacle Detection
 
 **LiDAR-based safety system**
@@ -89,7 +79,7 @@ ros2 run orbibot_sensors obstacle_detector \
 
 Learn device setup:
 
-**→ Continue to:** [[06-device-setup]]
+**→ Continue to:** [06 - Device Setup](06-device-setup.md)
 
 ---
 

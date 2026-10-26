@@ -17,9 +17,9 @@ setup(
     install_requires=['setuptools'],
     zip_safe=True,
     maintainer='Jewel Nath',
-    maintainer_email='jewel.nath@orbitax.com',
+    maintainer_email='58494211+jewel-nath@users.noreply.github.com',
     description='System launch files and bringup configurations for OrbiBot',
-    license='MIT',
+    license='Apache-2.0',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [

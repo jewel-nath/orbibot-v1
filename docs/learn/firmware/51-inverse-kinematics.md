@@ -1,18 +1,7 @@
----
-title: "Part 5: Inverse Kinematics"
-type: learn
-area: firmware
-package: orbibot_rosmaster_firmware
-duration: "35 minutes"
-tags:
-  - learn
-  - firmware
----
-
 # Part 5: Inverse Kinematics
 
 **Duration**: 35 minutes  
-**Prerequisites**: [[50-mecanum-wheel-theory]]
+**Prerequisites**: [Part 5: Mecanum Wheel Theory](50-mecanum-wheel-theory.md)
 
 ---
 
@@ -336,7 +325,7 @@ void mecanum_inverse_kinematics(const robot_velocity_t *robot,
 
 ## Next Lesson
 
-[[52-forward-kinematics]] - Calculate robot velocity from wheel speeds (for odometry)
+[Part 5: Forward Kinematics](52-forward-kinematics.md) - Calculate robot velocity from wheel speeds (for odometry)
 
 ---
 

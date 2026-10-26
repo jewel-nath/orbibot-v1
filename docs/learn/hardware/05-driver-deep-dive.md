@@ -1,14 +1,6 @@
----
-title: "05 - Driver Deep Dive"
-type: learn
-area: hardware
-package: orbibot_hardware
-tags:
-  - learn
-  - hardware
----
-
 # 05 - Driver Deep Dive
+
+> **Note:** this lesson was written before 2026-04-28, when OrbiBot stopped using the ICM-20948's magnetometer. The driver code below still parses magnetometer values. Today the IMU sends gyro and accelerometer only, in a 12-byte packet, and the yaw comes from the gyro alone.
 
 **Understanding rosmaster_driver.py - the serial protocol layer**
 
@@ -527,7 +519,7 @@ def get_motor_encoder(self):
 
 Learn about the sensors themselves:
 
-**→ Continue to:** [[02-imu-sensors]]
+**→ Continue to:** [02 - IMU Sensors](../localization/02-imu-sensors.md)
 
 ---
 

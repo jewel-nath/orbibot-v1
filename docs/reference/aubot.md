@@ -1,10 +1,3 @@
----
-title: "AuBot"
-type: reference
-tags:
-  - reference
----
-
 # Autonomous-Mobile-Robot (AuBot) — Reference Notes
 
 ## Robot Overview

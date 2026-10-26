@@ -1,11 +1,3 @@
----
-title: "System Overview"
-type: architecture
-tags:
-  - architecture
-  - overview
----
-
 # System Overview
 
 Two computers. The STM32 closes the fast loops; the Pi does everything that
@@ -41,7 +33,7 @@ stutter.
 | firmware | `/imu/data` | 50 Hz | Firmware's own attitude estimate |
 | firmware | `/joint_states` | 50 Hz | Wheel positions for TF |
 | firmware | `/orbibot/system_status`, `/orbibot/safety_status`, `/diagnostics` | — | Battery, motor enable, faults |
-| RPLidar A1 | `/scan` | 10 Hz | 360°, ~8 m |
+| RPLidar A1 | `/scan` | 5.5 Hz nominal | 360°, used to 8 m |
 
 ## The estimation chain
 
@@ -62,9 +54,9 @@ takes IMU yaw in *relative* mode (`imu0_relative: true`, first reading becomes
 zero), and yaw drift is corrected further up by slam_toolbox or AMCL through
 `map → odom`.
 
-The consequence for testing: **Phase 1 cannot prove absolute heading is
-correct.** It can only bound the drift rate. Absolute heading is the map's
-job — see [[roadmap]].
+The consequence for testing: a test of the base on its own cannot prove the
+heading is right. It can only bound how fast the yaw drifts. Absolute heading
+is the map's job.
 
 ## TF chain
 
@@ -81,22 +73,22 @@ map → odom → base_footprint → base_link → sensor_links
 
 ## Commands flowing down
 
-Covered in [[command-pipeline]] — including the fact that four things publish
+Covered in [Command Pipeline](command-pipeline.md) — including the fact that four things publish
 `/cmd_vel` today and nothing arbitrates between them.
 
 ## Launch layering
 
 Each package launches only its own nodes. Composition lives in
-[[orbibot_bringup]]:
+[orbibot_bringup](../../src/orbibot_bringup/README.md):
 
 ```bash
-ros2 launch orbibot_bringup robot.launch.py        # description + hardware + LiDAR + EKF
-ros2 launch orbibot_bringup mapping.launch.py      # + slam_toolbox
-ros2 launch orbibot_bringup exploration.launch.py  # + Nav2 + frontier explorer
+ros2 launch orbibot_bringup robot.launch.py        # description + hardware + EKF + LiDAR
+ros2 launch orbibot_bringup mapping.launch.py      # slam_toolbox + Nav2 (start the base first)
+ros2 launch orbibot_bringup exploration.launch.py  # slam_toolbox + Nav2 + frontier explorer
 ros2 launch orbibot_webgui  webgui.launch.py       # rosbridge :9090, WebRTC :8081
 ```
 
 ## Related
 
-[[docs/README|Docs home]] · [[command-pipeline]] · [[dashboard-design]] ·
-[[packages-moc]] · [[rosmaster-board]] · [[firmware-architecture]]
+[Docs home](../README.md) · [Command Pipeline](command-pipeline.md) · [Dashboard Design](dashboard-design.md) ·
+[Packages](../packages.md) · [OrbiBot Hardware Documentation](../hardware/rosmaster-board.md) · [OrbiBot ROSMaster Firmware - Architecture Design](../../src/orbibot_rosmaster_firmware/firmware-architecture.md)

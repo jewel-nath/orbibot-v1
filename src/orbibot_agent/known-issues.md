@@ -11,6 +11,10 @@ Remaining issues, technical debt, and improvement ideas after the 2026-03 refact
 
 ### Medium Priority
 
+- [ ] **Gemini's library isn't declared** — the default provider is Gemini, but `google-genai` is not in `package.xml` or `setup.py` (no system package exists), so `rosdep` won't install it. Install it with pip.
+- [ ] **The Anthropic model is pinned to an old ID** — `agent_params.yaml` names `claude-3-5-sonnet-20241022`.
+- [ ] **The system prompt may not load after a normal install** — `agent_node.py` finds `config/system_prompt.txt` relative to its own file, which works with `--symlink-install` or from source; otherwise it silently falls back to the built-in prompt. It should use `get_package_share_directory('orbibot_agent')`.
+
 - [ ] **No vision tools** — camera image capture and object detection are planned. The `cv_bridge` dependency is already declared in `package.xml`.
 - [ ] **Single concurrent session** — chat server uses a global lock; only one chat request processes at a time. Add session IDs for multi-user support.
 - [ ] **No persistent conversation** — chat history resets on server restart. Consider persisting to disk or database.

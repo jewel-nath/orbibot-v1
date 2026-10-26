@@ -1,12 +1,3 @@
----
-title: "06 - Actions"
-type: learn
-area: ros2
-tags:
-  - learn
-  - ros2
----
-
 # 06 - Actions
 
 **Long-running tasks with feedback**
@@ -86,7 +77,7 @@ action_client.send_goal_async(goal, feedback_callback)
 
 ## 📖 Next Steps
 
-**→ Continue to:** [[07-parameters]]
+**→ Continue to:** [07 - Parameters](07-parameters.md)
 
 ---
 

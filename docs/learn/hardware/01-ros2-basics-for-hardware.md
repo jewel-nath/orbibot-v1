@@ -1,13 +1,3 @@
----
-title: "01 - ROS 2 Basics for Hardware"
-type: learn
-area: hardware
-package: orbibot_hardware
-tags:
-  - learn
-  - hardware
----
-
 # 01 - ROS 2 Basics for Hardware
 
 **Essential ROS 2 concepts explained simply**
@@ -693,7 +683,7 @@ ros2 interface show orbibot_msgs/srv/SetMotorEnable
 
 Now you understand ROS 2 basics. Next, see how the hardware components fit together:
 
-**→ Continue to:** [[02-hardware-architecture]]
+**→ Continue to:** [02 - Hardware Architecture](02-hardware-architecture.md)
 
 ---
 

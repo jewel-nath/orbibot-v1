@@ -1,19 +1,8 @@
----
-title: "Part 5: Mecanum Wheel Theory"
-type: learn
-area: firmware
-package: orbibot_rosmaster_firmware
-duration: "30 minutes"
-tags:
-  - learn
-  - firmware
----
-
 # Part 5: Mecanum Wheel Theory
 
 **Duration**: 30 minutes  
 **Prerequisites**: none — the vectors and frame conventions you need are
-introduced inline. For the ROS 2 side of frames, see [[09-tf2-transforms]].
+introduced inline. For the ROS 2 side of frames, see [09 - TF2 Transforms](../ros2/09-tf2-transforms.md).
 
 ---
 
@@ -320,7 +309,7 @@ Case 3:
 
 ## Next Lesson
 
-[[51-inverse-kinematics]] - Calculate wheel speeds from robot velocity
+[Part 5: Inverse Kinematics](51-inverse-kinematics.md) - Calculate wheel speeds from robot velocity
 
 ---
 

@@ -1,18 +1,7 @@
----
-title: "Part 0: Electronics Fundamentals"
-type: learn
-area: firmware
-package: orbibot_rosmaster_firmware
-duration: "25 minutes"
-tags:
-  - learn
-  - firmware
----
-
 # Part 0: Electronics Fundamentals
 
 **Duration**: 25 minutes  
-**Prerequisites**: [[01-microcontroller-basics]]
+**Prerequisites**: [Part 0: Microcontroller Basics](01-microcontroller-basics.md)
 
 ---
 
@@ -283,7 +272,7 @@ Use 220Ω (standard value)
 
 ## Next Lesson
 
-[[03-number-systems]] - Binary, hexadecimal, and decimal number systems
+[Part 0: Number Systems](03-number-systems.md) - Binary, hexadecimal, and decimal number systems
 
 ---
 

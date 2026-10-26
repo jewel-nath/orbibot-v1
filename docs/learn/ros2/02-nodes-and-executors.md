@@ -1,12 +1,3 @@
----
-title: "02 - Nodes and Executors"
-type: learn
-area: ros2
-tags:
-  - learn
-  - ros2
----
-
 # 02 - Nodes and Executors
 
 **The building blocks of ROS2 programs**
@@ -184,7 +175,7 @@ def main(args=None):
 
 Learn about topics:
 
-**→ Continue to:** [[03-topics-pub-sub]]
+**→ Continue to:** [03 - Topics and Pub/Sub](03-topics-pub-sub.md)
 
 ---
 

@@ -1,16 +1,10 @@
----
-title: "Command Pipeline"
-type: architecture
-tags:
-  - architecture
-  - safety
-  - cmd_vel
----
-
 # Command Pipeline
 
 How a velocity command should reach the wheels, and why the current path is
 the most important thing to fix before driving the robot around a room.
+
+**Status: designed, not built.** `twist_mux` is not installed on V1, and the
+four publishers below still write straight to `/cmd_vel`.
 
 ---
 
@@ -75,8 +69,8 @@ Properties this buys:
 
 ### Teleop is web-only, so the network is the control path
 
-The operator drives from the browser — a controller on their laptop read by the
-Gamepad API, sent over rosbridge. There is no Pi-side gamepad in the loop.
+The operator drives from the browser — the dashboard's on-screen controls and
+keyboard, sent over rosbridge. There is no Pi-side gamepad in the loop.
 
 That makes the web input's timeout the **shortest** in the system, and not
 optional. A wifi drop, a closed laptop lid or a browser tab switch must all look
@@ -111,7 +105,7 @@ Pushing detection earlier shortens the worst case from 2 s to 0.5 s.
 
 ## Why this comes before autonomy
 
-Every later phase — mapping, navigation, exploration — adds another thing that
+Every later step — mapping, navigation, exploration — adds another thing that
 wants to drive the robot. Adding them on top of an unarbitrated topic means
 each new capability makes the failure modes harder to reason about. Fixing the
 pipeline once, early, keeps every later phase testable.
@@ -129,5 +123,5 @@ pipeline once, early, keeps every later phase testable.
 
 ## Related
 
-[[roadmap]] — Phase 2 implements this · [[orbibot_teleop]] ·
-[[orbibot_webgui]] · [[orbibot_navigation]] · [[dashboard-design]]
+[Status](../status.md) · [orbibot_teleop](../../src/orbibot_teleop/README.md) ·
+[orbibot_webgui](../../src/orbibot_webgui/README.md) · [orbibot_navigation](../../src/orbibot_navigation/README.md) · [Dashboard Design](dashboard-design.md)

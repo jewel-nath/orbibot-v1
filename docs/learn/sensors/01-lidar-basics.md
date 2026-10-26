@@ -1,13 +1,3 @@
----
-title: "01 - LiDAR Basics"
-type: learn
-area: sensors
-package: orbibot_sensors
-tags:
-  - learn
-  - sensors
----
-
 # 01 - LiDAR Basics
 
 **How 2D laser scanners work**
@@ -89,7 +79,7 @@ ros2 topic echo /scan --once
 
 Learn LaserScan message format:
 
-**→ Continue to:** [[02-laserscan-message]]
+**→ Continue to:** [02 - LaserScan Message](02-laserscan-message.md)
 
 ---
 

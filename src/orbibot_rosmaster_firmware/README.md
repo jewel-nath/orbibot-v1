@@ -3,6 +3,12 @@
 Custom firmware for the Yahboom ROSMaster V3.0 expansion board (STM32F103RCT6).
 Replaces the closed-source Yahboom firmware with an open, OrbiBot-specific implementation.
 
+**Status:** runs on the robot. It has been tested on the bench, with the wheels off the
+ground, on 2026-04-19, 2026-04-28 and 2026-08-03 ([test report](test-report.md)); nothing
+has been measured with the robot driving on the floor yet.
+
+This is not a colcon package: it carries a `COLCON_IGNORE` and is built with PlatformIO.
+
 ---
 
 ## 1. What This Firmware Does
@@ -12,7 +18,7 @@ and handles all **real-time hardware control**:
 
 - Drives 4 mecanum wheel motors with PID speed control at 100Hz
 - Reads quadrature encoders and computes wheel odometry
-- Reads the ICM-20948 9-axis IMU (gyro, accelerometer, magnetometer) at 50Hz
+- Reads the ICM-20948 IMU's gyro and accelerometer at 50Hz (its magnetometer is not used since 2026-04-28)
 - Monitors battery voltage with safety lockout
 - Streams all sensor data to the Raspberry Pi over USB serial
 
@@ -62,8 +68,8 @@ talks to it over a serial protocol. You send velocity commands in, you get senso
 | Motor PID control | 100Hz | 4 independent PID loops, one per wheel |
 | Encoder reading | 100Hz | Quadrature decoding via hardware timers |
 | Odometry integration | 100Hz | Midpoint (RK2) method for mecanum kinematics |
-| IMU acquisition | 50Hz | ICM-20948: gyro + accel + magnetometer via SPI |
-| Attitude estimation | 50Hz | Complementary filter (gyro + magnetometer) |
+| IMU acquisition | 50Hz | ICM-20948: gyro + accel via SPI |
+| Attitude estimation | 50Hz | Roll and pitch from the accelerometer, yaw from integrating the gyro |
 | Battery monitoring | 1Hz | ADC with EMA filter, safety lockout |
 | Data streaming | 50Hz per type | 5 report types, interleaved over serial |
 
@@ -94,7 +100,7 @@ talks to it over a serial protocol. You send velocity commands in, you get senso
 | What | ROS 2 Topic | Rate | Content |
 |------|-------------|------|---------|
 | Wheel odometry | `/odom` | 50Hz | Position (x, y, theta) + velocity (vx, vy, omega) |
-| IMU raw | `/imu/data_raw` | 50Hz | Gyro (rad/s), accel (m/s^2), magnetometer (uT) |
+| IMU raw | `/imu/data_raw` | 50Hz | Gyro (rad/s) and accel (m/s^2), a 12-byte packet |
 | IMU attitude | `/imu/data` | 50Hz | Roll, pitch, yaw (rad) |
 | Encoder counts | `/orbibot/encoders` | 50Hz | Raw tick counts for all 4 motors |
 | Battery + speed | `/orbibot/system_status` | 50Hz | Battery voltage, measured wheel speeds |
@@ -114,8 +120,8 @@ talks to it over a serial protocol. You send velocity commands in, you get senso
                     │     │       │             │
   Motor PWM ──────► │  Encoders ──► Forward Kin │  ──► /odom
                     │                           │
-  IMU (SPI) ──────► │  Gyro + Accel + Mag       │  ──► /imu/data_raw
-                    │  Complementary Filter      │  ──► /imu/data
+  IMU (SPI) ──────► │  Gyro + Accel             │  ──► /imu/data_raw
+                    │  Roll/pitch + gyro yaw    │  ──► /imu/data
                     │                           │
   Battery (ADC) ──► │  EMA filter + threshold   │  ──► /system_status
                     └─────────────────────────┘
@@ -131,7 +137,7 @@ talks to it over a serial protocol. You send velocity commands in, you get senso
 |-----------|----------|-------------|
 | Mecanum motors | 4 | JGB37-520, 12V, 333 RPM max, 30:1 gear ratio |
 | Encoders | 4 | Hall-effect quadrature, 1320 counts per wheel revolution |
-| IMU | 1 | ICM-20948: 3-axis gyro + 3-axis accel + 3-axis magnetometer |
+| IMU | 1 | ICM-20948: 3-axis gyro + 3-axis accel (its magnetometer is not used) |
 | Battery sensor | 1 | ADC with voltage divider (4S LiFePO4, 10.5V–14.6V) |
 | Buzzer | 1 | Active buzzer for battery warnings |
 | USB serial | 1 | CH340N bridge to Raspberry Pi (115200 baud) |
@@ -159,7 +165,7 @@ talks to it over a serial protocol. You send velocity commands in, you get senso
 | Wheelbase | 260mm (front-to-rear wheel separation) |
 | Encoder resolution | 1320 PPR (11 PPR x 30 gear ratio x 4 quadrature) |
 
-> For complete pin mappings and electrical details, see [hardware-doc.md](hardware-doc.md).
+> For complete pin mappings and electrical details, see [the ROSMaster board reference](../../docs/hardware/rosmaster-board.md).
 
 ---
 
@@ -171,8 +177,9 @@ per-wheel target speeds, runs 4 independent PID controllers, and outputs PWM to 
 motor drivers. Also integrates odometry at 100Hz using midpoint (RK2) method.
 
 ### IMU Acquisition (`task_imu.c`)
-Runs at 50Hz. Reads the ICM-20948 over SPI. Computes roll/pitch from accelerometer
-and yaw from gyro integration with magnetometer correction (complementary filter).
+Runs at 50Hz. Reads the ICM-20948 over SPI. Computes roll/pitch from the accelerometer
+and yaw by integrating the gyro. There is no magnetometer correction: the yaw drifts, and
+the ROS 2 side (the EKF, then SLAM or AMCL) corrects it.
 All data is cached thread-safely for the communication task to read.
 
 ### Communication (`task_communication.c`)
@@ -262,7 +269,7 @@ If you need to add new data from firmware to ROS 2:
 | Single PID (not multi-level) | Indoor speeds (100-500 mm/s) don't need speed-dependent gains |
 | 100Hz control loop | Sufficient for PID + odometry; leaves CPU headroom on 72MHz M3 |
 | Midpoint (RK2) integration | Better accuracy than Euler during combined rotation + translation |
-| Complementary filter (not EKF) | Lightweight yaw estimation; full EKF runs on RPi 5 instead |
+| Simple attitude estimate (not EKF) | Lightweight; the full EKF runs on the Raspberry Pi 5 instead |
 | FreeRTOS (not bare-metal) | Clean task isolation; per-task watchdog; safe priority preemption |
 
 ---
@@ -292,8 +299,7 @@ ros2 topic hz /odom              # Should be ~50Hz
 ros2 topic hz /imu/data_raw      # Should be ~50Hz
 ros2 topic echo /odom --once     # Inspect odometry data
 
-# Test motors with gamepad
-ros2 launch orbibot_teleop controller.launch.py
+# Drive it from the web dashboard (orbibot_webgui); the gamepad package is switched off
 ```
 
 ---
@@ -343,16 +349,18 @@ These files contain low-level firmware details for embedded developers:
 | Document | Audience | Contents |
 |----------|----------|----------|
 | [firmware-architecture.md](firmware-architecture.md) | Firmware devs | Layer design, task details, protocol packet formats |
-| [hardware-doc.md](hardware-doc.md) | Hardware/firmware devs | Pin mappings, timer configs, electrical specs |
-| [firmware-changelog.md](firmware-changelog.md) | All | Version history and bug fix details |
-| [firmware-issue.md](firmware-issue.md) | Firmware devs | Open issues, tech debt, improvement ideas |
+| [rosmaster-board.md](../../docs/hardware/rosmaster-board.md) | Hardware/firmware devs | Pin mappings, timer configs, electrical specs |
+| [test-report.md](test-report.md) | All | What has been tested on the hardware, and when |
+| [CHANGELOG.md](CHANGELOG.md) | All | Version history and bug fix details |
+| [known-issues.md](known-issues.md) | Firmware devs | Open issues, tech debt, improvement ideas |
+| [tests/README.md](tests/README.md) | All | The serial test suite (no ROS 2 needed) |
 | [orbibot_config.h](include/orbibot_config.h) | Firmware devs | All configurable parameters |
 
 ---
 
 ## Version
 
-- **Version**: v2.0.1
+- **Version**: v2.0.0 (`include/firmware_version.h`). This is the firmware's own version, not an OrbiBot version.
 - **Target**: STM32F103RCT6 (72MHz Cortex-M3)
 - **Board**: Yahboom ROSMaster V3.0
 - **Author**: Jewel Nath

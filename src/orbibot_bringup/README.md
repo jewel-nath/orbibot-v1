@@ -1,94 +1,75 @@
 # orbibot_bringup
 
-System-level launch orchestration for OrbiBot. Provides three launch files that compose the robot's full software stack in a layered architecture.
+The launch files that start several packages together. Every other package
+launches only its own nodes; this one puts them together. That rule keeps,
+say, the SLAM launch from quietly starting a second hardware node that would
+fight the first over the serial port.
 
-## Launch Files
+**Status:** `robot.launch.py` is how the robot was started. The mapping and
+exploration launches run on top of it.
 
-### 1. Robot Base — `robot.launch.py`
+## The robot base: `robot.launch.py`
 
-Launches all core hardware and sensing components. **Must be started first.**
+Start this first, in its own terminal.
 
 ```bash
 ros2 launch orbibot_bringup robot.launch.py
-ros2 launch orbibot_bringup robot.launch.py use_camera:=true
+ros2 launch orbibot_bringup robot.launch.py use_camera:=true   # with the RealSense
 ```
 
-| Order | Component | Package | Notes |
-|-------|-----------|---------|-------|
-| 1 | Robot Description (URDF + TF) | orbibot_description | Immediate |
-| 2 | Hardware Interface + System Monitor | orbibot_hardware | Immediate |
-| 3 | Control Manager (odometry + TF) | orbibot_control | Delayed 3s (hardware init) |
-| 4 | EKF Localization (sensor fusion) | orbibot_localization | Delayed 4s (wait for /odom) |
-| 5 | LiDAR | orbibot_sensors | Delayed 5s, subprocess isolation |
-| 6 | RealSense Camera (optional) | orbibot_sensors | Only if `use_camera:=true` |
+| When | What starts | Package |
+|---|---|---|
+| At once | The robot model and its TF (`robot_state_publisher`) | `orbibot_description` |
+| At once | `hardware_node` and `system_monitor`; 6 s later, a call that enables the motors | `orbibot_hardware` |
+| After 3 s | Madgwick and the EKF | `orbibot_localization` |
+| After 5 s | The RPLIDAR A1, as a separate `ros2 launch` process | `orbibot_sensors` |
+| If `use_camera:=true` | The RealSense D435 | `orbibot_sensors` |
 
-**Arguments:**
+## Mapping: `mapping.launch.py`
 
-| Argument | Default | Description |
-|----------|---------|-------------|
-| `use_camera` | `false` | Launch RealSense camera node |
-
-### 2. Mapping — `mapping.launch.py`
-
-SLAM mapping + Nav2 navigation for building a new map.
+slam_toolbox in mapping mode, plus the Nav2 navigation stack. No map server:
+SLAM provides the map.
 
 ```bash
-# Prerequisite: robot base must be running
-ros2 launch orbibot_bringup robot.launch.py
-
-# Then start mapping
 ros2 launch orbibot_bringup mapping.launch.py
 ```
 
-| Component | Package | Notes |
-|-----------|---------|-------|
-| SLAM Toolbox (mapping mode) | orbibot_slam | Builds occupancy grid |
-| Nav2 Navigation Stack | nav2_bringup | No map server — SLAM provides the map |
+| Argument | Default |
+|---|---|
+| `nav_params_file` | `orbibot_navigation/config/nav2_params.yaml` |
 
-**Arguments:**
+This default is the AMCL variant; `nav2_params_slam.yaml` is the one written
+for live SLAM. See [known issues](known-issues.md).
 
-| Argument | Default | Description |
-|----------|---------|-------------|
-| `nav_params_file` | `orbibot_navigation/config/nav2_params.yaml` | Nav2 parameters file |
+## Exploration: `exploration.launch.py`
 
-### 3. Exploration — `exploration.launch.py`
-
-SLAM + Nav2 + autonomous frontier exploration for hands-free map building.
+The same as mapping, plus the frontier explorer from `orbibot_exploration`.
 
 ```bash
-# Prerequisite: robot base must be running
-ros2 launch orbibot_bringup robot.launch.py
-
-# Then start exploration
 ros2 launch orbibot_bringup exploration.launch.py
+ros2 topic pub --once /orbibot/exploration/command std_msgs/String "data: start"
 ```
 
-| Component | Package | Notes |
-|-----------|---------|-------|
-| SLAM Toolbox (mapping mode) | orbibot_slam | Builds occupancy grid |
-| Nav2 Navigation Stack | nav2_bringup | No map server — SLAM provides the map |
-| Frontier Explorer | orbibot_exploration | Custom BFS frontier detection |
+| Argument | Default |
+|---|---|
+| `nav_params_file` | `orbibot_navigation/config/nav2_params_slam.yaml` |
 
-**Arguments:**
-
-| Argument | Default | Description |
-|----------|---------|-------------|
-| `nav_params_file` | `orbibot_navigation/config/nav2_params.yaml` | Nav2 parameters file |
-
-## Architecture
+## How they stack
 
 ```
-Tier 1 (robot.launch.py)        Tier 2 (pick one)
-─────────────────────────       ─────────────────────
-description                     mapping.launch.py
-hardware                          └─ SLAM + Nav2
-control (3s delay)
-lidar (5s delay, subprocess)    exploration.launch.py
-EKF localization                  └─ SLAM + Nav2 + Frontier Explorer
-system monitor
+robot.launch.py (terminal 1)        then one of (terminal 2)
+----------------------------        ------------------------
+description                         mapping.launch.py
+hardware + system monitor             SLAM + Nav2
+Madgwick + EKF (after 3 s)          exploration.launch.py
+LiDAR (after 5 s)                     SLAM + Nav2 + frontier explorer
 camera (optional)
 ```
 
+Neither mapping nor exploration starts the robot base itself.
+
 ## Dependencies
 
-`orbibot_description`, `orbibot_hardware`, `orbibot_control`, `orbibot_sensors`, `orbibot_localization`, `orbibot_slam`, `orbibot_navigation`, `orbibot_exploration`
+`orbibot_description`, `orbibot_hardware`, `orbibot_sensors`,
+`orbibot_localization`, `orbibot_slam`, `orbibot_navigation` and
+`orbibot_exploration`.

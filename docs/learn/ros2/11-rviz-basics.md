@@ -1,12 +1,3 @@
----
-title: "11 - RViz Basics"
-type: learn
-area: ros2
-tags:
-  - learn
-  - ros2
----
-
 # 11 - RViz Basics
 
 **Visualizing robot data**
@@ -65,7 +56,7 @@ ros2 launch orbibot_description rviz.launch.py
 
 ## 📖 Next Steps
 
-**→ Continue to:** [[12-cli-tools]]
+**→ Continue to:** [12 - CLI Tools](12-cli-tools.md)
 
 ---
 

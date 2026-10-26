@@ -4,7 +4,7 @@ OrbiBot SLAM Localization Launch
 Runs SLAM Toolbox in localization mode using a previously serialized map.
 
 Usage:
-  ros2 launch orbibot_slam slam_localization.launch.py map_file_name:=/home/orbitax/maps/bed_room_serialized
+  ros2 launch orbibot_slam slam_localization.launch.py map_file_name:=$HOME/maps/my_map
 """
 import os
 from launch import LaunchDescription
@@ -34,7 +34,7 @@ def generate_launch_description():
     map_file_arg = DeclareLaunchArgument(
         'map_file_name',
         description='Path to serialized map file (without extension). '
-                    'Example: /home/orbitax/maps/bed_room_serialized'
+                    'Example: $HOME/maps/my_map'
     )
 
     autostart_arg = DeclareLaunchArgument(

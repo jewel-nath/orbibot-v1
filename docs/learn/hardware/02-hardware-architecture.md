@@ -1,13 +1,3 @@
----
-title: "02 - Hardware Architecture"
-type: learn
-area: hardware
-package: orbibot_hardware
-tags:
-  - learn
-  - hardware
----
-
 # 02 - Hardware Architecture
 
 **How all the pieces fit together**
@@ -80,11 +70,11 @@ After reading this, you will understand:
 │                                         │
 │  ┌───────────────┐  ┌───────────────┐  │
 │  │  STM32F103    │  │  ICM-20948    │  │
-│  │ Microcontroller│  │  9-Axis IMU   │  │
+│  │ Microcontroller│  │  6-axis IMU   │  │
 │  │               │  │               │  │
 │  │ • Main brain  │  │ • Accelerometer│ │
 │  │ • 100Hz control│ │ • Gyroscope   │  │
-│  │ • Serial comm │  │ • Magnetometer│  │
+│  │ • Serial comm │  │ • (no mag)   │  │
 │  └───────────────┘  └───────────────┘  │
 │                                         │
 │  ┌───────────────┐  ┌───────────────┐  │
@@ -111,7 +101,7 @@ After reading this, you will understand:
 | Component | Spec | Notes |
 |-----------|------|-------|
 | **Microcontroller** | STM32F103RCT6 | 72MHz ARM Cortex-M3 |
-| **IMU** | ICM-20948 | 9-axis (accel+gyro+mag) |
+| **IMU** | ICM-20948 | Accel + gyro (its magnetometer is not used) |
 | **Motors** | 4× DC with encoders | Mecanum wheel configuration |
 | **Encoder Resolution** | 1320 ticks/rev | 11 PPR × 30:1 gearbox × 4 quadrature |
 | **Serial Speed** | 115200 baud | ~14 KB/s data rate |
@@ -429,7 +419,7 @@ ros2 run rqt_graph rqt_graph
 
 Now you understand the architecture. Next, dive into how serial communication works:
 
-**→ Continue to:** [[03-serial-communication]]
+**→ Continue to:** [03 - Serial Communication](03-serial-communication.md)
 
 ---
 

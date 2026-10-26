@@ -1,18 +1,7 @@
----
-title: "Part 1: STM32 Introduction"
-type: learn
-area: firmware
-package: orbibot_rosmaster_firmware
-duration: "20 minutes"
-tags:
-  - learn
-  - firmware
----
-
 # Part 1: STM32 Introduction
 
 **Duration**: 20 minutes  
-**Prerequisites**: [[04-memory-and-registers]]
+**Prerequisites**: [Part 0: Memory and Registers](04-memory-and-registers.md)
 
 ---
 
@@ -212,7 +201,7 @@ External Crystal: 8 MHz
 
 ## Next Lesson
 
-[[04-memory-and-registers]] - Controlling pins through registers
+[Part 0: Memory and Registers](04-memory-and-registers.md) - Controlling pins through registers
 
 ---
 

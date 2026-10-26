@@ -1,13 +1,3 @@
----
-title: "03 - Serial Communication"
-type: learn
-area: hardware
-package: orbibot_hardware
-tags:
-  - learn
-  - hardware
----
-
 # 03 - Serial Communication
 
 **Understanding binary protocols and packet structures**
@@ -456,7 +446,7 @@ Little-endian: [0xF4, 0x01]  ← OrbiBot uses this!
 
 Now you understand serial communication. Next, see the hardware node implementation:
 
-**→ Continue to:** [[04-hardware-node-deep-dive]]
+**→ Continue to:** [04 - Hardware Node Deep Dive](04-hardware-node-deep-dive.md)
 
 ---
 

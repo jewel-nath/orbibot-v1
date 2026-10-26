@@ -19,8 +19,8 @@ Each package carries its own set. Read them before touching the package:
 | File | Holds |
 |---|---|
 | `src/<pkg>/README.md` | The API reference — topics, services, parameters, run commands |
-| `src/<pkg>/<pkg>-issue.md` | What is currently open, with severity |
-| `src/<pkg>/<pkg>-changelog.md` | What changed and **why** |
+| `src/<pkg>/known-issues.md` | What is currently open, with severity |
+| `src/<pkg>/CHANGELOG.md` | What changed and **why** |
 
 Not every package has all three; the README is the one that always exists. If a
 note and the code disagree, the code decides and the note gets fixed.
@@ -30,10 +30,10 @@ note and the code disagree, the code decides and the note gets fixed.
 | If you changed… | Update |
 |---|---|
 | Behaviour, API, topics, services, parameters | `src/<pkg>/README.md` |
-| Why something changed, or what it replaces | `src/<pkg>/<pkg>-changelog.md` |
-| A finding — fixed it, made it worse, found a new one | `src/<pkg>/<pkg>-issue.md` |
+| Why something changed, or what it replaces | `src/<pkg>/CHANGELOG.md` |
+| A finding — fixed it, made it worse, found a new one | `src/<pkg>/known-issues.md` |
 | A number measured on real hardware | `src/orbibot_rosmaster_firmware/test-report.md` |
-| A procedure or a pass criterion | `testing-guide.md` |
+| A procedure or a pass criterion | `docs/testing/README.md` |
 | A project-wide convention | `CLAUDE.md` — and only then |
 
 **Measurements are documentation.** A number that stays in the terminal is a
@@ -48,7 +48,7 @@ When you remove a file, function, topic, parameter, package or skill, search for
 what referenced it:
 
 ```bash
-grep -rn "<name>" src/ .claude/ CLAUDE.md *.md --include=*.md
+grep -rn "<name>" src/ docs/ .claude/ CLAUDE.md README.md --include=*.md
 ```
 
 Fix every hit. A stale reference is not cosmetic — it sends the next reader, or
@@ -59,14 +59,14 @@ Prefer a pointer to a copy.
 
 ## Why this rule is strict
 
-All three were live in this repo, all three were confidently wrong:
+All four were live in this repo, all four were confidently wrong:
 
 - `IMPLEMENTATION_STATUS.md` advertised 15 agent tools; the registry had ~64
 - `MECANUM_GUIDE.md` documented `mecanum_demo` and `mecanum_teleop` nodes that
   had never existed
-- `.claude/skills/README.md` hand-listed every skill; it went stale in 20 places
-  the moment seven skills were deleted, so it was replaced by a pointer
-- `firmware-changelog.md` recorded "the chip produces 25644 counts/g" as a
+- A hand-written skills index listed every skill by name; it went stale in 20
+  places the moment seven skills were deleted
+- The firmware changelog recorded "the chip produces 25644 counts/g" as a
   hardware fact. It was a register left misconfigured — and the wrong
   explanation shipped as a compensation factor for four months
 

@@ -1,18 +1,7 @@
----
-title: "Part 2: Tasks and Scheduler"
-type: learn
-area: firmware
-package: orbibot_rosmaster_firmware
-duration: "30 minutes"
-tags:
-  - learn
-  - firmware
----
-
 # Part 2: Tasks and Scheduler
 
 **Duration**: 30 minutes  
-**Prerequisites**: [[20-what-is-rtos]]
+**Prerequisites**: [Part 2: What is a Real-Time Operating System?](20-what-is-rtos.md)
 
 ---
 
@@ -528,7 +517,7 @@ int main(void)
 
 ## Next Lesson
 
-[[22-inter-task-communication]] - Queues, semaphores, and mutexes
+[Part 2: Inter-Task Communication](22-inter-task-communication.md) - Queues, semaphores, and mutexes
 
 ---
 

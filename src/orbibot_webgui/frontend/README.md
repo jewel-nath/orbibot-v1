@@ -202,4 +202,4 @@ All settings are configurable via the in-app Settings panel and persisted in `lo
 
 ## License
 
-MIT
+Apache-2.0, as the rest of the repository.

@@ -1,13 +1,3 @@
----
-title: "00 - What is URDF?"
-type: learn
-area: description
-package: orbibot_description
-tags:
-  - learn
-  - description
----
-
 # 00 - What is URDF?
 
 **Why model robots digitally?**
@@ -132,7 +122,7 @@ Robot Model (URDF)
 
 1. **Visualize** - See robot in RViz
 2. **Transform frames** - Know where sensors are
-3. **Simulate** - Test in Gazebo (future)
+3. **Simulate** - Test in a simulator such as Gazebo (OrbiBot V1 is not simulated)
 4. **Navigate** - Path planning needs robot size
 
 ---
@@ -150,7 +140,7 @@ Robot Model (URDF)
 
 Learn URDF basics:
 
-**→ Continue to:** [[01-urdf-basics]]
+**→ Continue to:** [01 - URDF Basics](01-urdf-basics.md)
 
 ---
 

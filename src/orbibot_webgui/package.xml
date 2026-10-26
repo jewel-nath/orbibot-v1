@@ -4,8 +4,8 @@
   <name>orbibot_webgui</name>
   <version>0.1.0</version>
   <description>Web-based dashboard for OrbiBot monitoring and control</description>
-  <maintainer email="jewel.nath@orbitax.com">Jewel Nath</maintainer>
-  <license>MIT</license>
+  <maintainer email="58494211+jewel-nath@users.noreply.github.com">Jewel Nath</maintainer>
+  <license>Apache-2.0</license>
 
   <buildtool_depend>ament_python</buildtool_depend>
 

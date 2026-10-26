@@ -1,13 +1,3 @@
----
-title: "11 - Practical Exercises"
-type: learn
-area: hardware
-package: orbibot_hardware
-tags:
-  - learn
-  - hardware
----
-
 # 11 - Practical Exercises
 
 **Hands-on exercises to master orbibot_hardware**
@@ -79,7 +69,7 @@ ros2 topic hz /orbibot/system_status
 <details>
 <summary>Click for answers</summary>
 
-1. **50Hz:** /imu/data, /imu/data_raw, /imu/mag, /odom, /joint_states, /orbibot/encoders
+1. **50Hz:** /imu/data, /imu/data_raw, /odom, /joint_states, /orbibot/encoders
    **10Hz:** /orbibot/system_status, /orbibot/safety_status, /diagnostics
 
 2. **nav_msgs/Odometry**

@@ -1,13 +1,3 @@
----
-title: "OrbiBot Hardware Study Guide"
-type: learn
-area: hardware
-package: orbibot_hardware
-tags:
-  - learn
-  - hardware
----
-
 # OrbiBot Hardware Study Guide
 
 **Hardware Interface Package - From Driver to ROS2 Node**
@@ -46,21 +36,21 @@ By completing this guide, you will understand:
 ### Foundation
 | File | Topic | Time |
 |------|-------|------|
-| [[00-what-is-hardware-interface]] | What is hardware interface? | 10 min |
-| [[02-hardware-architecture]] | System architecture | 15 min |
+| [00 - What is a Hardware Interface?](00-what-is-hardware-interface.md) | What is hardware interface? | 10 min |
+| [02 - Hardware Architecture](02-hardware-architecture.md) | System architecture | 15 min |
 
 ### Core Concepts
 | File | Topic | Time |
 |------|-------|------|
-| [[03-serial-communication]] | Serial protocols | 25 min |
-| [[04-hardware-node-deep-dive]] | hardware_node.py analysis | 45 min |
-| [[05-driver-deep-dive]] | rosmaster_driver.py analysis | 40 min |
+| [03 - Serial Communication](03-serial-communication.md) | Serial protocols | 25 min |
+| [04 - Hardware Node Deep Dive](04-hardware-node-deep-dive.md) | hardware_node.py analysis | 45 min |
+| [05 - Driver Deep Dive](05-driver-deep-dive.md) | rosmaster_driver.py analysis | 40 min |
 
 ### Practice
 | File | Topic | Time |
 |------|-------|------|
-| [[10-debugging-guide]] | Troubleshooting | 30 min |
-| [[11-practical-exercises]] | Hands-on exercises | 60 min |
+| [10 - Debugging Guide](10-debugging-guide.md) | Troubleshooting | 30 min |
+| [11 - Practical Exercises](11-practical-exercises.md) | Hands-on exercises | 60 min |
 
 ---
 
@@ -94,14 +84,14 @@ src/orbibot_hardware/
 │   └── hardware_params.yaml   ← Configuration
 ├── launch/
 │   └── hardware.launch.py     ← Launch file
-└── hardware-issue.md          ← Known issues
+└── known-issues.md          ← Known issues
 ```
 
 ---
 
 ## Start Here
 
-**Begin with:** [[00-what-is-hardware-interface]]
+**Begin with:** [00 - What is a Hardware Interface?](00-what-is-hardware-interface.md)
 
 ---
 

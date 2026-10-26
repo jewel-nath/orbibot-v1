@@ -1,18 +1,7 @@
----
-title: "Part 0: Microcontroller Basics"
-type: learn
-area: firmware
-package: orbibot_rosmaster_firmware
-duration: "20 minutes"
-tags:
-  - learn
-  - firmware
----
-
 # Part 0: Microcontroller Basics
 
 **Duration**: 20 minutes  
-**Prerequisites**: [[00-what-is-embedded]]
+**Prerequisites**: [Part 0: What is an Embedded System?](00-what-is-embedded.md)
 
 ---
 
@@ -307,7 +296,7 @@ SRAM = Whiteboard
 
 ## Next Lesson
 
-[[02-electronics-fundamentals]] - Learn about voltage, current, and digital signals
+[Part 0: Electronics Fundamentals](02-electronics-fundamentals.md) - Learn about voltage, current, and digital signals
 
 ---
 

@@ -1,13 +1,3 @@
----
-title: "02 - LaserScan Message"
-type: learn
-area: sensors
-package: orbibot_sensors
-tags:
-  - learn
-  - sensors
----
-
 # 02 - LaserScan Message
 
 **Understanding sensor_msgs/LaserScan**
@@ -66,7 +56,7 @@ index = (angle - angle_min) / angle_increment
 
 Learn about cameras:
 
-**→ Continue to:** [[03-camera-basics]]
+**→ Continue to:** [03 - Camera Basics](03-camera-basics.md)
 
 ---
 

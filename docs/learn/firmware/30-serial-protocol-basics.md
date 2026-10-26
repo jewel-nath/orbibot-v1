@@ -1,18 +1,7 @@
----
-title: "Part 3: Serial Communication Protocol"
-type: learn
-area: firmware
-package: orbibot_rosmaster_firmware
-duration: "20 minutes"
-tags:
-  - learn
-  - firmware
----
-
 # Part 3: Serial Communication Protocol
 
 **Duration**: 20 minutes  
-**Prerequisites**: [[23-orbibot-task-architecture]]
+**Prerequisites**: [Part 2: OrbiBot Task Architecture](23-orbibot-task-architecture.md)
 
 ---
 
@@ -371,7 +360,7 @@ Checksum: 0xFC + 0x03 + 0x12 + 0x00 + 0x00 + 0x00 = 0x111 → 0x11 ✓ VALID
 
 ## Next Lesson
 
-[[31-packet-structure]] - Detailed packet format and all commands
+[Part 3: Packet Structure](31-packet-structure.md) - Detailed packet format and all commands
 
 ---
 

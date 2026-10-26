@@ -1,13 +1,3 @@
----
-title: "03 - OrbiBot URDF Walkthrough"
-type: learn
-area: description
-package: orbibot_description
-tags:
-  - learn
-  - description
----
-
 # 03 - OrbiBot URDF Walkthrough
 
 **Complete analysis of orbibot.urdf.xacro**
@@ -74,7 +64,7 @@ orbibot.urdf.xacro
 
 Learn about coordinate frames:
 
-**→ Continue to:** [[04-tf-tree]]
+**→ Continue to:** [04 - TF Tree](04-tf-tree.md)
 
 ---
 

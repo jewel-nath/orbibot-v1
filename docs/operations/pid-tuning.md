@@ -1,117 +1,111 @@
----
-title: "PID Tuning Checklist"
-type: operations
-tags:
-  - operations
-  - pid
-  - tuning
----
+# PID tuning
 
-# PID টেস্ট চেকলিস্ট ও ভালো মান বের করা
+How to check that the wheel speed control works, and how to find better PID
+gains, with the web dashboard's **Diagnostics → PID Response Graph**.
 
-Web GUI এর **Diagnostics → PID Response Graph** দিয়ে রোবটের PID টেস্ট করার সময় এই চেকলিস্ট ও স্টেপগুলো অনুসরণ করুন।
+**Do the final tuning with the robot on the floor.** With the wheels in the
+air there is no load, so gains found that way are only a starting point.
 
----
+## 1. Check that everything works
 
-## ১. সব ঠিক আছে কিনা চেক করা
+### Data and topics
 
-### ডেটা সোর্স ও টপিক
+| Check | How |
+|---|---|
+| `/odom` is published | `ros2 topic hz /odom`: about 20 Hz while the robot moves, and a 0.5 s heartbeat when it stands still |
+| The dashboard reads wheel odometry | Settings → ROS Topics → Odometry topic = `/odom`. Tune on wheel odometry, not on the EKF's output |
+| The robot gets commands | It moves when you press **Send**; if not, `ros2 topic echo /cmd_vel` shows whether a Twist goes out |
 
-| চেক | কীভাবে যাচাই করবেন |
-|-----|---------------------|
-| **/odom পাবলিশ হচ্ছে** | `ros2 topic hz /odom` — ~20 Hz দেখাবে যখন hardware node চালু। |
-| **Odom টপিক সেটিং** | Settings → ROS Topics → Odometry topic = `/odom` রাখুন (PID টেস্টের জন্য wheel odom ব্যবহার করুন; EKF নয়)। |
-| **রোবট কমান্ড পাচ্ছে** | Send চাপলে রোবট নড়ে; না নড়লে `ros2 topic echo /cmd_vel` দিয়ে দেখুন Twist যাচ্ছে কিনা। |
+### Hardware and firmware
 
-### হার্ডওয়্যার ও ফার্মওয়্যার
+| Check | How |
+|---|---|
+| Motors on | The sidebar shows Motors ON; turn them on if not |
+| Encoders count | The FL, BL, FR and BR counts change when the wheels turn |
+| Battery | Below the firmware's cut-off the motors are locked, so keep the voltage up |
 
-| চেক | কীভাবে যাচাই করবেন |
-|-----|---------------------|
-| **মোটর অন** | সাইডবারে Motors ON দেখাবে; না থাকলে enable করুন। |
-| **এনকোডার কাজ করছে** | FL/BL/FR/BR encoder মান পরিবর্তন হয় যখন চাকা ঘোরে। |
-| **ব্যাটারি ঠিক** | লো ভোল্টেজ হলে মোটর লক হয়ে যেতে পারে; ভোল্টেজ পর্যাপ্ত থাকা চাই। |
+### Reading the graph
 
-### গ্রাফ ইন্টারপ্রিটেশন (আপনার স্ক্রিনশট অনুযায়ী)
+The graph plots the target against the measured speed for Vx, Vy and Wz.
+Example: with only Vx = 0.2 m/s commanded, a run showed:
 
-| অক্ষ (Axis) | আপনার ফলাফল | মানে কী |
-|-------------|-------------|---------|
-| **Vx** | টার্গেট ০.২ m/s, ওভারশুট ~২১.৫%, তারপর দোলন | ফরওয়ার্ড/ব্যাক পিডিআইডি একটু আগ্রাসী — Kp কম বা Kd বাড়ালে ওভারশুট/দোলন কমবে। |
-| **Vy** | টার্গেট ০, অ্যাকচুয়াল দোলন (MAE ০.۰۰৫৬) | শুধু Vx দিলে কিছু ক্রস-কাপলিং/স্লিপ স্বাভাবিক; বেশি দোলন থাকলে স্ট্রেফ মোটর/ইয়ো পিডিআইডি চেক করুন। |
-| **Wz** | টার্গেট ০, অ্যাকচুয়াল দোলন (MAE ০.০১৩) | সোজা চালানোর সময় হেডিং ড্রিফট/দোলন — Yaw PID (হেডিং হোল্ড) টিউন করতে হবে। |
+| Axis | Result | Meaning |
+|---|---|---|
+| Vx | About 21.5 % overshoot, then oscillation | The wheel PID is a little aggressive: lower Kp or raise Kd |
+| Vy | Target 0, small oscillation (MAE 0.0056) | Some cross-coupling and slip is normal when only Vx is commanded |
+| Wz | Target 0, oscillation (MAE 0.013) | The heading drifts or wobbles while driving straight: tune the yaw PID |
 
-**সারাংশ:** পাইপলাইন ঠিক আছে বলেই ধরে নেওয়া যায় — `/odom` আসছে, কমান্ড যাচ্ছে, গ্রাফে টার্গেট বনাম অ্যাকচুয়াল দেখা যাচ্ছে। বাকি কাজ হলো PID গেইন ঠিক করে ওভারশুট ও দোলন কমানো।
+If you see the target and the measured line, the pipeline works, and the rest
+is choosing gains.
 
----
+## 2. Finding better gains
 
-## ২. PID ভালো মান বের করার স্টেপ
+There are two PIDs:
 
-### আগে যা জানা দরকার
+- **Motor PID** (Diagnostics → PID Tuning): how each wheel tracks its target
+  speed. One set of Kp, Ki and Kd for all four wheels.
+- **Yaw PID**: holds the heading while driving straight, using the IMU.
 
-- **মোটর PID** (Diagnostics → PID Tuning): চাকার স্পিড ট্র্যাকিং — Kp, Ki, Kd (এবং মাল্টিলেভেলে থ্রেশহোল্ড + প্রতি লেভেল গেইন)।
-- **Yaw PID**: সোজা চলার সময় হেডিং ধরে রাখে (IMU ব্যবহার); আলাদা Kp, Ki, Kd।
+Firmware defaults: motor Kp 0.8, Ki 0.06, Kd 0.5; yaw Kp 0.4, Ki 0, Kd 0.1.
 
-ডিফল্ট (ফার্মওয়্যার): Motor Kp=0.8, Ki=0.06, Kd=0.5; Yaw Kp=0.4, Ki=0, Kd=0.1।
+### Step 1: test one axis (Vx)
 
-### স্টেপ ১: এক অক্ষ দিয়ে টেস্ট (Vx)
+1. In **PID Response Graph**, set **Vx = 0.2**, Vy = 0, Wz = 0.
+2. Press **Send** and let it record for 8 s (or press **Stop** earlier).
+3. Look at the Vx graph:
+   - **Large overshoot** (20 % or more): lower the motor Kp a little (0.8 →
+     0.6), or raise Kd (0.5 → 0.7).
+   - **Slow response, or a steady error**: raise Kp; if needed, raise Ki a
+     little.
+   - **Jitter or noise**: lower Kd.
 
-1. **PID Response Graph** এ শুধু **Vx = 0.2**, Vy = 0, Wz = 0 সেট করুন।
-2. **Send** চাপুন, ৮ সেকেন্ড রেকর্ড হতে দিন (বা **Stop** দিয়ে আগে বন্ধ করুন)।
-3. **Vx গ্রাফ** দেখুন:
-   - **ওভারশুট বেশি** (যেমন ২০%+) → Motor **Kp একটু কম** করুন (যেমন ০.৮ → ০.৬) অথবা **Kd বাড়ান** (যেমন ০.৫ → ০.৭)।
-   - **স্লো রেসপন্স / স্টেডি-স্টেট এরর** → **Kp বাড়ান**; প্রয়োজন হলে **Ki একটু বাড়ান**।
-   - **জিটার/নয়েজ** → Kd কম করুন বা ফিল্টার চেক করুন।
+### Step 2: apply and save the motor PID
 
-### স্টেপ ২: মোটর PID অ্যাপ্লাই ও সেভ
+- Enter the new values in **Diagnostics → PID Tuning**.
+- **Apply** sets them in RAM (lost on reboot); **Flash** saves them in flash.
+  Keeping gains in flash across a reboot has not been tested yet.
+- After each change, run the Vx test again.
 
-- **Diagnostics → PID Tuning** এ গিয়ে নতুন মান লিখুন।
-- **Apply** দিলে র্যামে লাগে (রিবুটে যাবে); **Flash** দিলে ফ্ল্যাশে সেভ হয় (পাওয়ার সাইকেলের পরও থাকবে)।
-- প্রতিবার পরিবর্তনের পর আবার **PID Response Graph** দিয়ে Vx টেস্ট করুন।
+### Step 3: bring Vy and Wz towards zero
 
-### স্টেপ ৩: Vy ও Wz (টার্গেট ০) কমানো
+- While driving on Vx only, the closer Vy and Wz stay to 0, the better.
+- **Vy oscillates:** the sideways motion comes from the same motor PID, so it
+  improves as the motor PID does. If the wheels on one side behave
+  differently, check those motors and encoders.
+- **Wz oscillates:** tune the **yaw PID** (Diagnostics → PID Tuning → Yaw).
+  A lower Kp makes the heading correction softer; a higher Kd can damp the
+  oscillation.
 
-- যখন শুধু Vx দিয়ে চালাচ্ছেন, Vy ও Wz **যত কাছাকাছি ০** থাকবে তত ভালো।
-- **Vy দোলন বেশি** → স্ট্রেফ ডাইরেকশনের চাকার পিডিআইডি একই মোটর পিডিআইডি দিয়ে নিয়ন্ত্রিত; মোটর পিডিআইডি ঠিক হলে Vy ও ঠিক হতে থাকে। যদি একপাশের চাকা আলাদা আচরণ করে তবে হার্ডওয়্যার/এনকোডার চেক করুন।
-- **Wz দোলন বেশি** → **Yaw PID** টিউন করুন (Diagnostics → PID Tuning → Yaw): Kp কম করলে হেডিং করেকশন নরম হবে; Kd বাড়ালে দোলন কমতে পারে।
+### Step 4: test sideways and turning on their own
 
-### স্টেপ ৪: আলাদা আলাদা টেস্ট (Strafe ও Rotate)
+- **Sideways:** Vx = 0, Vy = 0.15, Wz = 0.
+- **Turning:** Vx = 0, Vy = 0, Wz = 0.5. Both the yaw PID and the motor PID
+  matter here.
 
-- **Vy টেস্ট:** Vx=0, Vy=0.15, Wz=0 — স্ট্রেফ রেসপন্স ও মেট্রিক দেখুন।
-- **Wz টেস্ট:** Vx=0, Vy=0, Wz=0.5 — রোটেশন রেসপন্স দেখুন; এখানে Yaw PID ও মোটর পিডিআইডি দুটোই প্রভাব ফেলে।
+### Symptoms and fixes
 
-### কুইক রেফারেন্স (লক্ষণ → অ্যাকশন)
+| Symptom | Try |
+|---|---|
+| Overshoot, oscillation | Lower Kp, raise Kd |
+| Slow response | Raise Kp |
+| Steady error | Raise Ki a little |
+| Jitter, noise | Lower Kd |
+| Turns while it should drive straight (Wz) | Tune the yaw PID (Kp, Kd) |
 
-| লক্ষণ | অ্যাকশন |
-|-------|--------|
-| ওভারশুট, দোলন | Kp কম, Kd বাড়া |
-| স্লো রেসপন্স | Kp বাড়া |
-| স্টেডি-স্টেট এরর | Ki একটু বাড়া |
-| জিটার/নয়েজি | Kd কম করা |
-| সোজা চলার সময় ঘুরে যাওয়া (Wz) | Yaw PID টিউন (Kp/Kd) |
+## 3. Letting the agent help
 
----
+With the agent running (`orbibot_agent`), you can ask it to tune the PID. It
+can set gains (`set_motor_pid`, `set_yaw_pid`), drive a test (`move_robot`),
+record the response (`record_timeseries`) and compare runs
+(`compute_statistics`), then try new gains. It sets gains in RAM only: save
+the ones you like with **Flash** in the dashboard, or with `save_motor_pid`
+and `save_yaw_pid`.
 
-## ৩. রেফারেন্স
+## See also
 
-- **ফার্মওয়্যার PID:** `src/orbibot_rosmaster_firmware/README.md` — PID সেকশন ও `orbibot_config.h`।
-- **টপিক/সার্ভিস:** `src/orbibot_webgui/README.md` — `/orbibot/pid_params`, `/orbibot/yaw_pid_params`, `/orbibot/pid_save`।
-- **সম্পূর্ণ টেস্ট ফ্লো:** `testing-guide.md` — Phase 3 (PID Tuning & Calibration)।
-
-এই চেকলিস্ট ও স্টেপগুলো দিয়ে আপনি যাচাই করতে পারবেন সব ঠিক আছে কিনা এবং ধাপে ধাপে ভালো PID মান বের করতে পারবেন।
-
----
-
-## ৪. AI কে PID Tester হিসেবে ব্যবহার করা
-
-রোবট MCP কানেক্ট থাকলে আপনি বলতে পারবেন: **"বেস্ট PID বের করো"** বা **"PID টিউন করো"**। AI তখন:
-
-1. **Motor PID সেট** করবে (`set_motor_pid`), তারপর **Yaw PID** (`set_yaw_pid`)
-2. **টেস্ট চালাবে** (`run_pid_test` — যেমন Vx=0.2, ৫ সেকেন্ড)
-3. **মেট্রিক্স দেখবে** (MAE, overshoot, Wz drift)
-4. ফল ভালো না হলে **নতুন গেইন** দিয়ে আবার ১–৩ পুনরাবৃত্তি করবে
-
-শর্ত:
-- রোবট **মাটিতে** থাকা চাই (চাকা মাটিতে), হাওয়ায় টেস্টে চূড়ান্ত মান ঠিক হয় না
-- Hardware node, MCP server চালু থাকা চাই
-- পছন্দের মান পেলে Web GUI থেকে **Flash** দিয়ে সেভ করুন (AI শুধু RAM এ সেট করে, রিবুটে যাবে)
-
-এভাবে AI আপনার **PID Tester** হিসেবে নতুন নতুন গেইন সেট করবে, রান করে ডেটা দেখবে, এবং বেস্ট PID বের করতে সাহায্য করবে।
+- [The firmware README](../../src/orbibot_rosmaster_firmware/README.md) and
+  `include/orbibot_config.h`, for the PID in the firmware
+- [The web dashboard README](../../src/orbibot_webgui/README.md), for the
+  `/orbibot/pid_params`, `/orbibot/yaw_pid_params` and `/orbibot/pid_save` topics
+- [The testing guide](../testing/README.md), section 3, for tuning from the
+  command line

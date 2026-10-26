@@ -34,13 +34,13 @@ This sequence is mandatory:
    cd src/orbibot_rosmaster_firmware && ~/.platformio/penv/bin/pio run
    ```
 2. **Ask, then wait:**
-   > **BOOT0 jumper HIGH (3.3V) করুন, তারপর RESET চাপুন** — হয়ে গেলে বলুন।
+   > **Set the BOOT0 jumper HIGH (3.3 V), then press RESET.** Tell me when it is done.
 3. Upload only after they confirm:
    ```bash
    ~/.platformio/penv/bin/pio run --target upload
    ```
 4. **Ask, then wait:**
-   > **BOOT0 jumper LOW (GND) করুন, তারপর RESET চাপুন** — হয়ে গেলে বলুন।
+   > **Set the BOOT0 jumper LOW (GND), then press RESET.** Tell me when it is done.
 5. **Verify the flash took.** Query the version, or better, measure the thing
    you changed. "Upload succeeded" is not evidence the firmware is correct.
 
@@ -67,7 +67,7 @@ Do not carry a state assumption across turns. If the robot was elevated an hour
 ago, ask again.
 
 When you need a change, ask plainly:
-> **রোবট নিচে নামান, চারপাশে ~২ মিটার ফাঁকা রাখুন** — হয়ে গেলে বলুন।
+> **Put the robot on the floor, with about 2 m clear around it.** Tell me when it is done.
 
 ## Before any motion at all
 
@@ -85,17 +85,17 @@ When you need a change, ask plainly:
   directly and correct the record. This has already happened once on this robot
   and cost real time.
 - Write measurements into `src/orbibot_rosmaster_firmware/test-report.md` (dated
-  sections) or the package's `<pkg>-issue.md`. A number that stays in the
+  sections) or the package's `known-issues.md`. A number that stays in the
   terminal is a number that gets re-measured.
 
 ## Teleop path
 
-Teleop is **web dashboard only** — a controller plugged into the operator's
-laptop, read by the browser's Gamepad API, sent over rosbridge.
+Teleop is **web dashboard only**: the dashboard's on-screen controls and
+keyboard, sent over rosbridge.
 
 The consequence is that **the network is the control path**. A dropped wifi
 link is a runaway robot unless timeouts are real. Per-input timeouts in
-`twist_mux` and the driver's `cmd_timeout` are safety features here, not
+`twist_mux` (designed, not installed yet) and the driver's `cmd_timeout` are safety features here, not
 housekeeping. The firmware enforces its own 2 s command timeout as the last
 line — verified live, `test-report.md` §7.1.
 
@@ -105,8 +105,8 @@ package in place as a network-independent fallback, but do not install
 
 ## Related
 
-- `testing-guide.md` — procedures and pass criteria
+- `docs/testing/README.md` — procedures and pass criteria
 - `src/orbibot_rosmaster_firmware/test-report.md` — what has been verified live, and when
-- `src/orbibot_rosmaster_firmware/firmware-issue.md` — what is still open on the board
+- `src/orbibot_rosmaster_firmware/known-issues.md` — what is still open on the board
 - `.claude/scripts/preflight.sh` — run before operating; `safety.sh` cross-checks
   the firmware and ROS 2 limits against each other

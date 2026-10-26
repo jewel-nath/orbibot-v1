@@ -1,18 +1,7 @@
----
-title: "Part 5: Forward Kinematics"
-type: learn
-area: firmware
-package: orbibot_rosmaster_firmware
-duration: "30 minutes"
-tags:
-  - learn
-  - firmware
----
-
 # Part 5: Forward Kinematics
 
 **Duration**: 30 minutes  
-**Prerequisites**: [[51-inverse-kinematics]]
+**Prerequisites**: [Part 5: Inverse Kinematics](51-inverse-kinematics.md)
 
 ---
 
@@ -380,7 +369,7 @@ void mecanum_forward_kinematics(const wheel_velocity_t *wheels,
 
 ## Next Lesson
 
-[[83-odometry-implementation]] - How this feeds the odometry code
+[Part 8: Odometry Implementation](83-odometry-implementation.md) - How this feeds the odometry code
 
 ---
 

@@ -1,13 +1,3 @@
----
-title: "03 - Sensor Fusion Concept"
-type: learn
-area: localization
-package: orbibot_localization
-tags:
-  - learn
-  - localization
----
-
 # 03 - Sensor Fusion Concept
 
 **Combining sensors for better accuracy**
@@ -58,10 +48,9 @@ tags:
 │                                         │
 │  IMU Raw Data                           │
 │  ├── /imu/data_raw (accel, gyro)        │
-│  └── /imu/mag (magnetometer)            │
 │         ↓                               │
 │  Madgwick Filter (50Hz)                 │
-│  └── Fuses: gyro + accel + mag          │
+│  └── Fuses: gyro + accel                │
 │  └── Output: /imu/data_filtered         │
 │         ↓                               │
 │  EKF (25Hz)                             │
@@ -87,7 +76,7 @@ tags:
 
 Learn Madgwick filter:
 
-**→ Continue to:** [[04-madgwick-filter]]
+**→ Continue to:** [04 - Madgwick Filter](04-madgwick-filter.md)
 
 ---
 

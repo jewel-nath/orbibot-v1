@@ -2,10 +2,18 @@
 
 SLAM (Simultaneous Localization and Mapping) for OrbiBot using `slam_toolbox`. Supports both mapping (building new maps) and localization (navigating with saved maps).
 
+**Status:** used on the robot to map rooms (from July 2025); last tuned on
+2026-03-02 for the Raspberry Pi 5's CPU. The two saved
+maps are in [`orbibot_navigation/maps/`](../orbibot_navigation/maps/).
+
+**Exactly one node may publish `map → odom`:** slam_toolbox or AMCL, never both. Two
+publishers on that edge make the robot appear to jump. With no magnetometer, the scan
+matching here is also what corrects the gyro's yaw drift.
+
 ## Overview
 
 This package wraps `slam_toolbox` with OrbiBot-specific configurations optimized for:
-- **RPLidar A1** (360°, 8m range, 10Hz)
+- **RPLidar A1** (360°, used to 8 m)
 - **Raspberry Pi 5** (CPU-efficient parameters)
 - **Mecanum wheel odometry** (velocity-only fusion via EKF)
 
@@ -23,7 +31,7 @@ Two modes are supported:
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                   │
 │   ┌─────────────┐                                                │
-│   │   /scan     │  10 Hz                                         │
+│   │   /scan     │  ~5.5 Hz                                        │
 │   │ (RPLidar A1)│                                                │
 │   └──────┬──────┘                                                │
 │          │                                                        │
@@ -62,36 +70,31 @@ Two modes are supported:
 ### Mapping Mode (Build New Map)
 
 ```bash
-# Terminal 1: Robot base + localization
+# Terminal 1: robot base (it includes the EKF localization)
 ros2 launch orbibot_bringup robot.launch.py
-ros2 launch orbibot_localization localization.launch.py
 
 # Terminal 2: SLAM
 ros2 launch orbibot_slam slam.launch.py
 
-# Terminal 3: Teleoperation
-ros2 launch orbibot_teleop controller.launch.py
-
-# Drive around to build map, then save:
+# Drive around from the web dashboard (orbibot_webgui) to build the map, then save it:
+mkdir -p ~/maps
 ros2 service call /slam_toolbox/save_map slam_toolbox/srv/SaveMap \
-  "{name: {data: '/home/orbibot/maps/my_map'}}"
-ros2 run nav2_map_server map_saver_cli -f /home/orbibot/maps/my_map
+  "{name: {data: '$HOME/maps/my_map'}}"
+ros2 run nav2_map_server map_saver_cli -f ~/maps/my_map
 ```
 
 ### Localization Mode (Use Saved Map)
 
 ```bash
-# Terminal 1: Robot base + localization
+# Terminal 1: robot base
 ros2 launch orbibot_bringup robot.launch.py
-ros2 launch orbibot_localization localization.launch.py
 
-# Terminal 2: SLAM localization
-ros2 launch orbibot_slam slam_localization.launch.py \
-  map_file_name:=/home/orbibot/maps/my_map
+# Terminal 2: localise on a serialized slam_toolbox map (no extension)
+ros2 launch orbibot_slam slam_localization.launch.py map_file_name:=$HOME/maps/my_map
 
-# Terminal 3: Navigation
-ros2 launch orbibot_navigation navigation.launch.py \
-  map:=/home/orbibot/maps/my_map.yaml
+# Or, instead of terminal 2: Nav2 with AMCL on the .yaml map.
+# Its launch starts AMCL, which also publishes map → odom, so don't run both.
+ros2 launch orbibot_navigation navigation.launch.py map_file:=$HOME/maps/my_map.yaml
 ```
 
 ---
@@ -200,17 +203,17 @@ When you save a map, two formats are created:
 ```bash
 # Method 1: slam_toolbox service (preserves pose graph)
 ros2 service call /slam_toolbox/save_map slam_toolbox/srv/SaveMap \
-  "{name: {data: '/home/orbibot/maps/my_map'}}"
+  "{name: {data: '$HOME/maps/my_map'}}"
 
 # Method 2: Nav2 map saver (standard format only)
-ros2 run nav2_map_server map_saver_cli -f /home/orbibot/maps/my_map
+ros2 run nav2_map_server map_saver_cli -f $HOME/maps/my_map
 ```
 
 ### Load Map for Localization
 
 ```bash
 ros2 launch orbibot_slam slam_localization.launch.py \
-  map_file_name:=/home/orbibot/maps/my_map
+  map_file_name:=$HOME/maps/my_map
 ```
 
 **Note**: Use the path **without extension**. The node loads both `.posegraph` and `.data` files.
@@ -260,7 +263,7 @@ ros2 launch orbibot_slam slam_localization.launch.py \
 ### Verify Data Flow
 ```bash
 # Check scan is arriving
-ros2 topic hz /scan  # Should be ~10Hz
+ros2 topic hz /scan  # about 5.5 Hz, the A1's nominal rate
 
 # Check TF is present
 ros2 run tf2_tools view_frames  # Verify odom → base_footprint
@@ -317,8 +320,8 @@ sudo apt install ros-jazzy-nav2-map-server
 ## References
 
 - **slam_toolbox**: https://github.com/SteveMacenski/slam_toolbox
-- **SLAM Tutorial**: https://navigation.ros.org/setup_guides/slam/setup_slam.html
-- **Ceres Solver**: http://ceres-solver.org/ (optimization backend)
+- **Nav2 documentation**: https://docs.nav2.org/
+- **Ceres Solver**: https://github.com/ceres-solver/ceres-solver (optimization backend)
 
 ---
 

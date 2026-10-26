@@ -1,13 +1,3 @@
----
-title: "04 - Image Transport"
-type: learn
-area: sensors
-package: orbibot_sensors
-tags:
-  - learn
-  - sensors
----
-
 # 04 - Image Transport
 
 **Camera data in ROS2**
@@ -76,7 +66,7 @@ ros2 run rqt_image_view rqt_image_view
 
 Learn obstacle detection:
 
-**→ Continue to:** [[05-obstacle-detection]]
+**→ Continue to:** [05 - Obstacle Detection](05-obstacle-detection.md)
 
 ---
 

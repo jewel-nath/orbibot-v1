@@ -1,12 +1,3 @@
----
-title: "ROS2 Study Guide"
-type: learn
-area: ros2
-tags:
-  - learn
-  - ros2
----
-
 # ROS2 Study Guide
 
 **Common Foundation for All OrbiBot Packages**
@@ -31,19 +22,19 @@ This guide teaches ROS2 (Robot Operating System 2) fundamentals used across all 
 
 | File | Topic | Duration |
 |------|-------|----------|
-| [[00-ros2-overview]] | What is ROS2? | 15 min |
-| [[01-workspace-and-packages]] | Workspaces and Colcon | 20 min |
-| [[02-nodes-and-executors]] | Nodes and Executors | 25 min |
-| [[03-topics-pub-sub]] | Topics and Pub/Sub | 30 min |
-| [[04-messages-interfaces]] | Messages and Interfaces | 25 min |
-| [[05-services]] | Services | 25 min |
-| [[06-actions]] | Actions | 30 min |
-| [[07-parameters]] | Parameters | 20 min |
-| [[08-launch-files]] | Launch Files | 30 min |
-| [[09-tf2-transforms]] | TF2 Transforms | 35 min |
-| [[10-bag-recording]] | Bag Recording | 20 min |
-| [[11-rviz-basics]] | RViz Basics | 25 min |
-| [[12-cli-tools]] | CLI Tools | 30 min |
+| [00 - ROS2 Overview](00-ros2-overview.md) | What is ROS2? | 15 min |
+| [01 - Workspace and Packages](01-workspace-and-packages.md) | Workspaces and Colcon | 20 min |
+| [02 - Nodes and Executors](02-nodes-and-executors.md) | Nodes and Executors | 25 min |
+| [03 - Topics and Pub/Sub](03-topics-pub-sub.md) | Topics and Pub/Sub | 30 min |
+| [04 - Messages and Interfaces](04-messages-interfaces.md) | Messages and Interfaces | 25 min |
+| [05 - Services](05-services.md) | Services | 25 min |
+| [06 - Actions](06-actions.md) | Actions | 30 min |
+| [07 - Parameters](07-parameters.md) | Parameters | 20 min |
+| [08 - Launch Files](08-launch-files.md) | Launch Files | 30 min |
+| [09 - TF2 Transforms](09-tf2-transforms.md) | TF2 Transforms | 35 min |
+| [10 - Bag Recording](10-bag-recording.md) | Bag Recording | 20 min |
+| [11 - RViz Basics](11-rviz-basics.md) | RViz Basics | 25 min |
+| [12 - CLI Tools](12-cli-tools.md) | CLI Tools | 30 min |
 
 **Total:** ~15 hours (beginner)
 
@@ -64,7 +55,7 @@ All files (uses everything)
 
 ## Start Here
 
-**Begin with:** [[00-ros2-overview]]
+**Begin with:** [00 - ROS2 Overview](00-ros2-overview.md)
 
 Or jump to any topic. Each file is self-contained.
 

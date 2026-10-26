@@ -1,13 +1,3 @@
----
-title: "03 - Camera Basics"
-type: learn
-area: sensors
-package: orbibot_sensors
-tags:
-  - learn
-  - sensors
----
-
 # 03 - Camera Basics
 
 **RealSense D435 RGB-D camera**
@@ -92,7 +82,7 @@ ros2 run rqt_image_view rqt_image_view
 
 Learn image transport:
 
-**→ Continue to:** [[04-image-transport]]
+**→ Continue to:** [04 - Image Transport](04-image-transport.md)
 
 ---
 

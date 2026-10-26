@@ -1,13 +1,3 @@
----
-title: "00 - What is Localization?"
-type: learn
-area: localization
-package: orbibot_localization
-tags:
-  - learn
-  - localization
----
-
 # 00 - What is Localization?
 
 **Why robots need to know where they are**
@@ -95,7 +85,7 @@ OrbiBot uses this approach!
 │  1. Wheel Odometry                  │
 │     └── Fast, but drifts            │
 │                                     │
-│  2. IMU (accelerometer + gyro + mag)│
+│  2. IMU (accelerometer + gyro)      │
 │     └── Orientation, but noisy      │
 │                                     │
 │  3. Sensor Fusion (EKF)             │
@@ -119,7 +109,7 @@ OrbiBot uses this approach!
 
 Learn about odometry:
 
-**→ Continue to:** [[01-odometry-basics]]
+**→ Continue to:** [01 - Odometry Basics](01-odometry-basics.md)
 
 ---
 

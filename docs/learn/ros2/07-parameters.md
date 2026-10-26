@@ -1,12 +1,3 @@
----
-title: "07 - Parameters"
-type: learn
-area: ros2
-tags:
-  - learn
-  - ros2
----
-
 # 07 - Parameters
 
 **Configuration system for ROS2 nodes**
@@ -193,7 +184,7 @@ def __init__(self):
 
 Learn about launch files:
 
-**→ Continue to:** [[08-launch-files]]
+**→ Continue to:** [08 - Launch Files](08-launch-files.md)
 
 ---
 

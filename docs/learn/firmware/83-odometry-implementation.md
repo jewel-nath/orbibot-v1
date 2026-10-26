@@ -1,18 +1,7 @@
----
-title: "Part 8: Odometry Implementation"
-type: learn
-area: firmware
-package: orbibot_rosmaster_firmware
-duration: "25 minutes"
-tags:
-  - learn
-  - firmware
----
-
 # Part 8: Odometry Implementation
 
 **Duration**: 25 minutes  
-**Prerequisites**: [[82-odometry-math]]
+**Prerequisites**: [Part 8: Odometry Mathematics](82-odometry-math.md)
 
 ---
 
@@ -297,7 +286,7 @@ Return to start:
 
 ## Next Lesson
 
-[[84-odometry-errors]] - Understanding and handling odometry errors
+[Part 8: Odometry Errors and Drift](84-odometry-errors.md) - Understanding and handling odometry errors
 
 ---
 

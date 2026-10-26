@@ -2,6 +2,12 @@
 
 Sensor integration for OrbiBot: RPLidar A1 2D LiDAR and Intel RealSense D435 RGB-D camera. Includes LiDAR-based obstacle detection for safety.
 
+**Status:** the LiDAR is used on the robot (it is started by `robot.launch.py`). The RealSense
+launch works but is off by default (`use_camera:=false`); the web dashboard uses its colour
+stream. On V1 the camera enumerated at USB 2 speed (480 Mbps), which limits depth and colour
+together. `obstacle_detector` is written
+but untested: no launch file starts it, and nothing subscribes to its emergency-stop topic.
+
 ## Overview
 
 This package provides sensor drivers and launch configurations for OrbiBot's perception stack. The RPLidar A1 is the primary navigation sensor, while the RealSense D435 provides visual data for advanced applications (optional, disabled by default on Raspberry Pi due to CPU load).
@@ -13,7 +19,7 @@ This package provides sensor drivers and launch configurations for OrbiBot's per
 ### RPLidar A1 (Primary Navigation Sensor)
 - **Type**: 360° 2D laser scanner
 - **Range**: 0.15–8.0 meters
-- **Rate**: 10 Hz (scans per second)
+- **Rate**: the A1's nominal 5.5 Hz (it can spin up to 10 Hz); no rate is set in the config, and V1's rate was not recorded
 - **Resolution**: ~0.5° (Express mode) or ~1° (Standard mode)
 - **Interface**: USB Serial (/dev/lidar)
 - **Topics**: `/scan`
@@ -22,7 +28,7 @@ This package provides sensor drivers and launch configurations for OrbiBot's per
 - **Type**: RGB-D camera with stereo depth
 - **Resolution**: 424×240 @ 15Hz (RPi-optimized) or 640×480 @ 30Hz
 - **Range**: 0.4–4.0 meters (depth)
-- **Interface**: USB 3.0 (/dev/camera)
+- **Interface**: USB (on V1 it enumerated at USB 2 speed)
 - **Topics**: `/camera/color/image_raw`, `/camera/depth/image_rect_raw`
 
 ---
@@ -93,7 +99,7 @@ ros2 launch orbibot_sensors sensors.launch.py sensors:=both enable_camera_to_sca
 
 | Topic | Type | QoS | Rate | Description |
 |-------|------|-----|------|-------------|
-| `/scan` | `sensor_msgs/LaserScan` | BEST_EFFORT, depth 5 | 10 Hz | 360° laser scan data |
+| `/scan` | `sensor_msgs/LaserScan` | BEST_EFFORT, depth 5 | the A1's scan rate | 360° laser scan data |
 
 **Scan Parameters**:
 - `angle_min`: -π (-180°)
@@ -190,7 +196,7 @@ When `enable_camera_to_scan:=true`, the RealSense depth image is converted to a 
 | `config/rplidar_params.yaml` | Valid rplidar_composition parameters (9 params only) |
 | `config/realsense_camera_params.yaml` | RealSense resolution, filters, frame IDs |
 
-**Note**: `rplidar_params.yaml` contains only valid parameters. Invalid parameters are silently ignored by the driver but create false expectations. See [sensors-changelog.md](sensors-changelog.md) for details.
+**Note**: `rplidar_params.yaml` contains only valid parameters. Invalid parameters are silently ignored by the driver but create false expectations. See [CHANGELOG.md](CHANGELOG.md) for details.
 
 ---
 
@@ -294,7 +300,7 @@ sudo apt install ros-jazzy-depthimage-to-laserscan
 ## References
 
 - **RPLidar A1 Datasheet**: https://www.slamtec.com/en/Lidar/A1Spec
-- **RealSense D435**: https://www.intelrealsense.com/depth-camera-d435/
+- **RealSense D435**: https://www.realsenseai.com/stereo-depth-cameras/stereo-depth-camera-d435/
 - **rplidar_ros**: https://github.com/Slamtec/rplidar_ros
 - **realsense-ros**: https://github.com/IntelRealSense/realsense-ros
 

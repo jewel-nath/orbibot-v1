@@ -1,13 +1,3 @@
----
-title: "01 - Odometry Basics"
-type: learn
-area: localization
-package: orbibot_localization
-tags:
-  - learn
-  - localization
----
-
 # 01 - Odometry Basics
 
 **Position from wheel encoders**
@@ -89,7 +79,7 @@ Errors accumulate over time!
 
 Learn about IMU:
 
-**→ Continue to:** [[02-imu-sensors]]
+**→ Continue to:** [02 - IMU Sensors](02-imu-sensors.md)
 
 ---
 

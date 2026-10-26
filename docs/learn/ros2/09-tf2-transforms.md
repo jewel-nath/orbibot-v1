@@ -1,12 +1,3 @@
----
-title: "09 - TF2 Transforms"
-type: learn
-area: ros2
-tags:
-  - learn
-  - ros2
----
-
 # 09 - TF2 Transforms
 
 **Coordinate frame management**
@@ -48,7 +39,7 @@ map (world)
 
 ## 📖 Next Steps
 
-**→ Continue to:** [[10-bag-recording]]
+**→ Continue to:** [10 - Bag Recording](10-bag-recording.md)
 
 ---
 

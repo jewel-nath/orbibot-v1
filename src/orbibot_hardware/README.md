@@ -8,6 +8,17 @@ publishes the sensor data as standard ROS 2 topics and forwards `/cmd_vel` comma
 to the firmware. For firmware internals, see
 [orbibot_rosmaster_firmware/README.md](../orbibot_rosmaster_firmware/README.md).
 
+**Status:** used on the robot. On 2026-08-03, with the robot standing still,
+`/imu/data_raw`, `/joint_states` and `/orbibot/encoders` were measured at
+about 50 Hz and `/odom` at its 0.5 s heartbeat
+([test report](../orbibot_rosmaster_firmware/test-report.md), §9.5).
+
+`rosmaster_driver.py` is the serial protocol half and `hardware_node.py` the
+ROS half. The driver is based on Yahboom's `Rosmaster_Lib`. When the firmware
+and the driver disagree about a packet's length, the driver drops it without
+an error, so check both sides of [`include/protocol.h`](../orbibot_rosmaster_firmware/include/protocol.h)
+first when a topic goes quiet.
+
 ---
 
 ## Nodes
@@ -34,7 +45,6 @@ Publishes sensor data and accepts velocity/PID commands.
 | `/odom` | `nav_msgs/Odometry` | Reliable, TRANSIENT_LOCAL (depth 5) | ~20Hz (heartbeat when idle) | Firmware wheel odometry; deduplicated; re-published at `odometry.heartbeat_interval` when unchanged so late joiners (e.g. web GUI) get data |
 | `/imu/data` | `sensor_msgs/Imu` | Best Effort (depth 5) | 50Hz | Filtered attitude (orientation) + accel + gyro |
 | `/imu/data_raw` | `sensor_msgs/Imu` | Best Effort (depth 5) | ~20Hz (firmware) / 50Hz timer | Raw accel + gyro, no orientation (for imu_filter_madgwick). Firmware sends at 20Hz; node re-publishes at 50Hz timer rate (most recent frame). |
-| `/imu/mag` | `sensor_msgs/MagneticField` | Best Effort (depth 5) | ~20Hz (firmware) / 50Hz timer | Magnetometer in Tesla (skipped if all-zero). Same rate note as above. |
 | `/orbibot/encoders` | `std_msgs/Int32MultiArray` | Best Effort (depth 5) | ~20Hz (firmware) / 50Hz timer | Raw encoder counts `[FL, BL, FR, BR]` in ticks. Same rate note as above. |
 | `/joint_states` | `sensor_msgs/JointState` | Reliable (depth 10) | 50Hz | Wheel positions (rad) for RViz visualization |
 | `/orbibot/system_status` | `orbibot_msgs/SystemStatus` | Reliable (depth 10) | 10Hz | Battery voltage, motor state, hardware health |
@@ -46,11 +56,10 @@ Publishes sensor data and accepts velocity/PID commands.
 | Service | Type | Description |
 |---------|------|-------------|
 | `/orbibot/set_motor_enable` | `orbibot_msgs/SetMotorEnable` | Enable/disable motors |
-| `/orbibot/calibrate_imu` | `orbibot_msgs/CalibrateIMU` | **DEPRECATED.** Sends (0,0,0) to firmware (no-op). Use `ros2 run orbibot_localization calibrate_magnetometer` instead. |
+| `/orbibot/calibrate_imu` | `orbibot_msgs/CalibrateIMU` | Does nothing, kept for compatibility. The firmware calibrates the gyro and accelerometer itself at boot. |
 | `/orbibot/reset_odometry` | `orbibot_msgs/ResetOdometry` | Reset firmware odometry to `(0,0,0)`; encoder counts unchanged. `reset_pose` field is not supported — firmware always resets to zero. |
 | `/orbibot/reset_encoders` | `orbibot_msgs/ResetEncoders` | Reset encoder counts to zero (MCU + node state); odometry unchanged |
 | `/orbibot/get_firmware_version` | `orbibot_msgs/GetFirmwareVersion` | Request firmware version from STM32; returns `major`, `minor`, `version_string` |
-| `/orbibot/set_mag_calibration` | `orbibot_msgs/SetMagCalibration` | Set magnetometer hard-iron offsets explicitly in µT (`offset_x`, `offset_y`, `offset_z`) |
 
 ---
 
@@ -105,11 +114,9 @@ See [config/hardware_params.yaml](config/hardware_params.yaml) for all parameter
 | `rates` | `status_rate` | `10.0` Hz | System/safety status publish rate |
 | `safety` | `battery_low_threshold` | `11.0` V | Low battery warning level |
 | `safety` | `battery_critical_voltage` | `10.5` V | Emergency stop threshold |
-| `imu` | `accel_covariance_x/y/z` | `0.01` | Per-axis accel covariance (m/s^2)^2 |
-| `imu` | `gyro_covariance_x/y/z` | `0.0025` | Per-axis gyro covariance (rad/s)^2 |
+| `imu` | `accel_covariance_x/y/z` | `8.1e-5`, `5.3e-5`, `4.1e-5` | Per-axis accel covariance (m/s²)², measured 2026-03-24 (212 samples, robot still) |
+| `imu` | `gyro_covariance_x/y/z` | `1e-6`, `2.6e-5`, `1e-6` | Per-axis gyro covariance (rad/s)², measured 2026-03-24 |
 | `imu` | `orientation_covariance` | `0.0025` | Orientation covariance (rad^2) |
-| `imu` | `mag_hard_iron_x/y/z` | `0.0` T | Hard-iron bias (permanent magnet offset). Run `calibrate_magnetometer` to compute. |
-| `imu` | `mag_soft_iron_scale_x/y/z` | `1.0` | Soft-iron axis scale (ferromagnetic distortion). Run `calibrate_magnetometer` to compute. |
 | `odometry` | `pose_base` | `0.001` | Base position variance (m²) |
 | `odometry` | `pose_drift` | `0.02` | Position variance drift per meter traveled |
 | `odometry` | `yaw_base` | `0.01` | Base yaw variance (rad²) |
@@ -141,18 +148,10 @@ ros2 topic pub --once /orbibot/yaw_pid_save std_msgs/msg/Float32MultiArray \
   "data: [0.4, 0.0, 0.1]"
 ```
 
-## Firmware Version and Magnetometer Calibration
+## Firmware Version
 
 ```bash
-# Request firmware version from STM32
 ros2 service call /orbibot/get_firmware_version orbibot_msgs/srv/GetFirmwareVersion '{}'
-
-# Set explicit magnetometer hard-iron offsets (µT)
-ros2 service call /orbibot/set_mag_calibration orbibot_msgs/srv/SetMagCalibration \
-  '{offset_x: 5.2, offset_y: -3.1, offset_z: 1.0}'
-
-# Full magnetometer calibration procedure (recommended)
-ros2 run orbibot_localization calibrate_magnetometer
 ```
 
 ## Buzzer Examples
@@ -167,7 +166,8 @@ ros2 topic pub --once /orbibot/beep std_msgs/msg/UInt16 "data: 0"    # Off
 
 ## IMU Topic Architecture
 
-hardware_node publishes **three** IMU-related topics. Understanding which topic to use where is critical:
+hardware_node publishes **two** IMU topics. The ICM-20948's magnetometer is not used: it was removed on 2026-04-28, because indoors the steel frame, the motors and the battery currents bent the field enough to make heading worse.
+Which topic goes where matters:
 
 ```
 hardware_node publishes:
@@ -180,17 +180,12 @@ hardware_node publishes:
                      PURPOSE: Input to imu_filter_madgwick
                      ✅ Madgwick subscribes to this
 
-  /imu/mag           Magnetometer in Tesla (hard+soft iron corrected in Python from yaml)
-                     Skipped when all-zero (DRDY not set)
-                     PURPOSE: Input to imu_filter_madgwick
-                     ✅ Madgwick subscribes to this
-
 imu_filter_madgwick publishes:
-  /imu/data_filtered  Fused orientation quaternion (accel + gyro + mag)
+  /imu/data_filtered  Fused orientation quaternion (accel + gyro, use_mag: false)
                       ✅ EKF subscribes to this (yaw + yaw_rate in relative mode)
 ```
 
-**Magnetometer correction** is applied in Python (`_publish_mag`) using hard-iron offsets and soft-iron scale factors from `hardware_params.yaml`. The firmware has a 3x3 soft-iron matrix capability (`imu_set_mag_calibration`) but it is not activated during normal operation — Python-side correction is the active path.
+With no magnetometer there is no absolute heading: the EKF takes the IMU's yaw in relative mode, and slam_toolbox or AMCL correct the drift through `map → odom`.
 
 ---
 

@@ -1,12 +1,3 @@
----
-title: "00 - ROS2 Overview"
-type: learn
-area: ros2
-tags:
-  - learn
-  - ros2
----
-
 # 00 - ROS2 Overview
 
 **What is ROS2 and why do we use it?**
@@ -306,7 +297,7 @@ OrbiBot uses:
 
 Learn how to set up a workspace:
 
-**→ Continue to:** [[01-workspace-and-packages]]
+**→ Continue to:** [01 - Workspace and Packages](01-workspace-and-packages.md)
 
 ---
 

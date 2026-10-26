@@ -246,7 +246,7 @@ planners that may emit very slow approach velocities.
 `tests/test_motor_direction.py` uses `proto.set_motor()` which sends func code
 `0x09`. In the current firmware, `0x09` is `FUNC_RESET_ODOM` — not
 direct-motor-drive. The `FUNC_MOTOR = 0x10` opcode was deprecated years ago
-(see NEW-ISSUE-8 in `firmware-issue.md`). Running the script would therefore
+(see NEW-ISSUE-8 in `known-issues.md`). Running the script would therefore
 reset odometry four times and never spin a motor.
 
 **Recommended fix (future PR):** rewrite `test_motor_direction.py` to use
@@ -256,7 +256,7 @@ the live mecanum table in §6 already proves per-wheel direction.
 ## 9. Deep-Dive Audit Live Verification — 2026-04-28
 
 **Auditor:** Claude (Opus 4.7) under Jewel Nath's direction.
-**Scope:** Live-verify findings in `firmware-issue-deepdive.md` that are
+**Scope:** Live-verify findings in `known-issues.md` that are
 testable on the bench. Robot wheels off the ground, battery 12.5 V.
 
 ### 9.1 DD-1 — Truncated-payload command handling (CRITICAL)
@@ -353,7 +353,7 @@ value. Recommended Phase 3 follow-up:
    correctly hard-iron corrected.
 
 This isn't a bug — it's a design-consistency gap with the PID handler
-(which does have the gate). Logged as **DD-11** in `firmware-issue-deepdive.md`.
+(which does have the gate). Logged as **DD-11** in `known-issues.md`.
 
 ---
 

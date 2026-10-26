@@ -1,17 +1,12 @@
----
-title: "Dashboard Design"
-type: architecture
-tags:
-  - architecture
-  - webgui
-  - performance
----
-
 # Dashboard Design
 
 A dashboard that shows everything and controls everything, while leaving the
 Pi 5 enough CPU to run Nav2. The constraint is not rendering — that happens in
 the operator's browser — it is **what the Pi has to serialise and send**.
+
+**Status: designed, not built.** The dashboard that runs today is described in
+[orbibot_webgui](../../src/orbibot_webgui/README.md); this page is the plan for making it cheaper. Its CPU and
+bandwidth figures are estimates, not measurements.
 
 ---
 
@@ -94,7 +89,7 @@ for v in /dev/video{0..5}; do echo "--- $v"; v4l2-ctl -d $v --list-formats; done
 If ROS ever needs an image — the agent's planned vision tools — add an
 **on-demand snapshot service**, not a continuous stream.
 
-> The camera being on a 480 Mbps link (see [[inventory]]) does not block this.
+> The camera being on a 480 Mbps link (see [Hardware](../hardware/README.md)) does not block this.
 > USB 2.0 is fine for a single colour stream. Moving it to a blue port is
 > worth doing when convenient, and becomes required only if depth is revived.
 
@@ -114,7 +109,7 @@ frontend; it only answers rosbridge and WebRTC.
 
 | Control | Publishes / calls |
 |---|---|
-| Drive (on-screen joystick + browser Gamepad API) | `/cmd_vel_web` — see [[command-pipeline]] |
+| Drive (on-screen joystick + browser Gamepad API) | `/cmd_vel_web` — see [Command Pipeline](command-pipeline.md) |
 | Emergency stop | `/cmd_vel_estop`, top priority |
 | Motor enable | `SetMotorEnable` |
 | Reset odometry / encoders | `ResetOdometry`, `ResetEncoders` |
@@ -150,7 +145,7 @@ Requirements that follow from the network being in the control loop:
   are steering through it.
 
 `orbibot_teleop` (Pi-side `/joy`) is deliberately not wired up — see
-[[command-pipeline]].
+[Command Pipeline](command-pipeline.md).
 
 ## Budget to hold
 
@@ -169,4 +164,4 @@ Record real numbers as they are measured — a budget nobody checks is decoratio
 
 ## Related
 
-[[roadmap]] · [[command-pipeline]] · [[orbibot_webgui]] · [[inventory]]
+[Command Pipeline](command-pipeline.md) · [orbibot_webgui](../../src/orbibot_webgui/README.md) · [Hardware](../hardware/README.md)

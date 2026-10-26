@@ -1,13 +1,3 @@
----
-title: "02 - Xacro Macros"
-type: learn
-area: description
-package: orbibot_description
-tags:
-  - learn
-  - description
----
-
 # 02 - Xacro Macros
 
 **Making URDF reusable and maintainable**
@@ -88,7 +78,7 @@ tags:
 
 See OrbiBot's complete URDF:
 
-**→ Continue to:** [[03-orbibot-urdf-walkthrough]]
+**→ Continue to:** [03 - OrbiBot URDF Walkthrough](03-orbibot-urdf-walkthrough.md)
 
 ---
 

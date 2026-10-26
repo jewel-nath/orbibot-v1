@@ -1,0 +1,45 @@
+OrbiBot V1
+Copyright 2025-2026 Jewel Nath
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This repository includes or builds on work by others:
+
+- FreeRTOS Kernel V10.4.3 LTS Patch 1
+  src/orbibot_rosmaster_firmware/lib/FreeRTOS/, include/FreeRTOSConfig.h
+  Copyright (C) 2020 Amazon.com, Inc. or its affiliates. MIT License,
+  kept in each file's header.
+
+- STM32F10x Standard Peripheral Library V3.5.0
+  src/orbibot_rosmaster_firmware/lib/STM32F10x_StdPeriph_Driver/,
+  include/stm32f10x.h, include/system_stm32f10x.h, include/stm32f10x_conf.h
+  Copyright 2011 STMicroelectronics, under the notice kept in each file.
+
+- ARM CMSIS Cortex-M3 core peripheral access layer V1.30
+  src/orbibot_rosmaster_firmware/include/core_cm3.h
+  Copyright (C) 2009 ARM Limited, under the notice kept in the file.
+
+- stm32-ssd1306 by Aleksander Alekseev: the Font7x10 table in
+  src/orbibot_rosmaster_firmware/src/drivers/oled_fonts.c
+  Copyright (c) 2018 Aleksander Alekseev. MIT License, in
+  LICENSES/stm32-ssd1306.txt.
+
+- Yahboom Rosmaster_Lib: the serial driver in
+  src/orbibot_hardware/orbibot_hardware/rosmaster_driver.py is based on it,
+  and the firmware speaks a Yahboom-compatible protocol. Yahboom distributes
+  it with the ROSMaster board's course materials, without a stated licence.
+  The board's materials: https://github.com/YahboomTechnology/ROS-robot-expansion-board
+
+- m-explore-ros2 (BSD License, Copyright (c) 2015-2016 Carlos Alvarez): the
+  frontier search in src/orbibot_exploration is a Python re-implementation of
+  its algorithm. No code is copied.
+  https://github.com/robo-friends/m-explore-ros2
+
+- shadcn/ui (MIT): the button and tabs components and the cn() helper in
+  src/orbibot_webgui/frontend follow its generated components.
+  https://ui.shadcn.com/
+
+The three STL meshes in src/orbibot_description/meshes/ are third-party CAD
+of unrecorded origin. The text routines of the SSD1306 OLED driver
+(src/orbibot_rosmaster_firmware/src/hal/hal_ssd1306.c) follow the widely
+copied TM SSD1306 library's API; where this copy came from is being checked.

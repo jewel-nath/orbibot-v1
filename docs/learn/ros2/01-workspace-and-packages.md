@@ -1,12 +1,3 @@
----
-title: "01 - Workspace and Packages"
-type: learn
-area: ros2
-tags:
-  - learn
-  - ros2
----
-
 # 01 - Workspace and Packages
 
 **Setting up ROS2 development environment**
@@ -86,7 +77,7 @@ my_package/                 ← Package directory
   <version>0.0.1</version>
   <description>My awesome package</description>
   <maintainer email="me@example.com">My Name</maintainer>
-  <license>MIT</license>
+  <license>Apache-2.0</license>
 
   <buildtool_depend>ament_python</buildtool_depend>
   
@@ -116,7 +107,7 @@ setup(
     maintainer='My Name',
     maintainer_email='me@example.com',
     description='My awesome package',
-    license='MIT',
+    license='Apache-2.0',
     entry_points={
         'console_scripts': [
             'my_node = my_package.my_node:main',
@@ -204,7 +195,7 @@ source install/setup.bash
 
 Learn about nodes:
 
-**→ Continue to:** [[02-nodes-and-executors]]
+**→ Continue to:** [02 - Nodes and Executors](02-nodes-and-executors.md)
 
 ---
 

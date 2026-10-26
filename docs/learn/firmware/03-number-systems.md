@@ -1,18 +1,7 @@
----
-title: "Part 0: Number Systems"
-type: learn
-area: firmware
-package: orbibot_rosmaster_firmware
-duration: "20 minutes"
-tags:
-  - learn
-  - firmware
----
-
 # Part 0: Number Systems
 
 **Duration**: 20 minutes  
-**Prerequisites**: [[02-electronics-fundamentals]]
+**Prerequisites**: [Part 0: Electronics Fundamentals](02-electronics-fundamentals.md)
 
 ---
 
@@ -290,7 +279,7 @@ if (value & (1 << 3)) {
 
 ## Next Lesson
 
-[[04-memory-and-registers]] - Memory types and register addressing
+[Part 0: Memory and Registers](04-memory-and-registers.md) - Memory types and register addressing
 
 ---
 

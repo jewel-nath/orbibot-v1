@@ -1,14 +1,6 @@
----
-title: "02 - IMU Sensors"
-type: learn
-area: localization
-package: orbibot_localization
-tags:
-  - learn
-  - localization
----
-
 # 02 - IMU Sensors
+
+> **Note:** this lesson was written before 2026-04-28, when OrbiBot stopped using the ICM-20948's magnetometer. It explains the magnetometer because it is part of the chip; OrbiBot found it unusable indoors, next to a steel frame, motors and battery currents. Today the IMU sends gyro and accelerometer only, in a 12-byte packet, and the yaw comes from the gyro alone.
 
 **Inertial Measurement Unit**
 
@@ -99,7 +91,7 @@ imu.linear_acceleration.z = 9.8  # gravity
 
 1. **Accelerometer** = Linear acceleration + gravity
 2. **Gyroscope** = Rotation rate
-3. **Magnetometer** = Absolute heading
+3. **Magnetometer** = Absolute heading, where the field is clean (OrbiBot does not use one)
 4. **Combined** = Complete orientation
 
 ---
@@ -108,7 +100,7 @@ imu.linear_acceleration.z = 9.8  # gravity
 
 Learn sensor fusion:
 
-**→ Continue to:** [[03-sensor-fusion-concept]]
+**→ Continue to:** [03 - Sensor Fusion Concept](03-sensor-fusion-concept.md)
 
 ---
 

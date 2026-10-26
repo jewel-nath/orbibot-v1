@@ -4,8 +4,8 @@
   <name>orbibot_teleop</name>
   <version>1.0.0</version>
   <description>Keyboard and simple teleoperation package for OrbiBot</description>
-  <maintainer email="jewel.nath@orbitax.com">Jewel Nath</maintainer>
-  <license>MIT</license>
+  <maintainer email="58494211+jewel-nath@users.noreply.github.com">Jewel Nath</maintainer>
+  <license>Apache-2.0</license>
 
   <depend>rclpy</depend>
   <depend>geometry_msgs</depend>

@@ -453,7 +453,7 @@ class TestOdomDeduplication:
 # ---------------------------------------------------------------------------
 
 # Magnetometer calibration tests removed 2026-04-28 — mag support dropped
-# from firmware and driver (see firmware-changelog.md).
+# from firmware and driver (see CHANGELOG.md).
 
 
 # ---------------------------------------------------------------------------

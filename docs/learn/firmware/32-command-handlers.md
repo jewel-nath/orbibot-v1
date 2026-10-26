@@ -1,18 +1,7 @@
----
-title: "Part 3: Command Handlers"
-type: learn
-area: firmware
-package: orbibot_rosmaster_firmware
-duration: "30 minutes"
-tags:
-  - learn
-  - firmware
----
-
 # Part 3: Command Handlers
 
 **Duration**: 30 minutes  
-**Prerequisites**: [[31-packet-structure]]
+**Prerequisites**: [Part 3: Packet Structure](31-packet-structure.md)
 
 ---
 
@@ -564,7 +553,7 @@ void parse_motion_data(const uint8_t *data)
 
 ## Next Lesson
 
-[[33-auto-reporting]] - Automatic data streaming
+[Part 3: Auto-Reporting](33-auto-reporting.md) - Automatic data streaming
 
 ---
 

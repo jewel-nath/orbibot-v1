@@ -1,13 +1,3 @@
----
-title: "00 - Sensor Overview"
-type: learn
-area: sensors
-package: orbibot_sensors
-tags:
-  - learn
-  - sensors
----
-
 # 00 - Sensor Overview
 
 **Types of robot sensors**
@@ -86,7 +76,7 @@ tags:
 
 Learn about LiDAR:
 
-**→ Continue to:** [[01-lidar-basics]]
+**→ Continue to:** [01 - LiDAR Basics](01-lidar-basics.md)
 
 ---
 

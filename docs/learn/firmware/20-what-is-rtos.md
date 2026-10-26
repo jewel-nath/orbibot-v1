@@ -1,18 +1,7 @@
----
-title: "Part 2: What is a Real-Time Operating System?"
-type: learn
-area: firmware
-package: orbibot_rosmaster_firmware
-duration: "20 minutes"
-tags:
-  - learn
-  - firmware
----
-
 # Part 2: What is a Real-Time Operating System?
 
 **Duration**: 20 minutes  
-**Prerequisites**: [[03-number-systems]]
+**Prerequisites**: [Part 0: Number Systems](03-number-systems.md)
 
 ---
 
@@ -343,7 +332,7 @@ Best of both:
 
 ## Next Lesson
 
-[[21-tasks-and-scheduler]] - Creating tasks and understanding the scheduler
+[Part 2: Tasks and Scheduler](21-tasks-and-scheduler.md) - Creating tasks and understanding the scheduler
 
 ---
 

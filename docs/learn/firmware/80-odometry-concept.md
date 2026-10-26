@@ -1,18 +1,7 @@
----
-title: "Part 8: What is Odometry?"
-type: learn
-area: firmware
-package: orbibot_rosmaster_firmware
-duration: "20 minutes"
-tags:
-  - learn
-  - firmware
----
-
 # Part 8: What is Odometry?
 
 **Duration**: 20 minutes  
-**Prerequisites**: [[52-forward-kinematics]]
+**Prerequisites**: [Part 5: Forward Kinematics](52-forward-kinematics.md)
 
 ---
 
@@ -362,7 +351,7 @@ Answer: (1.79m, 0.43m, 0.5rad or 28.6°)
 
 ## Next Lesson
 
-[[81-encoder-to-distance]] - How encoder counts become distance
+[Part 8: From Encoders to Distance](81-encoder-to-distance.md) - How encoder counts become distance
 
 ---
 

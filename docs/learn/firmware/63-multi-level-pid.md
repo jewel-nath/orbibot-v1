@@ -1,18 +1,7 @@
----
-title: "Part 6: Multi-Level PID"
-type: learn
-area: firmware
-package: orbibot_rosmaster_firmware
-duration: "20 minutes"
-tags:
-  - learn
-  - firmware
----
-
 # Part 6: Multi-Level PID
 
 **Duration**: 20 minutes  
-**Prerequisites**: [[62-pid-implementation]]
+**Prerequisites**: [Part 6: PID Implementation in Firmware](62-pid-implementation.md)
 
 ---
 
@@ -348,7 +337,7 @@ but must reduce Kp more at high speed due to inertia.
 
 ## Next Lesson
 
-[[64-yaw-control]] - Heading control with yaw PID
+[Part 6: Yaw Control (Heading Control)](64-yaw-control.md) - Heading control with yaw PID
 
 ---
 

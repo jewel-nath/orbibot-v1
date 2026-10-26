@@ -1,12 +1,3 @@
----
-title: "10 - Bag Recording"
-type: learn
-area: ros2
-tags:
-  - learn
-  - ros2
----
-
 # 10 - Bag Recording
 
 **Recording and replaying ROS2 data**
@@ -56,7 +47,7 @@ ros2 bag play rosbag2_... --rate 0.5
 
 ## 📖 Next Steps
 
-**→ Continue to:** [[11-rviz-basics]]
+**→ Continue to:** [11 - RViz Basics](11-rviz-basics.md)
 
 ---
 

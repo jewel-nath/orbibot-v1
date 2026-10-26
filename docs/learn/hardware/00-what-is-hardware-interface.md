@@ -1,13 +1,3 @@
----
-title: "00 - What is a Hardware Interface?"
-type: learn
-area: hardware
-package: orbibot_hardware
-tags:
-  - learn
-  - hardware
----
-
 # 00 - What is a Hardware Interface?
 
 **Understanding how software talks to physical robots**
@@ -283,7 +273,7 @@ You can see the communication flow working.
 
 Now you understand what a hardware interface does. Next, learn the ROS 2 concepts that make it work:
 
-**→ Continue to:** [[01-ros2-basics-for-hardware]]
+**→ Continue to:** [01 - ROS 2 Basics for Hardware](01-ros2-basics-for-hardware.md)
 
 ---
 

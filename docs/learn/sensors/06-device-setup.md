@@ -1,13 +1,3 @@
----
-title: "06 - Device Setup"
-type: learn
-area: sensors
-package: orbibot_sensors
-tags:
-  - learn
-  - sensors
----
-
 # 06 - Device Setup
 
 **udev rules and permissions**

@@ -4,6 +4,10 @@
  * @author Jewel Nath
  * @date 2025-11-30
  * 
+ * The Font7x10 table is from afiskon/stm32-ssd1306 (ssd1306_fonts.c),
+ * https://github.com/afiskon/stm32-ssd1306
+ * Copyright (c) 2018 Aleksander Alekseev. MIT License: see LICENSES/stm32-ssd1306.txt.
+ *
  * Contains font data for OLED display.
  * Currently only includes 7x10 font to save flash memory.
  */

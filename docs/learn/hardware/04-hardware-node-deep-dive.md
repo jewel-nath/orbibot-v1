@@ -1,14 +1,6 @@
----
-title: "04 - Hardware Node Deep Dive"
-type: learn
-area: hardware
-package: orbibot_hardware
-tags:
-  - learn
-  - hardware
----
-
 # 04 - Hardware Node Deep Dive
+
+> **Note:** this lesson was written before 2026-04-28, when OrbiBot stopped using the ICM-20948's magnetometer. The code below still creates an `/imu/mag` publisher. Today the IMU sends gyro and accelerometer only, in a 12-byte packet, and the yaw comes from the gyro alone.
 
 **Line-by-line analysis of hardware_node.py**
 
@@ -699,11 +691,11 @@ except Exception as e:
 
 Now you understand the hardware node. Next, learn about the low-level driver:
 
-**→ Continue to:** [[05-driver-deep-dive]]
+**→ Continue to:** [05 - Driver Deep Dive](05-driver-deep-dive.md)
 
 Or jump to sensor topics:
 
-**→ Or go to:** [[02-imu-sensors]]
+**→ Or go to:** [02 - IMU Sensors](../localization/02-imu-sensors.md)
 
 ---
 

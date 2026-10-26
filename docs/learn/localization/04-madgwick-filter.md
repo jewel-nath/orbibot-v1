@@ -1,14 +1,6 @@
----
-title: "04 - Madgwick Filter"
-type: learn
-area: localization
-package: orbibot_localization
-tags:
-  - learn
-  - localization
----
-
 # 04 - Madgwick Filter
+
+> **Note:** this lesson was written before 2026-04-28, when OrbiBot stopped using the ICM-20948's magnetometer. Where it mentions the magnetometer, it describes the 9-DOF mode OrbiBot no longer uses. Today the IMU sends gyro and accelerometer only, in a 12-byte packet, and the yaw comes from the gyro alone.
 
 **IMU orientation fusion**
 
@@ -53,14 +45,14 @@ Output:
 |-----------|---------|--------|
 | gain | 0.1 | Higher = faster response, more noise |
 | zeta | 0.0 | Gyro drift compensation |
-| use_mag | true | Use magnetometer for yaw |
+| use_mag | false | No magnetometer on OrbiBot: Madgwick runs on gyro and accel (6-DOF) |
 
 ---
 
 ## 🎯 Key Takeaways
 
 1. **Madgwick** = Fast orientation fusion
-2. **Fuses** gyro + accel + mag
+2. **Fuses** gyro + accel (OrbiBot has no magnetometer input)
 3. **Output** = Quaternion orientation
 4. **Runs at** 50Hz on OrbiBot
 
@@ -70,7 +62,7 @@ Output:
 
 Learn EKF:
 
-**→ Continue to:** [[05-ekf-basics]]
+**→ Continue to:** [05 - EKF Basics](05-ekf-basics.md)
 
 ---
 

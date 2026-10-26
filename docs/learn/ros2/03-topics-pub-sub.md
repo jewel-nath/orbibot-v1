@@ -1,12 +1,3 @@
----
-title: "03 - Topics and Pub/Sub"
-type: learn
-area: ros2
-tags:
-  - learn
-  - ros2
----
-
 # 03 - Topics and Pub/Sub
 
 **The heart of ROS2 communication**
@@ -392,7 +383,7 @@ ros2 topic echo /count
 
 Learn about message interfaces:
 
-**→ Continue to:** [[04-messages-interfaces]]
+**→ Continue to:** [04 - Messages and Interfaces](04-messages-interfaces.md)
 
 ---
 

@@ -1,18 +1,9 @@
----
-title: "Part 2: OrbiBot Task Architecture"
-type: learn
-area: firmware
-package: orbibot_rosmaster_firmware
-duration: "25 minutes"
-tags:
-  - learn
-  - firmware
----
-
 # Part 2: OrbiBot Task Architecture
 
+> **Note:** this lesson was written before 2026-04-28, when OrbiBot stopped using the ICM-20948's magnetometer. The IMU task below still shows the magnetometer and a gyro/magnetometer complementary filter. Today the IMU sends gyro and accelerometer only, in a 12-byte packet, and the yaw comes from the gyro alone.
+
 **Duration**: 25 minutes  
-**Prerequisites**: [[21-tasks-and-scheduler]], [[22-inter-task-communication]]
+**Prerequisites**: [Part 2: Tasks and Scheduler](21-tasks-and-scheduler.md), [Part 2: Inter-Task Communication](22-inter-task-communication.md)
 
 ---
 
@@ -636,7 +627,7 @@ void create_tasks(void)
 
 ## Next Lesson
 
-[[30-serial-protocol-basics]] - Communication protocol overview
+[Part 3: Serial Communication Protocol](30-serial-protocol-basics.md) - Communication protocol overview
 
 ---
 

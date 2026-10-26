@@ -1,66 +1,59 @@
----
-title: "OrbiBot Docs"
-type: moc
-tags:
-  - moc
-  - home
----
+# OrbiBot V1 documentation
 
-# OrbiBot
-
-Mecanum-wheeled indoor robot. ROS 2 Jazzy on a Raspberry Pi 5, motor control on
-a Yahboom ROSMaster V3.0 (STM32F103RCT6) over serial at 115200 baud.
-
-**Claude Code runs on the robot's own Pi**, wired to the motor board and the
-LiDAR. Commands here move real wheels — `.claude/rules/robot-safety.md` first.
-
----
+The code is the source of truth: when a page disagrees with the code, the page
+is wrong. Each package documents itself beside its code; this folder holds what
+belongs to the robot as a whole.
 
 ## Start here
 
-| You want | Go to |
+| Page | What it covers |
 |---|---|
-| What to build next | [[roadmap]] — phases, and the numbers that gate each one |
-| What is broken | [[backlog-moc]] — where every open finding lives |
-| How the pieces connect | [[system-overview]] |
-| Who is allowed to drive the robot | [[command-pipeline]] |
-| A dashboard that fits the Pi's CPU | [[dashboard-design]] |
-| One package | [[packages-moc]], then that package's own `README.md` |
-| Learning a subsystem from zero | [[learn-moc]] — 71 lessons, six areas |
-| The board itself — pinout, timers, rails | [[rosmaster-board]] |
-| What hardware is actually fitted | [[inventory]] |
-| How another robot solved this | [[yahboom-rosmaster-x3]], [[lgdxrobot2]], [[aubot]] |
+| [Getting started](getting-started.md) | Setting up the Pi, the firmware and a first launch |
+| [Running the robot](operations/running.md) | Launch recipes: the base, the dashboard, mapping, navigation, exploration, the agent |
+| [Status](status.md) | What was built, what was tested and how, and the known limits |
+| [Packages](packages.md) | The 13 packages, with links to each one's README |
 
----
+## How it works
 
-## Where truth lives
+| Page | What it covers |
+|---|---|
+| [System overview](architecture/system-overview.md) | The two-computer split, the data flow, the estimation chain and the frames |
+| [Command pipeline](architecture/command-pipeline.md) | How velocity commands should reach the wheels (designed, not built) |
+| [Dashboard design](architecture/dashboard-design.md) | A cheaper data path for the web dashboard (designed, not built) |
+| [Hardware](hardware/README.md) | What is on the robot, measured, and the parts list |
+| [ROSMaster board](hardware/rosmaster-board.md) | The motor board's pins, timers and power |
 
-**The code decides.** If a note disagrees with the code, the note is a bug.
+## Working on it
 
-Documentation sits **beside the code it describes**, not in here:
+| Page | What it covers |
+|---|---|
+| [Testing guide](testing/README.md) | Test procedures and what each step should show |
+| [Baseline run, 2026-03-14](testing/2026-03-14-baseline.md) | An early full-system run, kept as a record |
+| [PID tuning](operations/pid-tuning.md) | Tuning the wheel and yaw PIDs from the dashboard |
+| [Troubleshooting](operations/troubleshooting.md) | The first checks when something doesn't work |
+
+## Learning from it
+
+[The lessons](learn/README.md): 70 lessons in six areas (ROS 2, firmware,
+the hardware bridge, the robot model, localisation and sensors), built on
+this robot's code.
+
+## Other robots
+
+Robots whose designs were compared with OrbiBot's:
+[Yahboom ROSMaster X3](reference/yahboom-rosmaster-x3.md), the source of the
+serial protocol and driver;
+[LGDXRobot2](reference/lgdxrobot2.md) and its
+[ChassisTuner](reference/lgdxrobot2-chassistuner.md); and
+[AuBot](reference/aubot.md).
+
+## Inside each package
 
 ```
-src/<pkg>/README.md            the API — topics, services, parameters
-src/<pkg>/<pkg>-issue.md       what is open, with severity
-src/<pkg>/<pkg>-changelog.md   what changed and why
-testing-guide.md               procedures and pass criteria
-src/orbibot_rosmaster_firmware/test-report.md
-                               what has been verified live, and when
+src/<package>/README.md          topics, services, parameters, launch files
+src/<package>/CHANGELOG.md       what changed and why (where kept)
+src/<package>/known-issues.md    what is open
+src/orbibot_rosmaster_firmware/test-report.md   what was tested on the hardware, and when
 ```
 
-`docs/` holds what has nowhere else to go: **why** the system is shaped this
-way, **what is planned**, **what was measured**, and **how to learn it**. Notes
-here point at the per-package files rather than copying them — a copy is a
-future contradiction.
-
-## Reading this as a vault
-
-The Obsidian vault root is the **repository root**, not `docs/`. That is
-deliberate: it lets a note link straight to `[[firmware-architecture]]` or
-`[[testing-guide]]` where they actually live, in `src/` and at the top level.
-
-`docs/COLCON_IGNORE` keeps colcon out of this tree.
-
-## Related
-
-[[roadmap]] · [[backlog-moc]] · [[packages-moc]] · [[learn-moc]] · [[system-overview]]
+`docs/COLCON_IGNORE` keeps colcon out of this folder.

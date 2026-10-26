@@ -1,55 +1,59 @@
 # orbibot_navigation
 
-Nav2 navigation stack for OrbiBot mecanum robot. MPPI controller with Omni motion model.
+Nav2 configuration, launch file and saved maps for OrbiBot. It uses the MPPI
+controller with the `Omni` motion model, because a mecanum robot can move
+sideways.
+
+**Status:** set up and run on the robot in a small room in March 2026;
+nothing about it was measured. Its speed and acceleration limits were never
+measured either. The footprint is the 350 × 250 mm frame, but the wheel
+centres are 360 mm apart, so the wheels stick out of it.
 
 ## Launch
 
+Start the robot base first (`ros2 launch orbibot_bringup robot.launch.py`),
+then:
+
 ```bash
+# Navigate on the default map, maps/map.yaml
 ros2 launch orbibot_navigation navigation.launch.py
 
-# With custom map
-ros2 launch orbibot_navigation navigation.launch.py map_file:=/path/to/map.yaml
+# Navigate on a map you saved
+ros2 launch orbibot_navigation navigation.launch.py map_file:=$HOME/maps/my_map.yaml
 ```
 
-### Parameters
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `params_file` | `config/nav2_params.yaml` | Nav2 parameters file |
-| `map_file` | `maps/map.yaml` | Map file for localization |
-| `use_sim_time` | `false` | Use simulation time |
-| `autostart` | `true` | Auto-start Nav2 stack |
-| `use_composition` | `false` | Use composed nodes |
-| `use_respawn` | `false` | Respawn crashed nodes |
+| Argument | Default | What it does |
+|---|---|---|
+| `params_file` | `config/nav2_params.yaml` | Nav2 parameters |
+| `map_file` | `maps/map.yaml` | The map to localise on |
+| `autostart` | `true` | Starts the Nav2 lifecycle nodes |
+| `use_composition` | `False` | Runs the nodes in one container |
+| `use_respawn` | `False` | Restarts nodes that crash |
 
 ## Configuration
 
-Key components in `config/nav2_params.yaml`:
+| File | For |
+|---|---|
+| `config/nav2_params.yaml` | Navigating on a saved map, with AMCL |
+| `config/nav2_params_slam.yaml` | Navigating while slam_toolbox builds the map |
+| `config/dock_database.yaml` | A minimal entry, so that Nav2's docking server starts |
+| `maps/` | Two saved maps, `map` and `home_map`, at 0.05 m per cell |
 
-- **MPPI Controller** — Omni motion model for mecanum wheels; full vy range (`vy_min: -0.5`)
-- **AMCL** — OmniMotionModel; adaptive recovery alphas enabled (fast: 0.1, slow: 0.001); `laser_min_range: 0.15`
-- **NavFn Planner** — A* global path planning
-- **Velocity Smoother** — controller (`cmd_vel_nav`) → smoother → collision_monitor (`cmd_vel`) chain
-- **Collision Monitor** — `FootprintApproach` (velocity-adaptive slowdown) + `PolygonStop` (hard stop for very close obstacles)
-- **Costmaps** — Local (rolling 6×6m) and global; update frequency matches controller frequency (10Hz)
+The main settings in `nav2_params.yaml`:
 
-## Frame Configuration
+- **Controller:** MPPI, `Omni` motion model, 5 Hz; 0.5 m/s forward and
+  sideways, 1.5 rad/s turning.
+- **Localisation:** AMCL with the omnidirectional motion model.
+- **Planner:** NavFn.
+- **Velocity chain:** controller (`cmd_vel_nav`) → `velocity_smoother` →
+  `collision_monitor` → `/cmd_vel`.
+- **Costmaps:** a rolling local costmap and a global costmap with the static
+  map, both with a 0.25 m inflation radius and the robot's 350 × 250 mm
+  footprint.
+- **Frames:** `map`, `odom`, and `base_footprint` as the robot's base frame.
 
-- **robot_base_frame**: `base_footprint`
-- **global_frame**: `map`
-- **odom_frame**: `odom`
-- **scan_topic**: `/scan`
-
-## Robot Specifications
-
-- Footprint: 350mm × 250mm mecanum
-- Max velocity: 0.5 m/s (x, y), 1.5 rad/s (angular — aligned across MPPI, smoother, and behavior server)
-- Inflation radius: 0.55m (costmap safety buffer)
-- Controller frequency: 10Hz (RPi 5 appropriate)
+`nav2_params_slam.yaml` runs MPPI at 8 Hz with a longer horizon.
 
 ## Dependencies
 
-- `nav2_bringup` — Nav2 launch infrastructure
-- `nav2_controller` — MPPI controller
-- `nav2_amcl` — Localization
-- `nav2_map_server` — Map serving
+`nav2_bringup`, `nav2_controller` (MPPI), `nav2_amcl` and `nav2_map_server`.
