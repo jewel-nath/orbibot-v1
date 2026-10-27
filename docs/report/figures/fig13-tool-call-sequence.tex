@@ -1,0 +1,20 @@
+% One request through the agent, as a sequence diagram.
+\begin{tikzpicture}[
+    actor/.style={box, minimum width=17mm, font=\scriptsize},
+    msg/.style={->, thick, font=\scriptsize},
+    ret/.style={->, densely dashed, font=\scriptsize}]
+  \foreach \x/\n/\t/\s in {0/u/User/uibox, 2.4/o/Orchestrator/uibox, 4.8/l/LLM/uibox, 7.2/s/Safety/warnbox, 9.6/r/ROS 2 and\\firmware/hostbox}{
+    \node[\s, actor] (\n) at (\x,0) {\t};
+    \draw[gray, thin] (\n.south) -- ++(0,-6.3);
+  }
+  \draw[msg] (0,-0.9) -- node[above] {``move 0.5\,m forward''} (2.4,-0.9);
+  \draw[msg] (2.4,-1.5) -- node[above] {message + 58 tool schemas} (4.8,-1.5);
+  \draw[ret] (4.8,-2.1) -- node[above] {tool call: \topic{move_robot}(vx, vy, wz, duration)} (2.4,-2.1);
+  \draw[msg] (2.4,-2.7) -- node[above] {validate} (7.2,-2.7);
+  \draw[ret] (7.2,-3.2) -- node[above] {clamped to limits} (2.4,-3.2);
+  \draw[msg] (2.4,-3.8) -- node[above, pos=0.7] {\topic{/cmd_vel}, then stop} (9.6,-3.8);
+  \draw[ret] (9.6,-4.4) -- node[above, pos=0.7] {odometry, status} (2.4,-4.4);
+  \draw[msg] (2.4,-5.0) -- node[above] {tool result} (4.8,-5.0);
+  \draw[ret] (4.8,-5.5) -- node[above] {final answer} (2.4,-5.5);
+  \draw[ret] (2.4,-6.0) -- node[above] {reply} (0,-6.0);
+\end{tikzpicture}

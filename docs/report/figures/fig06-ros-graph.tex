@@ -1,0 +1,36 @@
+% The main ROS 2 packages (not node names) and the topics between them.
+% Data flows left to right; the three /cmd_vel writers meet on the red bus below.
+\begin{tikzpicture}[pkg/.style={hostbox, minimum width=30mm, minimum height=9mm},
+                    ipkg/.style={uibox, minimum width=30mm, minimum height=9mm},
+                    tl/.style={font=\scriptsize, fill=white, inner sep=1pt}]
+  \def\ca{0} \def\cb{5.6} \def\cc{11.2} \def\cd{16.8}
+  \node[pkg] (rsp)   at (\ca, 2.0) {\topic{robot_state_publisher}\\(URDF)};
+  \node[pkg] (hw)    at (\ca, 0)   {\topic{orbibot_hardware}};
+  \node[warnbox, minimum width=30mm] (cmd) at (\ca,-2.0) {\topic{/cmd_vel}};
+  \node[pkg] (lidar) at (\cb, 2.0) {\topic{rplidar_ros}};
+  \node[pkg] (madg)  at (\cb, 0)   {Madgwick filter};
+  \node[ipkg] (web)  at (\cb,-2.0) {\topic{orbibot_webgui}\\(rosbridge)};
+  \node[pkg] (slam)  at (\cc, 2.0) {\topic{slam_toolbox}\\or AMCL};
+  \node[pkg] (ekf)   at (\cc, 0)   {EKF\\(\topic{robot_localization})};
+  \node[ipkg] (agent) at (\cc,-2.0) {\topic{orbibot_agent}};
+  \node[pkg] (expl)  at (\cd, 3.0) {\topic{orbibot_exploration}};
+  \node[pkg] (nav)   at (\cd, 1.0) {Nav2\\(MPPI, Omni)};
+
+  \draw[flow] (hw) -- node[tl, left] {\topic{/joint_states}} (rsp);
+  \draw[flow] (hw) -- node[tl, above] {\topic{/imu/data_raw}} (madg);
+  \draw[flow] (madg) -- node[tl, above] {\topic{/imu/data_filtered}} (ekf);
+  \draw[flow] (hw.south east) ++(0,0) -- ++(0,-0.5) -| node[tl, pos=0.25] {\topic{/odom}} ([xshift=-6mm]ekf.south);
+  \draw[flow] (lidar) -- node[tl, above] {\topic{/scan}} (slam);
+  \draw[flow] (ekf) -- node[tl, right] {TF} (slam);
+  \draw[flow] (slam.east) -- node[tl, sloped, above, pos=0.45] {\topic{/map}} (nav.north west);
+  \draw[flow] (ekf.east) -- node[tl, sloped, below, pos=0.6] {\topic{/odometry/filtered}} (nav.south west);
+  \draw[flow] (expl) -- node[tl, right] {goals} (nav);
+  \draw[flow] (agent.east) -| node[tl, pos=0.75, right] {goals} ([xshift=-6mm]nav.south);
+
+  % The /cmd_vel bus
+  \draw[thick, warnedge] (web.south) -- ++(0,-0.6) coordinate (wb);
+  \draw[thick, warnedge] (agent.south) -- ++(0,-0.6) coordinate (ab);
+  \draw[thick, warnedge] ([xshift=6mm]nav.south) |- (ab);
+  \draw[flow, warnedge] (ab) -- (wb) -| (cmd.south);
+  \draw[flow, warnedge] (cmd) -- (hw);
+\end{tikzpicture}

@@ -1,0 +1,14 @@
+% Dashboard data paths as built. Telemetry and commands go through rosbridge as JSON;
+% the camera's frames go through a ROS 2 topic to a WebRTC node, never through rosbridge.
+\begin{tikzpicture}[tl/.style={font=\scriptsize, fill=white, inner sep=1pt}]
+  \node[uibox, minimum width=32mm, minimum height=24mm] (br) at (0,0) {Operator's browser\\React 19, TypeScript,\\roslib, D3\\[2pt] motors, IMU, odometry,\\map, camera};
+  \node[hostbox, minimum width=30mm] (rb)  at (6.2, 0.8) {rosbridge server\\JSON over WebSocket};
+  \node[hostbox, minimum width=30mm] (rtc) at (6.2,-0.8) {WebRTC node\\(a ROS 2 node)};
+  \node[hostbox, minimum width=28mm] (ros) at (10.8, 0.8) {ROS 2 topics,\\services, actions};
+  \node[hwbox, minimum width=28mm]   (cam) at (10.8,-0.8) {RealSense D435\\colour image topic};
+
+  \draw[flow, <->] (br.east |- rb) -- node[tl, above=1pt] {$\approx$15 subscriptions} (rb);
+  \draw[flow] (rtc) -- node[tl, below=1pt] {video} (br.east |- rtc);
+  \draw[flow, <->] (rb) -- (ros);
+  \draw[flow] (cam) -- node[tl, below=1pt] {ROS 2 topic} (rtc);
+\end{tikzpicture}

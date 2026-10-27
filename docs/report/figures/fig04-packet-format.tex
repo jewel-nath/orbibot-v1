@@ -1,0 +1,17 @@
+% The serial frame, with the VERSION request and reply recorded on 2026-04-19.
+\begin{tikzpicture}[
+    field/.style={draw, fill=mcu, draw=mcuedge, minimum height=8mm, align=center, font=\scriptsize, inner sep=2pt},
+    note/.style={font=\scriptsize, align=center}]
+  \node[field, minimum width=13mm] (h) {Head\\\texttt{0xFF}};
+  \node[field, minimum width=16mm, right=0mm of h] (d) {Device ID\\\texttt{0xFC} in, \texttt{0xFB} out};
+  \node[field, minimum width=13mm, right=0mm of d] (l) {Length};
+  \node[field, minimum width=15mm, right=0mm of l] (f) {Function};
+  \node[field, minimum width=22mm, right=0mm of f] (p) {Payload\\(little-endian)};
+  \node[field, minimum width=15mm, right=0mm of p] (c) {Checksum};
+
+  \draw[decorate, decoration={brace, amplitude=4pt, mirror}] ([yshift=-1mm]l.south west) -- ([yshift=-1mm]p.south east)
+    node[note, midway, below=2mm] {summed, truncated to 8 bits $\rightarrow$ checksum (Device ID not included)};
+
+  \node[note, anchor=west, font=\scriptsize\ttfamily] at ([yshift=-15mm]h.west) {request: FF FC 03 51 54};
+  \node[note, anchor=west, font=\scriptsize\ttfamily] at ([yshift=-19mm]h.west) {reply:\ \ \ FF FB 04 51 02 00 57 \normalfont\itshape(firmware 2.0)};
+\end{tikzpicture}

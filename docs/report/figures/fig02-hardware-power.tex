@@ -1,0 +1,25 @@
+% Hardware and power. Solid lines carry power, dashed lines carry data.
+\begin{tikzpicture}[node distance=6mm and 9mm]
+  \node[hwbox, minimum width=27mm] (bat) {4S LiFePO4, 12.8\,V\\IFR-32140, 15.5\,Ah};
+  \node[hwbox, minimum width=27mm, right=of bat] (bms) {4S BMS, 100\,A\\cuts off at 10\,V};
+  \node[mcubox, minimum width=34mm, right=of bms, minimum height=17mm] (board) {ROSMaster V3.0\\STM32F103RCT6\\(9--16\,V in)};
+  \node[hostbox, minimum width=27mm, above=8mm of board] (pi) {Raspberry Pi 5\\8\,GB};
+  \node[hwbox, minimum width=22mm, left=of pi] (lidar) {RPLIDAR A1};
+  \node[hwbox, minimum width=22mm, above=3mm of lidar] (cam) {RealSense D435};
+  \node[hwbox, minimum width=29mm, below=8mm of board] (hb) {4 $\times$ AM2857 H-bridge\\20\,kHz PWM};
+  \node[hwbox, minimum width=29mm, below=4mm of hb] (mot) {4 $\times$ JGB37-520, 30:1\\Hall encoders, 1320 counts/turn};
+  \node[hwbox, minimum width=22mm, right=of board] (imu) {ICM-20948\\IMU (SPI)};
+  \node[hwbox, minimum width=22mm, below=3mm of imu] (adc) {Battery ADC\\divider 4.03};
+
+  \draw[very thick] (bat) -- (bms);
+  \draw[very thick, ->] (bms) -- node[lbl, above=1pt] {12.8\,V} (board);
+  \draw[very thick, ->] (board) -- node[lbl] {5.1\,V, 5\,A, USB-C} (pi);
+  \draw[very thick, ->] (board) -- (hb);
+  \draw[very thick, ->] (hb) -- (mot);
+  \draw[dataflow, <->] (pi.south east) -- node[lbl, right] {USB serial} (board.north east);
+  \draw[dataflow, ->] (lidar) -- node[lbl, above=1pt] {USB} (pi);
+  \draw[dataflow, ->] (cam.east) -| node[lbl, pos=0.25] {USB 2 link} (pi.north);
+  \draw[dataflow, ->] (mot.east) -- ++(6mm,0) |- (board.south east);
+  \draw[dataflow, <->] (imu) -- (board);
+  \draw[dataflow, ->] (adc.west) -| (board.south east);
+\end{tikzpicture}

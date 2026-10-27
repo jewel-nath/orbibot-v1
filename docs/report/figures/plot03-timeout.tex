@@ -1,0 +1,14 @@
+% One MOTION command of 0.1 m/s at t = 0 and nothing after it. The firmware
+% reports zero from t = 2.12 s on. Wheels off the ground, 2026-04-19 (section 7.1).
+\begin{tikzpicture}
+  \begin{axis}[
+      width=\columnwidth, height=44mm,
+      xmin=0, xmax=4.4, ymin=-10, ymax=150,
+      xlabel={time since the last command (s)}, ylabel={$v_x$ (mm/s)},
+      tick label style={font=\scriptsize}, label style={font=\scriptsize}]
+    \addplot[thick, mcuedge, mark=*, mark size=1.2pt] coordinates {
+      (0.61,17) (0.91,95) (1.21,107) (1.52,77) (1.82,130) (2.12,0) (2.42,0) (4.24,0)};
+    \draw[dashed, warnedge] (axis cs:2.0,-10) -- (axis cs:2.0,150)
+      node[pos=0.92, right, font=\scriptsize, text=warnedge] {2\,s timeout};
+  \end{axis}
+\end{tikzpicture}

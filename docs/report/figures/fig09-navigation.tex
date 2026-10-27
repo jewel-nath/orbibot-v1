@@ -1,0 +1,20 @@
+% Nav2's command chain on V1, ending at the shared /cmd_vel topic.
+\begin{tikzpicture}[node distance=3mm and 4mm]
+  \node[uibox, minimum width=18mm] (goal) {Goal\\(dashboard,\\agent, explorer)};
+  \node[hostbox, minimum width=20mm, right=of goal] (bt) {BT navigator\\planner};
+  \node[hostbox, minimum width=20mm, right=of bt] (ctl) {Controller\\MPPI, Omni};
+  \node[hostbox, minimum width=20mm, right=of ctl] (sm) {Velocity\\smoother};
+  \node[hostbox, minimum width=20mm, right=of sm] (cm) {Collision\\monitor};
+  \node[warnbox, minimum width=16mm, right=of cm] (cmd) {\topic{/cmd_vel}};
+  \node[hostbox, minimum width=20mm, below=6mm of bt] (amcl) {AMCL on a\\saved map};
+  \node[hostbox, minimum width=20mm, below=6mm of ctl] (cost) {Costmaps\\from \topic{/scan}};
+
+  \draw[flow] (goal) -- (bt);
+  \draw[flow] (bt) -- (ctl);
+  \draw[flow] (ctl) -- (sm);
+  \draw[flow] (sm) -- (cm);
+  \draw[flow] (cm) -- (cmd);
+  \draw[dataflow] (amcl) -- (bt);
+  \draw[dataflow] (cost) -- (ctl);
+  \draw[dataflow] (cost) -- (bt);
+\end{tikzpicture}

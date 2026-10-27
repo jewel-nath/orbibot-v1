@@ -1,0 +1,16 @@
+% The state-estimation chain, from raw firmware data to the map frame.
+\begin{tikzpicture}[b/.style={minimum width=30mm, minimum height=11mm},
+                    tl/.style={font=\scriptsize, fill=white, inner sep=1pt}]
+  \node[mcubox, b] (enc)  at (0, 1.0)  {Wheel encoders\\\topic{/odom}, velocity only};
+  \node[mcubox, b] (imu)  at (0,-1.0)  {ICM-20948\\\topic{/imu/data_raw}, 50\,Hz};
+  \node[hostbox, b] (madg) at (4.2,-1.0) {Madgwick\\6-DoF, no magnetometer};
+  \node[hostbox, b] (ekf)  at (8.4, 0)  {EKF, yaw in relative mode\\publishes \topic{odom -> base_footprint}};
+  \node[hwbox, b]   (scan) at (8.4, 2.4) {RPLIDAR A1\\\topic{/scan}};
+  \node[hostbox, b] (map)  at (12.6, 1.2) {slam\_toolbox / AMCL\\corrects yaw drift\\through \topic{map -> odom}};
+
+  \draw[flow] (imu) -- (madg);
+  \draw[flow] (madg.east) -- (ekf.south west);
+  \draw[flow] (enc.east) -- (ekf.north west);
+  \draw[flow] (ekf.east) -- (map.south west);
+  \draw[flow] (scan.east) -- (map.north west);
+\end{tikzpicture}

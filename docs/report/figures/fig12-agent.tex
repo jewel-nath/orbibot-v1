@@ -1,0 +1,29 @@
+% orbibot_agent. HTTP and the CLI go through the orchestrator; the MCP server hands the
+% tools to the client's own model. Only the two direct motion tools pass the safety manager.
+\begin{tikzpicture}[tool/.style={uibox, minimum width=36mm, font=\scriptsize, minimum height=5mm},
+                    tl/.style={font=\scriptsize, fill=white, inner sep=1pt}]
+  \node[uibox, minimum width=22mm] (http) at (0, 2.2)  {HTTP + SSE\\port 8082};
+  \node[uibox, minimum width=22mm] (cli)  at (0, 0.9)  {Terminal CLI};
+  \node[uibox, minimum width=22mm] (mcp)  at (0,-1.2)  {MCP server\\(stdio)};
+  \node[uibox, minimum width=30mm] (llm)  at (3.9, 3.6) {LLM providers\\Gemini, Claude, Kimi,\\Ollama (local)};
+  \node[uibox, minimum width=30mm, minimum height=13mm] (orch) at (3.9, 1.55) {AgentNode\\orchestrator\\up to 10 tool rounds};
+  \node[warnbox, minimum width=30mm] (safe) at (3.9,-1.2) {SafetyManager\\0.5\,m/s per axis,\\2.0\,rad/s, 10\,s};
+
+  \foreach \i/\t in {1/Motion (4), 2/Sensors (13), 3/Firmware (7), 4/ROS 2 generic (10),
+                     5/Navigation and SLAM (19), 6/Diagnostics (3), 7/Analysis (2)}
+    \node[tool] (t\i) at (8.6, 4.4-\i*0.62) {\t};
+  \begin{scope}[on background layer]
+    \node[group, draw=uiedge, fit=(t1)(t7)] (reg) {};
+  \end{scope}
+  \node[grouplabel, text=uiedge, anchor=south west] at (reg.north west) {ToolRegistry: 58 tools, JSON schemas};
+  \node[hostbox, minimum width=36mm] (rcl) at (8.6,-2.4) {RosBridge (direct \topic{rclpy})\\topics, services, actions};
+
+  \draw[flow, <->] (http.east) -- (orch.west);
+  \draw[flow, <->] (cli.east) -- (orch.west);
+  \draw[flow, <->] (orch) -- (llm);
+  \draw[flow, <->] (orch.east) -- (reg.west |- orch.east);
+  \draw[flow, <->] (mcp.east) -- ++(0.6,0) |- node[tl, pos=0.75, below] {client's model runs the loop} (reg.west |- 0,0.3);
+  \draw[flow] ([xshift=-12mm]reg.south) -- node[tl, sloped, above] {move, stop} (safe.east);
+  \draw[flow] (safe.south) |- (rcl.west);
+  \draw[flow, <->] (reg.south) -- node[tl, right] {other tools} (rcl.north);
+\end{tikzpicture}

@@ -1,0 +1,24 @@
+% Top view of the base, drawn to scale (1 unit = 100 mm). x points forward
+% (up the page), y to the left. Roller lines show the ABBA layout schematically.
+\begin{tikzpicture}[scale=0.9,
+    wheel/.style={draw=hwedge, fill=hw, thick},
+    roller/.style={hwedge, thin}]
+  % Frame: 350 mm along x, 250 mm along y; the wheels stand outside it
+  \draw[fill=host, draw=hostedge, thick] (-1.25,-1.75) rectangle (1.25,1.75);
+  % Wheel centres at x = +-130 mm, y = +-180 mm; \s sets the roller slant. A-type rollers
+  % run top-left to bottom-right, as orbibot_config.h describes them.
+  \foreach \px/\py/\name/\type/\s in {-1.8/1.3/FL/A/-1, 1.8/1.3/FR/B/1, -1.8/-1.3/BL/B/1, 1.8/-1.3/BR/A/-1}{
+    \draw[wheel] (\px-0.25,\py-0.5) rectangle (\px+0.25,\py+0.5);
+    \foreach \k in {-0.25,0,0.25}{
+      \draw[roller] (\px-0.2,\py+\k-0.12*\s) -- (\px+0.2,\py+\k+0.12*\s);
+    }
+    \node[font=\scriptsize] at (\px,\py+0.75) {\name\ (\type)};
+  }
+  % Body axes
+  \draw[flow, hostedge] (0,0) -- (0,1.0) node[above, font=\scriptsize] {$x$};
+  \draw[flow, hostedge] (0,0) -- (-0.9,0) node[left, font=\scriptsize] {$y$};
+  \draw[->, hostedge, thick] (0.4,0) arc (0:120:0.4) node[above right, font=\scriptsize] {$\omega$};
+  % Dimensions between wheel centres
+  \draw[<->, thin] (-1.8,-2.2) -- node[lbl, below] {track $2l_y = 360$\,mm} (1.8,-2.2);
+  \draw[<->, thin] (2.4,-1.3) -- node[lbl, right] {wheelbase $2l_x = 260$\,mm} (2.4,1.3);
+\end{tikzpicture}

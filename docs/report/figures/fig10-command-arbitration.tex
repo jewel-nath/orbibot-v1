@@ -1,0 +1,22 @@
+% Fig. 20: (a) as built, four sources write /cmd_vel with no arbitration;
+% (b) the designed fix, twist_mux with priorities and timeouts (not built).
+\begin{tikzpicture}[src/.style={uibox, text width=30mm, minimum height=6mm},
+                    hd/.style={font=\footnotesize\bfseries, anchor=west}]
+  % (a) as built
+  \node[hd] at (-1.6, 0.7) {(a) Built};
+  \foreach \i/\t in {0/Web dashboard, 1/AI agent, 2/{Gamepad (off, still wired)}, 3/Nav2 collision monitor}
+    \node[src] (a\i) at (0,-\i*0.85) {\t};
+  \node[warnbox, text width=20mm] (ac) at (4.0,-1.275) {\topic{/cmd_vel}\\last writer wins};
+  \node[mcubox, text width=17mm] (af) at (6.9,-1.275) {Firmware\\2\,s timeout};
+  \foreach \i in {0,1,2,3} \draw[flow, warnedge] (a\i.east) -- (ac.west);
+  \draw[flow] (ac) -- (af);
+
+  % (b) designed
+  \node[hd] at (-1.6,-3.6) {(b) Designed, not built};
+  \foreach \i/\t in {0/E-stop: priority 255{,} 0.5\,s, 1/Dashboard: 200{,} 0.3\,s, 2/Agent: 100{,} 1.0\,s, 3/Nav2: 50{,} 0.5\,s}
+    \node[src] (b\i) at (0,-4.3-\i*0.85) {\t};
+  \node[hostbox, text width=20mm] (mux) at (4.0,-5.575) {\topic{twist_mux}\\priority, timeout};
+  \node[hostbox, text width=17mm] (bc)  at (6.9,-5.575) {\topic{/cmd_vel}\\one writer};
+  \foreach \i in {0,1,2,3} \draw[flow] (b\i.east) -- (mux.west);
+  \draw[flow] (mux) -- (bc);
+\end{tikzpicture}

@@ -1,0 +1,23 @@
+% The firmware's four FreeRTOS tasks and the path of a motion command. The parser stores
+% the velocity target; task_control turns it into wheel speeds (inverse kinematics) each cycle.
+\begin{tikzpicture}[node distance=4mm and 5mm]
+  \node[mcubox, minimum width=36mm] (rx) {USART1 RX interrupt\\byte-by-byte parser};
+  \node[mcubox, minimum width=36mm, below=of rx] (comm) {\topic{task_communication}\\priority 7, 1\,ms tick\\parse, reply, auto-report};
+  \node[mcubox, minimum width=36mm, below=8mm of comm] (ctl) {\topic{task_control}\\priority 10, 100\,Hz\\inverse kinematics,\\encoders, PID, PWM, odometry};
+
+  \node[mcubox, minimum width=30mm, right=10mm of comm] (imu) {\topic{task_imu}\\priority 8, 50\,Hz\\gyro and accelerometer};
+  \node[mcubox, minimum width=30mm, right=10mm of ctl] (mon) {\topic{task_monitoring}\\priority 5, 1\,Hz\\watchdog, battery, buzzer};
+
+  \node[hwbox, minimum width=36mm, below=of ctl] (pwm) {4 H-bridges and encoders};
+  \node[hwbox, minimum width=30mm, right=10mm of rx] (tx) {USART1 DMA TX\\5 report types at 50\,Hz};
+  \node[warnbox, minimum width=30mm, below=of mon] (wd) {Independent watchdog\\5\,s, fed only if all\\tasks are alive};
+
+  \draw[flow] (rx) -- (comm);
+  \draw[flow] (comm) -- node[lbl, right] {0x12 MOTION: velocity target} (ctl);
+  \draw[flow, <->] (ctl) -- (pwm);
+  \draw[flow] (comm) -- (tx);
+  \draw[dataflow] (imu) -- (comm);
+  \draw[dataflow] (ctl.east) -- ++(3mm,0) |- (comm.south east);
+  \draw[flow] (mon) -- (wd);
+  \draw[flow, draw=warnedge] (comm.west) -- ++(-5mm,0) |- node[lbl, pos=0.25, left, text=warnedge] {no command for 2\,s: stop} (ctl.west);
+\end{tikzpicture}

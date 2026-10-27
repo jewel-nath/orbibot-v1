@@ -1,0 +1,39 @@
+% The two-computer architecture, from sensors and users down to the motors.
+\begin{tikzpicture}[node distance=4mm and 5mm]
+  % Users and interfaces
+  \node[uibox, minimum width=30mm] (browser) {Web browser\\React dashboard};
+  \node[uibox, minimum width=30mm, right=6mm of browser] (llm) {LLM provider\\Gemini / Claude / Kimi / Ollama};
+  \node[uibox, minimum width=30mm, right=6mm of llm] (mcpc) {MCP client\\or terminal CLI};
+
+  % Host
+  \node[hostbox, minimum width=30mm, below=9mm of browser] (rosbridge) {rosbridge\\WebSocket :9090\\WebRTC camera :8081};
+  \node[uibox, minimum width=30mm, below=9mm of llm] (agent) {\topic{orbibot_agent}\\58 tools, safety layer};
+  \node[hostbox, minimum width=30mm, below=9mm of mcpc] (nav) {Nav2, slam\_toolbox,\\EKF, exploration};
+  \node[hostbox, minimum width=101mm, below=5mm of agent] (ros) {ROS 2 Jazzy topics, services and actions (\topic{/cmd_vel}, \topic{/odom}, \topic{/scan}, \topic{/tf}, \ldots)};
+  \node[hostbox, minimum width=101mm, below=3mm of ros] (bridge) {\topic{orbibot_hardware}: serial bridge to the firmware};
+
+  \begin{scope}[on background layer]
+    \node[group, draw=hostedge, inner ysep=9pt, fit=(rosbridge)(agent)(nav)(ros)(bridge)] (pi) {};
+  \end{scope}
+  \node[grouplabel, text=hostedge, anchor=north east, inner sep=2pt] at (pi.north east) {Raspberry Pi 5, Ubuntu 24.04};
+
+  % Sensors on the Pi
+  \node[hwbox, left=6mm of ros, minimum width=20mm] (lidar) {RPLIDAR A1\\USB};
+  \node[hwbox, below=3mm of lidar, minimum width=20mm] (cam) {RealSense D435\\USB};
+
+  % MCU
+  \node[mcubox, minimum width=101mm, below=10mm of bridge] (fw) {STM32F103RC on the ROSMaster V3.0, FreeRTOS: PID at 100\,Hz, encoders, IMU, odometry, 2\,s command timeout};
+  \node[hwbox, below=6mm of fw, minimum width=101mm] (motors) {4 $\times$ JGB37-520 motors with Hall encoders \quad $\cdot$ \quad ICM-20948 IMU \quad $\cdot$ \quad 4S LiFePO4 battery};
+
+  \draw[flow, <->] (browser) -- (rosbridge);
+  \draw[flow, <->] (llm) -- (agent);
+  \draw[flow, <->] (mcpc.south west) -- (agent.north east);
+  \draw[flow, <->] (rosbridge) -- (rosbridge |- ros.north);
+  \draw[flow, <->] (agent) -- (ros);
+  \draw[flow, <->] (nav) -- (nav |- ros.north);
+  \draw[flow, <->] (ros) -- (bridge);
+  \draw[flow] (lidar) -- (ros.west |- lidar);
+  \draw[flow] (cam.east) -- ++(3mm,0) |- (ros.west);
+  \draw[flow, <->] (bridge) -- node[lbl] {USB serial, 115200\,baud, binary protocol} (fw);
+  \draw[flow, <->] (fw) -- node[lbl] {PWM, encoder pulses, SPI} (motors);
+\end{tikzpicture}

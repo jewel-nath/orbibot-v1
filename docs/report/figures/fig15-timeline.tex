@@ -1,0 +1,33 @@
+% The build, June 2025 to August 2026, from the dated photos, videos and
+% test reports. One unit = one month; 0 is June 2025. Labels sit beside their bars.
+\begin{tikzpicture}[x=5.6mm, y=5.4mm,
+    bar/.style={draw=hostedge, fill=host, rounded corners=1pt},
+    fwbar/.style={draw=mcuedge, fill=mcu, rounded corners=1pt},
+    uibar/.style={draw=uiedge, fill=ui, rounded corners=1pt},
+    item/.style={font=\footnotesize}]
+  % Month axis
+  \foreach \m/\l in {0/Jun, 3/Sep, 6/Dec, 9/Mar, 12/Jun, 14/Aug}{
+    \draw[gray!40] (\m,0.5) -- (\m,-7.6);
+    \node[font=\footnotesize, gray] at (\m,0.9) {\l};
+  }
+  \node[font=\footnotesize\bfseries, gray] at (2.5,1.6) {2025};
+  \node[font=\footnotesize\bfseries, gray] at (11,1.6) {2026};
+
+  % Bars whose labels go to the right (early) or to the left (late)
+  \foreach \y/\a/\b/\s/\t in {
+      0/0/1/bar/Frame welded; first electronics,
+      1/1/4/bar/Pi 5; gamepad driving; first SLAM map,
+      2/5/6/bar/Rebuilt; RealSense D435 fitted,
+      3/7/8/bar/Localising on a saved home map}{
+    \draw[\s] (\a,-\y-0.35) rectangle (\b,-\y+0.35);
+    \node[item, anchor=west] at (\b+0.2,-\y) {\t};
+  }
+  \foreach \y/\a/\b/\s/\t in {
+      4/8/9/uibar/Web dashboard,
+      5/9/10/bar/Nav2 run in a small room,
+      6/10/11/fwbar/Firmware audit; bench tests,
+      7/14/15/fwbar/Accelerometer fix; end-to-end check}{
+    \draw[\s] (\a,-\y-0.35) rectangle (\b,-\y+0.35);
+    \node[item, anchor=east] at (\a-0.2,-\y) {\t};
+  }
+\end{tikzpicture}

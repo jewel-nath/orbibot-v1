@@ -1,0 +1,12 @@
+% Safety, layer by layer, from the language model down to the hardware. Each layer says
+% how far it has been checked: measured on the bench, configured, reviewed in code, datasheet.
+\begin{tikzpicture}[layer/.style={box, minimum width=78mm, text width=74mm, align=left, font=\scriptsize}]
+  \node[layer, fill=ui, draw=uiedge] (l1) {\textbf{Agent} (move and stop tools only): 0.5\,m/s per axis, 2.0\,rad/s, 10\,s per motion \hfill \emph{configured}};
+  \node[layer, fill=host, draw=hostedge, below=2mm of l1] (l2) {\textbf{Nav2:} 0.5\,m/s per axis, 1.5\,rad/s; velocity smoother, collision monitor \hfill \emph{configured}};
+  \node[layer, fill=mcu, draw=mcuedge, below=2mm of l2] (l3) {\textbf{Protocol:} length gate for truncated frames \emph{(measured)}; checksum \emph{(in code)}};
+  \node[layer, fill=mcu, draw=mcuedge, below=2mm of l3] (l4) {\textbf{Firmware motion:} 2\,s command timeout, 1.0\,m/s clamp, reset-state stop \emph{(measured)}; 2.0\,rad/s clamp \emph{(configured)}};
+  \node[layer, fill=mcu, draw=mcuedge, below=2mm of l4] (l5) {\textbf{Firmware health:} 5\,s watchdog \emph{(seen to fire once)}; battery warning 11.0\,V, lockout 10.5\,V \emph{(reviewed)}};
+  \node[layer, fill=hw, draw=hwedge, below=2mm of l5] (l6) {\textbf{Battery:} BMS cut-off at 10\,V and 15\,V \hfill \emph{datasheet}};
+  \draw[flow] ([xshift=-4mm]l1.west) -- node[left, font=\scriptsize, align=right] {software,\\bypassable} ([xshift=-4mm]l3.west);
+  \draw[flow] ([xshift=-4mm]l3.west) -- node[left, font=\scriptsize, align=right] {on the\\microcontroller,\\every path} ([xshift=-4mm]l6.west);
+\end{tikzpicture}

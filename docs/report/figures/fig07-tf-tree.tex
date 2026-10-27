@@ -1,0 +1,18 @@
+% The transform tree (frame names from orbibot.urdf.xacro) and the one
+% publisher of each upper link.
+\begin{tikzpicture}[node distance=6mm and 2mm,
+    frame/.style={hostbox, minimum width=20mm, font=\scriptsize\ttfamily}]
+  \node[frame] (map) {map};
+  \node[frame, below=of map] (odom) {odom};
+  \node[frame, below=of odom] (fp) {base\_footprint};
+  \node[frame, below=of fp] (bl) {base\_link};
+  \node[frame, below=8mm of bl] (imu) {imu\_link};
+  \node[frame, left=of imu] (lidar) {lidar\_link};
+  \node[frame, right=of imu] (cam) {camera\_link};
+  \node[frame, left=of lidar] (wheels) {wheel\_*\_link};
+
+  \draw[flow] (map) -- node[right=2mm, font=\scriptsize, align=left] {slam\_toolbox \emph{or} AMCL\\(exactly one at a time)} (odom);
+  \draw[flow] (odom) -- node[right=2mm, font=\scriptsize] {EKF} (fp);
+  \draw[flow] (fp) -- node[right=2mm, font=\scriptsize] {URDF} (bl);
+  \foreach \c in {wheels, lidar, imu, cam} \draw[flow] (bl.south) -- (\c.north);
+\end{tikzpicture}

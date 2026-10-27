@@ -1,0 +1,16 @@
+% Mean wheel speed per motor at the 1.0 m/s firmware limit, with one standard
+% deviation, about 250 samples each, wheels off the ground, 2026-04-28 (section 9.2).
+\begin{tikzpicture}
+  \begin{axis}[
+      width=\columnwidth, height=46mm,
+      ymin=950, ymax=1050, ylabel={wheel speed (mm/s)},
+      symbolic x coords={M1 FL, M2 BL, M3 FR, M4 BR},
+      xtick=data, tick label style={font=\scriptsize}, label style={font=\scriptsize},
+      enlarge x limits=0.2]
+    \addplot[only marks, mark=*, mark options={fill=mcu, draw=mcuedge}, color=mcuedge,
+             error bars/.cd, y dir=both, y explicit]
+      coordinates {(M1 FL,1001.7) +- (0,28.7) (M2 BL,1002.0) +- (0,29.1)
+                   (M3 FR,1002.5) +- (0,28.0) (M4 BR,1002.4) +- (0,28.9)};
+    \addplot[dashed, hwedge] coordinates {(M1 FL,1000) (M4 BR,1000)};
+  \end{axis}
+\end{tikzpicture}

@@ -1,0 +1,14 @@
+% Measured chassis velocity as a share of the command, wheels off the ground,
+% 2 s runs, 2026-04-19 (firmware test report, section 6). 100 % = the command.
+\begin{tikzpicture}
+  \begin{axis}[
+      ybar, bar width=16pt, width=\columnwidth, height=46mm,
+      ymin=80, ymax=110, ylabel={measured / commanded (\%)},
+      symbolic x coords={Forward, Backward, Sideways, Turning},
+      xtick=data, tick label style={font=\scriptsize}, label style={font=\scriptsize},
+      nodes near coords, nodes near coords style={font=\scriptsize},
+      enlarge x limits=0.18]
+    \addplot[fill=mcu, draw=mcuedge] coordinates {(Forward,98.7) (Backward,102.7) (Sideways,90.7) (Turning,104.1)};
+    \draw[dashed, hwedge] (rel axis cs:0,0.6667) -- (rel axis cs:1,0.6667);
+  \end{axis}
+\end{tikzpicture}
