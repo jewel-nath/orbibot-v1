@@ -35,7 +35,7 @@ can't prove distance, drift or traction. The full results are in the
 
 | Test | Result | Date |
 |---|---|---|
-| Serial protocol: round trips, malformed input, 500 Hz of commands for 3 s | No corrupt frames, no drops | 2026-04-19 |
+| Serial protocol: round trips, malformed input, commands at a 500 Hz target (328 Hz reached) for 3.3 s | No corrupt frames, no drops | 2026-04-19 |
 | Mecanum kinematics: forward, back, sideways, turning | All four wheel directions right | 2026-04-19 |
 | Command timeout (2 s configured) | Motors stopped 2.12 s after the last command | 2026-04-19 |
 | Velocity tracking at 150 mm/s and 700 mrad/s | Forward −1 %, back +3 %, turning +4 %, sideways −9 % (136 of 150 mm/s) | 2026-04-19 |

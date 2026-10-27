@@ -304,15 +304,15 @@ output is saturated in the same direction as the error.
 ## Memory Budget
 
 ### Flash (256KB total)
-- Firmware code + FreeRTOS: ~38KB (~15%)
-- Unused: ~224KB (>85% free for future features)
+- Firmware code + FreeRTOS: 28.4 KB (10.9 %), measured with GCC 12.3 on 2026-08-02
+- Unused: about 228 KB
 
 ### RAM (48KB total)
 - FreeRTOS heap: 20KB
 - Task stacks: ~5KB (4 tasks; CommTask uses 2KB)
 - Global variables: ~2KB
-- In use: ~19.5KB (~40%)
-- Free: ~29KB (~60%)
+- In use: 19.9 KB (40.4 %), measured on 2026-08-02
+- Free: about 29 KB
 
 ---
 

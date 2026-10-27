@@ -177,7 +177,9 @@ Import as `from orbibot_agent.core.ros_bridge import RosBridge` — the facade c
 
 ### `core/safety_manager.py` — Safety Layer
 
-Validates and clamps velocity/duration before any motion command. Manages emergency stop state. All motion goes through safety validation.
+Validates and clamps velocity and duration for the direct motion tools, `move_robot` and `stop_robot`, and checks an emergency-stop flag.
+
+**Known gaps (2026-10-27):** the Nav2 tools (`navigate_to_pose`, `nav_spin`, `nav_backup`, `ros2_send_action_goal`) and `ros2_topic_publish` can move the robot without passing the SafetyManager, and nothing calls `activate_emergency_stop()` yet, so the flag is never set. The firmware's 1.0 m/s clamp and 2 s command timeout still apply to every path.
 
 ### `core/test_suite_runner.py` — Deterministic Tests
 
@@ -286,7 +288,7 @@ Register in `agent_node.py` `_init_providers`.
 ### What NOT to Break
 
 - **RosBridge** is the single point of ROS 2 communication — don't create parallel publishers
-- **SafetyManager** must validate all motion — don't bypass it
+- **SafetyManager** must validate all motion — don't add new bypasses (the existing ones are listed under the safety layer above)
 - **Tool schemas** must be valid JSON Schema — LLMs depend on them for function calling
 - The chat server's `_chat_lock` prevents concurrent LLM calls — don't remove it
 
@@ -320,10 +322,10 @@ orbibot_agent/
     tools/
       tool_registry.py             # Thin dispatcher
       motion_tools.py              # 4 motion tools
-      sensor_tools.py              # 15 sensor/GET tools
-      firmware_tools.py            # 9 firmware command tools
-      ros_tools.py                 # 11 ROS interface tools
-      navigation_tools.py          # 18 nav/SLAM/exploration tools
+      sensor_tools.py              # 13 sensor/GET tools
+      firmware_tools.py            # 7 firmware command tools
+      ros_tools.py                 # 10 ROS interface tools
+      navigation_tools.py          # 19 nav/SLAM/exploration tools
       diagnostics_tools.py         # 3 diagnostics tools (health check, timeseries, ROS diagnostics)
       analysis_tools.py            # 2 analysis tools (compare, statistics)
     interfaces/

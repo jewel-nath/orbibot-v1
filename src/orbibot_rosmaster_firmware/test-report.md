@@ -215,9 +215,10 @@ below the AM2857 motor-driver dead band that the firmware compensates with
 `MOTOR_IGNORE_PULSE = 1600` of 3600 PWM units).
 ```
 Encoders: M1=54  M2=351  M3=407  M4=0
-Expected: ~158 each (0.03 m/s × 2.5 s / (2π × 0.05 m) × 1320 edges)
+Expected: ~315 each (0.03 m/s × 2.5 s / (2π × 0.05 m) × 1320 edges)
 ```
-Result is **non-uniform** — M2/M3 over-shoot, M1 lags, M4 stalls completely.
+Result is **non-uniform** — M2/M3 over-shoot (by about 11 % and 29 %), M1 lags, M4 stalls completely.
+(Corrected 2026-10-27: this section first gave ~158, an arithmetic slip.)
 Root cause is the way `motor_apply_deadzone()` (`motor_driver.c`) **adds**
 `MOTOR_IGNORE_PULSE` to any non-zero PWM, which is too coarse for very low
 target speeds:
@@ -324,8 +325,9 @@ behaviour rather than raw motor RPM.
    within 0.5 mm/s of each other.
 2. **`MAX_WHEEL_SPEED_MMS = 3500` is loose.** Worst-case combined
    wheel speed at the firmware limits — `vx + vy + (lx+ly)·ω = 1.0 +
-   0.5 + 0.222·2 = 1.94 m/s` — fits comfortably in a 2000 mm/s threshold.
-   Recommend tightening to 2200 mm/s (10 % margin over worst-case).
+   0.5 + 0.31·2 = 2.12 m/s` (lx + ly = 0.13 + 0.18 m) — is well under 3500.
+   Recommend tightening to about 2350 mm/s (10 % margin over worst case).
+   (Corrected 2026-10-27: this first used lx + ly = 0.222.)
    This makes the encoder-anomaly rejection in `task_control.c` more
    useful as a noise filter (current 3500 only triggers on EMI-grade
    spurious encoder pulses).
