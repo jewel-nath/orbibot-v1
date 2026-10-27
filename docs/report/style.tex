@@ -1,50 +1,77 @@
-% Shared packages, colours, TikZ styles and macros for the OrbiBot V1 report.
+% The report's page layout. The fonts, colours and diagram styles are in figure-style.tex.
 
-\usepackage[T1]{fontenc}
-\usepackage{amsmath}
+\input{figure-style}
+
+% --- Page and type: one column, 11 pt, room to breathe -----------------------
+\usepackage[a4paper, margin=25mm, headheight=14pt]{geometry}
+\usepackage[final]{microtype}
+\usepackage{setspace}
+\setstretch{1.15}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.7\baselineskip}
+\setlength{\emergencystretch}{2em}   % room for long code names without overfull lines
+\usepackage{enumitem}
+\setlist{itemsep=2pt, topsep=4pt}
+
+% --- Colour accents ------------------------------------------------------------
+\definecolor{accent}{HTML}{1F5FA8}     % headings, links, the title band
+\definecolor{accentsoft}{HTML}{EAF2FB}
+\definecolor{ink}{HTML}{22262B}
+\definecolor{muted}{HTML}{5F6670}
+\color{ink}
+
+\usepackage[font={small,sf}, labelfont={bf,color=accent}, margin=8mm, skip=6pt]{caption}
+\usepackage[section]{placeins}   % keep each section's floats in that section
+\usepackage{titlesec}
+\usepackage[most]{tcolorbox}
+
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\sffamily\color{muted} OrbiBot V1: design and bench evaluation}
+\fancyhead[R]{\small\sffamily\color{muted} Technical report, v1.0, October 2026}
+\fancyfoot[C]{\small\sffamily\color{muted}\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\headrule}{{\color{accent!40}\hrule height\headrulewidth}}
+
+% Section headings: sans, accent colour, a thin rule under each section
+\titleformat{\section}{\Large\sffamily\bfseries\color{accent}}{\thesection}{0.6em}{}[{\color{accent!30}\titlerule[0.6pt]}]
+\titleformat{\subsection}{\large\sffamily\bfseries\color{accent!85!black}}{\thesubsection}{0.6em}{}
+\titleformat{\paragraph}[runin]{\sffamily\bfseries\color{ink}}{}{}{}[.]
+\titlespacing*{\section}{0pt}{1.6\baselineskip}{0.6\baselineskip}
+\titlespacing*{\subsection}{0pt}{1.1\baselineskip}{0.3\baselineskip}
+\titlespacing*{\paragraph}{0pt}{0.6\baselineskip}{0.6em}
+
+% Status labels, one colour each, used in the results box and the tables
+\newcommand{\chip}[2]{\tikz[baseline=(c.base)]\node[fill=#1!15, draw=#1!70!black, text=#1!60!black,
+  rounded corners=2pt, inner xsep=3pt, inner ysep=1.2pt, font=\scriptsize\sffamily\bfseries] (c) {#2};}
+\newcommand{\measured}{\chip{green!60!black}{measured}}
+\newcommand{\runonly}{\chip{orange}{run, not measured}}
+\newcommand{\notdone}{\chip{red}{not measured}}
+\newcommand{\configured}{\chip{blue}{configured}}
+
+% A soft, coloured box for summaries
+\newtcolorbox{summarybox}[1]{colback=accentsoft, colframe=accent, boxrule=0.6pt, arc=2pt,
+  left=8pt, right=8pt, top=6pt, bottom=6pt, fonttitle=\sffamily\bfseries, title={#1},
+  before upper={\setlength{\parskip}{5pt}}}
+
+% --- Content --------------------------------------------------------------------
 \usepackage{graphicx}
+\usepackage{adjustbox}
 \usepackage{booktabs}
 \usepackage{array}
-\usepackage{xcolor}
+\usepackage{tabularx}
+\usepackage{colortbl}
 \usepackage{url}
 \usepackage{cite}
-\usepackage{tikz}
-\usepackage{pgfplots}
-\usepackage[hidelinks]{hyperref}
-
-\pgfplotsset{compat=1.18}
-\usetikzlibrary{arrows.meta, positioning, fit, calc, shapes.geometric, backgrounds,
-  decorations.pathreplacing}
+\usepackage[colorlinks, linkcolor=accent, citecolor=accent, urlcolor=accent]{hyperref}
 
 \graphicspath{{../media/}}
 
-% One palette for every figure: a layer has one colour everywhere.
-\definecolor{mcu}{HTML}{E8F1FB}       % STM32 and firmware
-\definecolor{mcuedge}{HTML}{2F6DB5}
-\definecolor{host}{HTML}{EAF6EC}      % Raspberry Pi and ROS 2
-\definecolor{hostedge}{HTML}{2E7D32}
-\definecolor{ui}{HTML}{FFF4E0}        % dashboard and agent
-\definecolor{uiedge}{HTML}{C77700}
-\definecolor{hw}{HTML}{F1F1F1}        % hardware
-\definecolor{hwedge}{HTML}{555555}
-\definecolor{warn}{HTML}{FDECEC}
-\definecolor{warnedge}{HTML}{B3261E}
+% Table headers in a light accent band
+\newcommand{\thead}[1]{\cellcolor{accentsoft}\sffamily\bfseries\small #1}
 
-\tikzset{
-  >={Stealth[length=2mm]},
-  box/.style={draw, rounded corners=2pt, align=center, font=\footnotesize,
-              minimum height=7mm, inner sep=3pt},
-  mcubox/.style={box, fill=mcu, draw=mcuedge},
-  hostbox/.style={box, fill=host, draw=hostedge},
-  uibox/.style={box, fill=ui, draw=uiedge},
-  hwbox/.style={box, fill=hw, draw=hwedge},
-  warnbox/.style={box, fill=warn, draw=warnedge},
-  group/.style={draw, dashed, rounded corners=3pt, inner sep=6pt},
-  grouplabel/.style={font=\scriptsize\itshape, anchor=north west},
-  flow/.style={->, thick},
-  dataflow/.style={->, thick, densely dashed},
-  lbl/.style={font=\scriptsize, midway, fill=white, inner sep=1pt},
-}
-
-% A ROS 2 topic, frame or code name, typeset as written (underscores included).
-\newcommand{\topic}[1]{\texttt{\detokenize{#1}}}
+% A diagram at its natural size, shrunk only if it is wider than the text.
+\newcommand{\diagram}[1]{\adjustbox{max width=\textwidth}{\input{#1}}}
+% A diagram scaled, up or down, to a share of the text width: \diagramw{0.8}{figures/x}
+\newcommand{\diagramw}[2]{\adjustbox{width=#1\textwidth}{\input{#2}}}

@@ -15,10 +15,10 @@
   \begin{scope}[on background layer]
     \node[group, draw=hostedge, inner ysep=9pt, fit=(rosbridge)(agent)(nav)(ros)(bridge)] (pi) {};
   \end{scope}
-  \node[grouplabel, text=hostedge, anchor=north east, inner sep=2pt] at (pi.north east) {Raspberry Pi 5, Ubuntu 24.04};
+  \node[grouplabel, text=hostedge, anchor=south east, inner sep=2pt] at (pi.north east) {Raspberry Pi 5, Ubuntu 24.04};
 
   % Sensors on the Pi
-  \node[hwbox, left=6mm of ros, minimum width=20mm] (lidar) {RPLIDAR A1\\USB};
+  \node[hwbox, left=12mm of ros, minimum width=20mm] (lidar) {RPLIDAR A1\\USB};
   \node[hwbox, below=3mm of lidar, minimum width=20mm] (cam) {RealSense D435\\USB};
 
   % MCU
