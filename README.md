@@ -1,10 +1,13 @@
 # OrbiBot V1
 
-A mecanum-wheeled indoor robot I built and programmed: a welded
-stainless-steel frame, a Raspberry Pi 5 running ROS 2 Jazzy, and an STM32 motor
-board running my own firmware. It maps a room with its LiDAR, localises on the
-map, runs Nav2, is driven from a web dashboard, and has an AI agent with
-58 robot tools.
+A mecanum-wheeled indoor robot: a welded stainless-steel frame, a Raspberry
+Pi 5 running ROS 2 Jazzy, and an STM32 motor board running firmware I wrote.
+It maps a room with its LiDAR, localises on the map, runs Nav2, is driven from
+a web dashboard, and has an AI agent with 58 robot tools.
+
+At Orbitax, I build OrbiBot in my free time, on the way to a telepresence
+robot for the office. V1 is the first step: the mobile base, which I built
+and programmed.
 
 <img src="docs/media/orbibot-v1-2025-09-24-pi5-build-front.jpg" width="720" alt="OrbiBot V1 from the front: a welded stainless-steel frame on four mecanum wheels, an RPLIDAR A1 on top, and a Raspberry Pi 5 above the STM32 motor board">
 
@@ -70,7 +73,7 @@ What was tested and how, and what is known to be wrong, is in
 | Body | Welded stainless-steel frame, 350 × 250 mm, about 6 kg in the robot model; four 100 mm steel mecanum wheels; four JGB37-520 motors (30:1) with Hall encoders | [docs/hardware](docs/hardware/README.md) |
 | Power | 4S LiFePO4 pack (12.8 V); the firmware warns at 11.0 V and cuts the motors off at 10.5 V | [docs/hardware](docs/hardware/README.md) |
 | Computer | Raspberry Pi 5, Ubuntu 24.04, ROS 2 Jazzy | [Getting started](docs/getting-started.md) |
-| Motor board and firmware | Yahboom ROSMaster V3.0 (STM32F103RCT6) with my own firmware in place of the vendor's closed one: mecanum kinematics, PID, odometry, the ICM-20948 IMU, a binary serial protocol, PID gains in flash, a watchdog | [orbibot_rosmaster_firmware](src/orbibot_rosmaster_firmware/README.md) |
+| Motor board and firmware | Yahboom ROSMaster V3.0 (STM32F103RCT6) with firmware I wrote in place of the vendor's closed one: mecanum kinematics, PID, odometry, the ICM-20948 IMU, a binary serial protocol, PID gains in flash, a watchdog | [orbibot_rosmaster_firmware](src/orbibot_rosmaster_firmware/README.md) |
 | Bridge | The serial protocol to ROS 2: `/odom`, `/imu/data_raw`, `/joint_states`, motor services | [orbibot_hardware](src/orbibot_hardware/README.md) |
 | Sensors | RPLIDAR A1 on `/scan`; RealSense D435, off by default; the dashboard uses its colour stream | [orbibot_sensors](src/orbibot_sensors/README.md) |
 | Model | URDF/Xacro; `base_footprint` is the base frame | [orbibot_description](src/orbibot_description/README.md) |

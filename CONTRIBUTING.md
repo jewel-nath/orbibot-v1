@@ -1,7 +1,8 @@
 # Contributing
 
-OrbiBot V1 is a personal robot project, but issues and pull requests are
-welcome. This page is how the code and its documentation are kept in step.
+At Orbitax, I build OrbiBot in my free time; V1 is its first robot. Issues
+and pull requests are welcome. This page is how the code and its
+documentation are kept in step.
 
 ## The code decides
 

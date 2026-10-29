@@ -2,7 +2,7 @@
 
 **OrbiBot V1: A Mecanum Mobile Robot with Microcontroller-Level Real-Time
 Control, a ROS 2 Navigation Stack, and a Tool-Using LLM Agent — Design and
-Bench Evaluation.** Version 1.0, October 2026.
+Bench Evaluation.** Version 1.1, October 2026.
 
 [Read the PDF](orbibot-v1-report.pdf) (19 pages, one column).
 

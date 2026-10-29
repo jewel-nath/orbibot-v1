@@ -8,14 +8,14 @@
 \thispagestyle{empty}
 \begin{tcolorbox}[colback=accent, colframe=accent, arc=3pt, left=14pt, right=14pt, top=14pt, bottom=12pt]
   \color{white}\sffamily\raggedright
-  {\small Technical report \quad$\cdot$\quad Version 1.0 \quad$\cdot$\quad October 2026}\par\vspace{8pt}
+  {\small Technical report \quad$\cdot$\quad Version 1.1 \quad$\cdot$\quad October 2026}\par\vspace{8pt}
   {\LARGE\bfseries OrbiBot V1: A Mecanum Mobile Robot with Microcontroller-Level Real-Time Control, a ROS~2 Navigation Stack, and a Tool-Using LLM Agent}\par\vspace{6pt}
   {\large Design and Bench Evaluation}
 \end{tcolorbox}
 
 \vspace{4pt}
 {\sffamily
-\textbf{Jewel Nath}\quad{\color{muted}Independent researcher, Dhaka, Bangladesh}\\
+\textbf{Jewel Nath}\quad{\color{muted}Software Engineer, Orbitax, Dhaka, Bangladesh}\\
 {\small\color{muted}ORCID \href{https://orcid.org/0009-0002-6609-6378}{0009-0002-6609-6378}\quad$\cdot$\quad Code and data: \url{https://github.com/jewel-nath/orbibot-v1}}\par}
 
 \vspace{6pt}
@@ -428,10 +428,13 @@ The measurements that would close the gaps in Section~\ref{sec:limits} are floor
 % ---------------------------------------------------------------------------
 \section*{Acknowledgements}
 
+The author thanks Hasan Shahriar Masud, Chief Technology Officer of Orbitax, for supporting the project.
+
 The firmware keeps a protocol compatible with Yahboom's, and the serial driver started from Yahboom's library. The firmware uses FreeRTOS, ST's STM32F10x Standard Peripheral Library, ARM's CMSIS and the font table of stm32-ssd1306 by Aleksander Alekseev, with their notices kept; its SSD1306 display routines follow an existing driver's interface, whose source is still being traced. The dashboard uses shadcn/ui components (MIT). Three wheel and LiDAR meshes in the robot model are third-party CAD whose source was not recorded. Design ideas came from LGDXRobot2 and AuBot.
 
 Parts of the firmware audit, its bench tests and this documentation were carried out with AI coding assistants under the author's direction; every result reported here was checked against the logged data and the code.
 
+\clearpage
 {\small
 \bibliographystyle{IEEEtran}
 \bibliography{references}
